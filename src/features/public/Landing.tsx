@@ -87,23 +87,39 @@ export default function Landing() {
     const scope = root.current;
     if (!scope) return;
 
-    const io = new IntersectionObserver((es) => {
-      es.forEach((en) => {
-        if (!en.isIntersecting) return;
-        en.target.classList.add('in');
-        const el = en.target as HTMLElement;
-        if (el.dataset.count) {
-          const to = +el.dataset.count; const pre = el.dataset.pre ?? '';
-          let i = 0; const step = () => {
-            i++; el.textContent = pre + (i >= to ? to : i);
-            if (i < to) setTimeout(step, 700 / Math.max(to, 1));
-          };
-          step();
-        }
-        io.unobserve(en.target);
-      });
-    }, { threshold: 0.18 });
-    scope.querySelectorAll('.reveal, .reveal-img, [data-count]').forEach((e) => io.observe(e));
+    const els = Array.from(scope.querySelectorAll<HTMLElement>('.reveal, .reveal-img, [data-count]'));
+
+    // Las animaciones de entrada SOLO se activan si hay JS + IntersectionObserver
+    // (clase .anim). Sin eso, todo queda visible por defecto — nunca se ocultan
+    // las fotos ni los textos. Además, un temporizador de seguridad revela todo
+    // por si el observer no dispara en algún navegador.
+    const supportsIO = 'IntersectionObserver' in window;
+    if (!reduce && supportsIO) scope.classList.add('anim');
+
+    let safety = 0;
+    if (supportsIO) {
+      const io = new IntersectionObserver((es) => {
+        es.forEach((en) => {
+          if (!en.isIntersecting) return;
+          en.target.classList.add('in');
+          const el = en.target as HTMLElement;
+          if (el.dataset.count) {
+            const to = +el.dataset.count; const pre = el.dataset.pre ?? '';
+            let i = 0; const step = () => {
+              i++; el.textContent = pre + (i >= to ? to : i);
+              if (i < to) setTimeout(step, 700 / Math.max(to, 1));
+            };
+            step();
+          }
+          io.unobserve(en.target);
+        });
+      }, { threshold: 0.15 });
+      els.forEach((e) => io.observe(e));
+      // Seguridad: si algo impide que el observer dispare, revela todo.
+      safety = window.setTimeout(() => els.forEach((e) => e.classList.add('in')), 2500);
+      // Guarda el observer para desconectarlo al limpiar.
+      (scope as unknown as { _io?: IntersectionObserver })._io = io;
+    }
 
     // Parallax suave de las manchas de fondo.
     let raf = 0;
@@ -117,7 +133,12 @@ export default function Landing() {
     };
     if (!reduce) window.addEventListener('scroll', onScroll, { passive: true });
 
-    return () => { io.disconnect(); window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf); };
+    return () => {
+      (scope as unknown as { _io?: IntersectionObserver })._io?.disconnect();
+      clearTimeout(safety);
+      window.removeEventListener('scroll', onScroll);
+      cancelAnimationFrame(raf);
+    };
   }, []);
 
   return (
@@ -382,8 +403,9 @@ const CSS = `
 .mya-land .shot{position:relative;overflow:hidden;border-radius:24px;background:linear-gradient(150deg,var(--mint-soft),var(--sage2));box-shadow:var(--shadow);width:100%;height:100%}
 .mya-land .shot img{width:100%;height:100%;object-fit:cover;display:block;animation:mya-kb 20s ease-in-out infinite alternate}
 @keyframes mya-kb{0%{transform:scale(1.03)}100%{transform:scale(1.13)}}
-.mya-land .reveal-img{clip-path:inset(0 0 100% 0);opacity:.4;transition:clip-path 1.05s cubic-bezier(.2,.7,.2,1),opacity 1.05s}
-.mya-land .reveal-img.in{clip-path:inset(0 0 0 0);opacity:1}
+.mya-land .reveal-img{transition:clip-path 1.05s cubic-bezier(.2,.7,.2,1),opacity 1.05s}
+.mya-land.anim .reveal-img{clip-path:inset(0 0 100% 0);opacity:.4}
+.mya-land.anim .reveal-img.in{clip-path:inset(0 0 0 0);opacity:1}
 
 /* Secciones */
 .mya-land section{position:relative;z-index:2;padding:72px 0}
@@ -391,8 +413,9 @@ const CSS = `
 .mya-land h2{font-family:var(--serif);font-size:clamp(28px,4vw,42px);letter-spacing:-.01em;font-weight:600;margin:0;color:var(--sage);text-wrap:balance}
 .mya-land .lead{color:var(--muted);margin-top:12px;font-size:16.5px;line-height:1.6}
 .mya-land .hl{color:var(--clay)}
-.mya-land .reveal{opacity:0;transform:translateY(28px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
-.mya-land .reveal.in{opacity:1;transform:none}
+.mya-land .reveal{transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
+.mya-land.anim .reveal{opacity:0;transform:translateY(28px)}
+.mya-land.anim .reveal.in{opacity:1;transform:none}
 
 .mya-land .disc{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:26px}
 .mya-land .disc span{font-size:14px;font-weight:500;color:var(--sage);background:var(--card);border:1px solid var(--line);padding:9px 16px;border-radius:999px;min-width:0;box-shadow:0 8px 20px -16px rgba(43,58,50,.5)}
