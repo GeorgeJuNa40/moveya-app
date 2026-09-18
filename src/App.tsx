@@ -114,14 +114,25 @@ export default function App() {
     const susc = params.get('suscripcion');
     if (!pago && !susc) return;
     if (pago === 'exito') {
-      notifySuccess('¡Pago recibido! Tu paquete se activa en unos segundos.');
-      setTimeout(triggerResync, 3000);
+      notifySuccess('¡Pago recibido! Activando tu paquete…');
+      // El webhook de Stripe crea el paquete en el servidor; puede tardar unos
+      // segundos. Reintentamos el refresco varias veces para que aparezca solo,
+      // sin que el alumno tenga que recargar.
+      [1500, 4000, 8000, 14000].forEach((ms) => setTimeout(triggerResync, ms));
     } else if (susc === 'exito') {
       notifySuccess('¡Suscripción activada! Bienvenido a tu plan.');
-      setTimeout(triggerResync, 3000);
+      [1500, 4000, 8000, 14000].forEach((ms) => setTimeout(triggerResync, ms));
     }
-    // Limpia el query para que el aviso no se repita al recargar.
+    // Limpia el query para que el aviso no se repita al recargar (conserva el hash).
     window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+    // Si el navegador (algunos in-app de móvil) perdió el "#/ruta" al volver de
+    // Stripe, caeríamos en la raíz (landing). Forzamos la ruta correcta — asignar
+    // location.hash SÍ dispara la navegación del HashRouter.
+    const h = window.location.hash;
+    if (!h || h === '#' || h === '#/') {
+      const target = pago === 'exito' ? '/app/packages' : susc === 'exito' ? '/admin/subscription' : '';
+      if (target) window.location.hash = target;
+    }
   }, []);
 
   // Si faltan las llaves de conexión, avisa claramente (en vez de "Failed to fetch").
