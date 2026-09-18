@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" fill="#4A5D55"/>
-  <g transform="translate(256,356)" stroke="#38473F" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
-    <!-- pétalos externos -->
-    <path d="M0,0 C-66,-66 -68,-150 0,-206 C68,-150 66,-66 0,0 Z" fill="#7FB2AF" transform="rotate(-72) scale(0.9)"/>
-    <path d="M0,0 C-66,-66 -68,-150 0,-206 C68,-150 66,-66 0,0 Z" fill="#7FB2AF" transform="rotate(72) scale(0.9)"/>
+  <rect width="512" height="512" rx="112" fill="#FAF1E2"/>
+  <g fill="none" stroke="#7B9F85" stroke-width="13" stroke-linejoin="round" stroke-linecap="round">
+    <!-- pétalos externos (base ancha) -->
+    <path d="M256,382 C 320,300 322,196 256,132 C 190,196 192,300 256,382 Z" transform="rotate(-64 256 382)"/>
+    <path d="M256,382 C 320,300 322,196 256,132 C 190,196 192,300 256,382 Z" transform="rotate(64 256 382)"/>
     <!-- pétalos medios -->
-    <path d="M0,0 C-62,-70 -58,-162 0,-216 C58,-162 62,-70 0,0 Z" fill="#AEDAD5" transform="rotate(-36) scale(0.96)"/>
-    <path d="M0,0 C-62,-70 -58,-162 0,-216 C58,-162 62,-70 0,0 Z" fill="#AEDAD5" transform="rotate(36) scale(0.96)"/>
+    <path d="M256,382 C 306,306 306,214 256,158 C 206,214 206,306 256,382 Z" transform="rotate(-32 256 382)"/>
+    <path d="M256,382 C 306,306 306,214 256,158 C 206,214 206,306 256,382 Z" transform="rotate(32 256 382)"/>
     <!-- pétalo central -->
-    <path d="M0,0 C-58,-74 -54,-178 0,-236 C54,-178 58,-74 0,0 Z" fill="#FAF8F3"/>
+    <path d="M256,382 C 300,300 300,200 256,138 C 212,200 212,300 256,382 Z"/>
   </g>
 </svg>

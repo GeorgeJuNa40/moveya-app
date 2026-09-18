@@ -87,16 +87,18 @@ export default function OnboardingScreen() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
-      {/* Panel de marca — solo el logo, limpio */}
-      <div className="hidden lg:flex items-center justify-center bg-forest text-cream p-12">
-        <div className="brand-float text-6xl font-black tracking-tight">Move yA</div>
+      {/* Panel de marca — el logo en una tarjeta cream, limpio */}
+      <div className="hidden lg:flex items-center justify-center bg-forest p-12">
+        <div className="brand-float rounded-3xl p-8 shadow-zen" style={{ backgroundColor: '#F6F1E9' }}>
+          <img src="/logo-moveya.png" alt="Move yA" className="w-72 h-auto select-none" draggable={false} />
+        </div>
       </div>
 
       {/* Panel de acceso */}
       <div className="flex items-center justify-center bg-cream p-6">
         <div className="w-full max-w-sm">
-          <div className="lg:hidden mb-8 text-center">
-            <div className="brand-float text-4xl font-black text-brand">Move yA</div>
+          <div className="lg:hidden mb-8 flex justify-center">
+            <img src="/logo-moveya.png" alt="Move yA" className="brand-float w-52 h-auto select-none" draggable={false} />
           </div>
 
           <h1 className="text-2xl font-bold text-ink">
