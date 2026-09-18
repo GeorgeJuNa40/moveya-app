@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useStore, botReply } from '../../lib/store';
 import { PageHeader, Card, Button, Toggle } from '../../components/ui';
 import type { WhatsappTemplate } from '../../lib/types';
+import { launchWhatsAppSignup, connectWhatsApp, whatsappSignupAvailable } from '../../lib/whatsapp';
+import { notifySuccess, notifyError } from '../../lib/notify';
 
 // Agente de IA para WhatsApp: recordatorios de pago, avisos y respuestas del bot.
 export default function WhatsappAgent() {
@@ -15,6 +17,34 @@ export default function WhatsappAgent() {
   const [newKnow, setNewKnow] = useState('');
   const [chat, setChat] = useState<{ from: 'user' | 'bot'; text: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [manual, setManual] = useState(false); // mostrar el alta manual (Fase A)
+
+  // Conecta el WhatsApp del estudio con el flujo oficial de Meta (Embedded Signup).
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const res = await launchWhatsAppSignup();
+      const out = await connectWhatsApp(res);
+      if (out.connected) {
+        updateWhatsapp({
+          connected: true,
+          number: out.number ?? wa.number,
+          verifiedName: out.verifiedName,
+          phoneNumberId: out.phoneNumberId,
+          wabaId: out.wabaId,
+        });
+        notifySuccess('¡WhatsApp conectado! Ya puedes enviar y recibir mensajes.');
+      } else {
+        notifyError('WhatsApp', 'No se pudo completar la conexión. Inténtalo de nuevo.');
+      }
+    } catch (e) {
+      const m = (e as Error)?.message ?? 'Error';
+      if (!/cancelad/i.test(m)) notifyError('WhatsApp', m);
+    } finally {
+      setConnecting(false);
+    }
+  };
 
   const sendChat = () => {
     if (!chatInput.trim()) return;
@@ -45,17 +75,64 @@ export default function WhatsappAgent() {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Configuración */}
         <Card className="p-6">
-          <h2 className="font-semibold text-ink mb-3">Configuración</h2>
-          <label className="block mb-4">
-            <span className="mb-1 block text-sm font-medium text-ink-soft">Número de WhatsApp (formato internacional, sin +)</span>
-            <input
-              className="input"
-              placeholder="521234567890"
-              value={wa.number}
-              onChange={(e) => updateWhatsapp({ number: e.target.value.replace(/[^\d]/g, '') })}
-            />
-          </label>
-          <div className="border-t border-cream-dark pt-2">
+          <h2 className="font-semibold text-ink mb-3">Tu número de WhatsApp</h2>
+
+          {wa.connected ? (
+            // --- Conectado por el flujo oficial de Meta ---
+            <div className="rounded-2xl border border-green-200 bg-green-50 p-4">
+              <div className="flex items-center gap-2 text-green-800 font-semibold">
+                <span>✅</span> WhatsApp conectado
+              </div>
+              <p className="mt-1 text-sm text-green-900/80">
+                {wa.verifiedName ? <><b>{wa.verifiedName}</b> · </> : null}
+                {wa.number ? `+${wa.number}` : 'Número vinculado'}
+              </p>
+              <button
+                onClick={connect}
+                disabled={connecting}
+                className="mt-3 text-sm text-brand font-medium disabled:opacity-60"
+              >
+                {connecting ? 'Conectando…' : 'Reconectar / cambiar número'}
+              </button>
+            </div>
+          ) : (
+            // --- Sin conectar: botón oficial + alta manual como respaldo ---
+            <div>
+              <p className="text-sm text-ink-soft mb-3">
+                Conecta el WhatsApp de tu estudio en un par de clics. Usamos el flujo
+                oficial de Meta: tú autorizas tu número y listo.
+              </p>
+              <Button onClick={connect} disabled={connecting || !whatsappSignupAvailable()}>
+                {connecting ? 'Conectando…' : 'Conectar mi WhatsApp'}
+              </Button>
+              {!whatsappSignupAvailable() && (
+                <p className="mt-2 text-xs text-ink-faint">
+                  La conexión con Meta aún se está habilitando. Mientras tanto puedes
+                  registrar tu número manualmente.
+                </p>
+              )}
+
+              <button
+                onClick={() => setManual((v) => !v)}
+                className="mt-4 block text-sm text-brand font-medium"
+              >
+                {manual ? 'Ocultar alta manual' : '¿Prefieres registrarlo manualmente?'}
+              </button>
+              {manual && (
+                <label className="block mt-3">
+                  <span className="mb-1 block text-sm font-medium text-ink-soft">Número de WhatsApp (formato internacional, sin +)</span>
+                  <input
+                    className="input"
+                    placeholder="521234567890"
+                    value={wa.number}
+                    onChange={(e) => updateWhatsapp({ number: e.target.value.replace(/[^\d]/g, '') })}
+                  />
+                </label>
+              )}
+            </div>
+          )}
+
+          <div className="border-t border-cream-dark mt-4 pt-3">
             <Toggle
               label="Respuestas automáticas"
               description="Cuando está encendido, el bot contesta solo a tus alumnos. Apágalo si prefieres responder tú."

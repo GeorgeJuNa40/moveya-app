@@ -72,6 +72,13 @@ export interface WhatsappConfig {
   aiActive?: boolean;
   templates: WhatsappTemplate[];
   knowledge: string[]; // retro/base de conocimiento para que el bot responda
+  // Conexión oficial vía Embedded Signup de Meta (el estudio conecta su propio
+  // WhatsApp). Solo METADATOS no sensibles: el token de acceso NUNCA se guarda
+  // aquí (vive en la tabla protegida whatsapp_accounts, solo service role).
+  connected?: boolean; // true cuando se conectó por el flujo oficial de Meta
+  wabaId?: string; // id de la cuenta de WhatsApp Business del estudio
+  phoneNumberId?: string; // id del número (lo usa la Cloud API para enviar)
+  verifiedName?: string; // nombre verificado que ve el alumno en WhatsApp
 }
 
 export interface Subscription {

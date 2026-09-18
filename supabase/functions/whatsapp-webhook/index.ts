@@ -79,9 +79,20 @@ Deno.serve(async (req) => {
         const text = (msg.text?.body as string) ?? '';
         console.log(`💬 Mensaje de ${from}: "${text}" (display=${displayPhone})`);
 
-        // Identifica el estudio dueño de este número de WhatsApp.
-        const studio = await findStudioByPhone(displayPhone);
-        if (studio) console.log(`🏷️ Estudio: ${studio.name} (bot=${studio.botEnabled})`);
+        // Identifica el estudio y con qué token responder. Se prefiere la
+        // conexión oficial (Embedded Signup): cada estudio tiene SU propio token
+        // guardado en whatsapp_accounts, buscado por el id del número. Si no hay,
+        // se cae al alta manual (por número) usando el token global (Fase A).
+        let studio: Studio | null = null;
+        let sendToken = WHATSAPP_TOKEN;
+        const acct = await getAccountByPhoneId(phoneNumberId);
+        if (acct) {
+          sendToken = acct.token;
+          studio = await getStudioById(acct.studioId);
+        } else {
+          studio = await findStudioByPhone(displayPhone);
+        }
+        if (studio) console.log(`🏷️ Estudio: ${studio.name} (bot=${studio.botEnabled}, propio=${Boolean(acct)})`);
 
         // Si el estudio existe y APAGÓ el bot, no respondemos (lo atiende una persona).
         if (studio && studio.botEnabled === false) {
@@ -89,11 +100,11 @@ Deno.serve(async (req) => {
           return new Response('EVENT_RECEIVED', { status: 200 });
         }
 
-        if (!WHATSAPP_TOKEN) {
-          console.error('⚠️ Falta el secret WHATSAPP_TOKEN — no puedo responder.');
+        if (!sendToken) {
+          console.error('⚠️ Sin token para responder (ni propio del estudio ni WHATSAPP_TOKEN).');
         } else {
           const reply = await buildReply(studio, text);
-          await sendText(phoneNumberId, from, reply);
+          await sendText(phoneNumberId, from, reply, sendToken);
         }
       } else {
         console.log('ℹ️ POST sin mensaje de texto (probablemente un status/recibo).');
@@ -237,6 +248,50 @@ async function findStudioByPhone(displayPhone: string): Promise<Studio | null> {
   }
 }
 
+// Busca la conexión oficial (Embedded Signup) por el id del número: devuelve el
+// estudio dueño y SU token de acceso propio (guardado en whatsapp_accounts).
+async function getAccountByPhoneId(phoneNumberId: string): Promise<{ studioId: string; token: string } | null> {
+  if (!SUPABASE_URL || !SERVICE_KEY || !phoneNumberId) return null;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/whatsapp_accounts?select=studio_id,access_token&phone_number_id=eq.${encodeURIComponent(phoneNumberId)}`,
+      { headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` } },
+    );
+    if (!res.ok) return null;
+    const rows: Any[] = await res.json();
+    const r = rows?.[0];
+    if (!r?.access_token) return null;
+    return { studioId: r.studio_id, token: r.access_token };
+  } catch (e) {
+    console.error('❌ Error buscando cuenta:', (e as Error).message);
+    return null;
+  }
+}
+
+// Lee un estudio por id (para la ruta de conexión oficial).
+async function getStudioById(id: string): Promise<Studio | null> {
+  if (!SUPABASE_URL || !SERVICE_KEY || !id) return null;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/studios?select=id,name,whatsapp&id=eq.${encodeURIComponent(id)}`, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
+    });
+    if (!res.ok) return null;
+    const rows: Any[] = await res.json();
+    const row = rows?.[0];
+    if (!row) return null;
+    return {
+      id: row.id,
+      name: row.name,
+      botEnabled: row.whatsapp?.botEnabled ?? true,
+      aiActive: row.whatsapp?.aiActive ?? false,
+      knowledge: row.whatsapp?.knowledge ?? [],
+    };
+  } catch (e) {
+    console.error('❌ Error leyendo estudio:', (e as Error).message);
+    return null;
+  }
+}
+
 // Suma 1 al contador de uso con IA del estudio en el mes actual y devuelve el
 // nuevo total. Requiere la función SQL bump_whatsapp_usage (ver migración).
 async function bumpUsage(studioId: string): Promise<number | null> {
@@ -266,11 +321,11 @@ async function bumpUsage(studioId: string): Promise<number | null> {
 // ---------------------------------------------------------------------------
 // Envía un mensaje de texto por la Cloud API de WhatsApp.
 // ---------------------------------------------------------------------------
-async function sendText(phoneNumberId: string, to: string, bodyText: string) {
+async function sendText(phoneNumberId: string, to: string, bodyText: string, token: string) {
   const res = await fetch(`${GRAPH}/${phoneNumberId}/messages`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
