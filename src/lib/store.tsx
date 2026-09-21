@@ -663,6 +663,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         delta: -reward.starCost,
         reason: 'redemption',
         createdAt: new Date().toISOString(),
+        rewardId: reward.id,
       });
 
       const { data, error } = await supabase.rpc('redeem_reward', { p_reward_id: rewardId });

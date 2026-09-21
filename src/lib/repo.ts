@@ -177,6 +177,7 @@ const mapStar = (r: Row): StarEntry => ({
   delta: r.delta,
   reason: r.reason,
   createdAt: r.created_at,
+  rewardId: r.reward_id ?? undefined,
 });
 
 const mapReward = (r: Row): Reward => ({
@@ -375,6 +376,7 @@ export const rowStar = (s: StarEntry): Row => ({
   delta: s.delta,
   reason: s.reason,
   created_at: s.createdAt,
+  reward_id: s.rewardId ?? null,
 });
 export const rowReward = (r: Reward): Row => ({
   id: r.id,

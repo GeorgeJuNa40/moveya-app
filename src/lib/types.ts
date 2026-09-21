@@ -216,6 +216,7 @@ export interface StarEntry {
   delta: number;
   reason: 'attendance' | 'redemption' | 'bonus';
   createdAt: string;
+  rewardId?: string; // en un canje: qué recompensa se canjeó
 }
 
 export interface Reward {
