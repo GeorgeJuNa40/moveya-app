@@ -4,7 +4,11 @@ import { HashRouter } from 'react-router-dom';
 import App from './App';
 import { StoreProvider } from './lib/store';
 import './lib/pwa'; // registra el listener de "instalar app" cuanto antes
+import { startVersionWatch } from './lib/version'; // auto-actualización al nuevo deploy
 import './index.css';
+
+// Revisa si hay una versión nueva publicada y, de haberla, recarga sola.
+startVersionWatch();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
