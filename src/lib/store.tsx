@@ -9,6 +9,7 @@ import {
 import type {
   Booking,
   Branding,
+  ClassGuest,
   ClassSession,
   ClassTemplate,
   Database,
@@ -42,6 +43,7 @@ import {
   dbDelete,
   dbDeleteWhere,
   rowBooking,
+  rowClassGuest,
   rowUserPackage,
   rowPayment,
   rowStar,
@@ -124,6 +126,10 @@ interface StoreValue {
   deleteClassTemplate: (id: string) => void;
   upsertSession: (s: ClassSession) => void;
   deleteSession: (id: string) => void;
+  // Estudio — invitados a una clase (clase de prueba / acompañante 2x1)
+  guestsOf: (sessionId: string) => ClassGuest[];
+  addGuest: (input: { sessionId: string; name: string; phone?: string; kind: 'trial' | 'companion'; cost: number; hostUserId?: string | null }) => void;
+  removeGuest: (id: string) => void;
   // Estudio — coaches
   setCoachStatus: (userId: string, status: User['coachStatus']) => void;
   upsertCoach: (coach: User) => void;
@@ -409,6 +415,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         },
       });
       if (error) throw error;
+      // Si llegó como invitado (clase de prueba / 2x1) y se registra con el mismo
+      // teléfono, marcamos "de dónde viene" (se ve en Miembros). No es crítico.
+      if (input.ceuCode) {
+        try { await supabase.rpc('claim_guest_source'); } catch { /* opcional */ }
+      }
     },
     async signIn(email, password) {
       const { error } = await supabase.auth.signInWithPassword({
@@ -441,7 +452,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const taken = db.bookings.filter(
         (b) => b.sessionId === sessionId && b.status !== 'CANCELED',
       ).length;
-      return Math.max(0, s.capacity - taken);
+      // Los invitados (clase de prueba / 2x1) también ocupan lugar.
+      const guests = db.classGuests.filter((g) => g.sessionId === sessionId).length;
+      return Math.max(0, s.capacity - taken - guests);
     },
     studioUsers(role) {
       return db.users.filter((u) => u.studioId === currentUser?.studioId && u.role === role);
@@ -806,8 +819,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...prev,
         classSessions: prev.classSessions.filter((s) => s.id !== id),
         bookings: prev.bookings.filter((b) => b.sessionId !== id),
+        classGuests: prev.classGuests.filter((g) => g.sessionId !== id),
       }));
-      void dbDelete('class_sessions', id); // las reservas se borran en cascada
+      void dbDelete('class_sessions', id); // reservas e invitados se borran en cascada
+    },
+
+    // --- Invitados a una clase (clase de prueba / acompañante 2x1) ---
+    guestsOf(sessionId) {
+      return db.classGuests.filter((g) => g.sessionId === sessionId);
+    },
+    addGuest(input) {
+      if (!currentStudio) return;
+      const guest: ClassGuest = {
+        id: newId(),
+        studioId: currentStudio.id,
+        sessionId: input.sessionId,
+        name: input.name.trim(),
+        phone: input.phone?.replace(/\D/g, '') || undefined,
+        kind: input.kind,
+        cost: input.kind === 'trial' ? Math.max(0, input.cost || 0) : 0,
+        hostUserId: input.kind === 'companion' ? (input.hostUserId ?? null) : null,
+        createdAt: new Date().toISOString(),
+      };
+      setDb((prev) => ({ ...prev, classGuests: [...prev.classGuests, guest] }));
+      void dbInsert('class_guests', rowClassGuest(guest));
+    },
+    removeGuest(id) {
+      setDb((prev) => ({ ...prev, classGuests: prev.classGuests.filter((g) => g.id !== id) }));
+      void dbDelete('class_guests', id);
     },
 
     setCoachStatus(userId, status) {

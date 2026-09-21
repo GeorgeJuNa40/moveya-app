@@ -128,6 +128,21 @@ export interface User {
   createdAt: string;
   coachProfile?: CoachProfile;
   coachStatus?: CoachStatus; // solo coaches
+  source?: 'trial' | 'companion'; // de dónde llegó: clase de prueba / invitado 2x1
+}
+
+// Invitado a una clase (sin cuenta): clase de prueba o acompañante (2x1). Ocupa
+// un lugar en la clase. Si luego se registra con el mismo teléfono, se reconoce.
+export interface ClassGuest {
+  id: string;
+  studioId: string;
+  sessionId: string;
+  name: string;
+  phone?: string;
+  kind: 'trial' | 'companion'; // clase de prueba | acompañante 2x1
+  cost: number; // lo que pagó por la clase de prueba (0 = gratis)
+  hostUserId?: string | null; // 2x1: alumno que lo invitó
+  createdAt: string;
 }
 
 export interface Package {
@@ -235,4 +250,5 @@ export interface Database {
   stars: StarEntry[];
   rewards: Reward[];
   goals: Goal[];
+  classGuests: ClassGuest[];
 }

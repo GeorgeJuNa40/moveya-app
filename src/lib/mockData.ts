@@ -169,6 +169,7 @@ export function seedDatabase(): Database {
       { id: 'goal_1', userId: 'user_student', title: 'Asistir 12 clases este mes', targetValue: 12, currentValue: 3, periodEnd: inDays(20), achieved: false },
       { id: 'goal_2', userId: 'user_student', title: 'Racha de 3 semanas', targetValue: 3, currentValue: 2, periodEnd: inDays(7), achieved: false },
     ],
+    classGuests: [],
   };
 
   return db;

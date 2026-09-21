@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { PageHeader, Button, Card } from '../../components/ui';
 import WeekCalendar from '../../components/WeekCalendar';
 import { useStore } from '../../lib/store';
+import { usd } from '../../lib/format';
 import type { ClassSession } from '../../lib/types';
 
 function toLocalInput(iso: string): string {
@@ -12,13 +13,14 @@ function toLocalInput(iso: string): string {
 
 // Calendario editable: el estudio crea, edita o elimina clases.
 export default function CalendarAdmin() {
-  const { db, currentStudio, studioUsers, upsertSession, deleteSession } = useStore();
+  const { db, currentStudio, studioUsers, upsertSession, deleteSession, guestsOf } = useStore();
   const studioId = currentStudio!.id;
   const templates = db.classTemplates.filter((t) => t.studioId === studioId);
   const coaches = studioUsers('COACH').filter((c) => c.coachStatus !== 'DENIED');
 
   const [draft, setDraft] = useState<ClassSession | null>(null);
   const [startLocal, setStartLocal] = useState('');
+  const [guestsFor, setGuestsFor] = useState<ClassSession | null>(null);
 
   const newDraft = () => {
     const start = new Date();
@@ -63,12 +65,18 @@ export default function CalendarAdmin() {
 
       <WeekCalendar
         filter={(s) => s.studioId === studioId}
-        renderAction={(s) => (
-          <div className="flex gap-2">
-            <Button variant="secondary" className="flex-1" onClick={() => editDraft(s)}>Editar</Button>
-            <Button variant="danger" onClick={() => { if (confirm('¿Cancelar/eliminar esta clase?')) deleteSession(s.id); }}>Eliminar</Button>
-          </div>
-        )}
+        renderAction={(s) => {
+          const nGuests = guestsOf(s.id).length;
+          return (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="secondary" className="flex-1" onClick={() => editDraft(s)}>Editar</Button>
+              <Button variant="ghost" className="flex-1" onClick={() => setGuestsFor(s)}>
+                Invitados{nGuests ? ` (${nGuests})` : ''}
+              </Button>
+              <Button variant="danger" onClick={() => { if (confirm('¿Cancelar/eliminar esta clase?')) deleteSession(s.id); }}>Eliminar</Button>
+            </div>
+          );
+        }}
       />
 
       {draft && (
@@ -115,7 +123,125 @@ export default function CalendarAdmin() {
           </Card>
         </div>
       )}
+
+      {guestsFor && <GuestsModal session={guestsFor} onClose={() => setGuestsFor(null)} />}
     </>
+  );
+}
+
+// Modal para gestionar invitados de una clase: clase de prueba o acompañante 2x1.
+function GuestsModal({ session, onClose }: { session: ClassSession; onClose: () => void }) {
+  const { db, studioUsers, guestsOf, addGuest, removeGuest, seatsLeft } = useStore();
+  const students = studioUsers('STUDENT');
+  const tpl = db.classTemplates.find((t) => t.id === session.templateId);
+  const guests = guestsOf(session.id);
+
+  const [kind, setKind] = useState<'trial' | 'companion'>('trial');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [cost, setCost] = useState('0');
+  const [hostId, setHostId] = useState('');
+
+  const seats = seatsLeft(session.id);
+  const canAdd = name.trim() && (kind === 'trial' || hostId) && seats > 0;
+
+  const submit = () => {
+    if (!canAdd) return;
+    addGuest({
+      sessionId: session.id,
+      name,
+      phone: phone.trim() || undefined,
+      kind,
+      cost: kind === 'trial' ? Number(cost) || 0 : 0,
+      hostUserId: kind === 'companion' ? hostId : null,
+    });
+    setName(''); setPhone(''); setCost('0'); setHostId('');
+  };
+
+  return (
+    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4" onClick={onClose}>
+      <Card className="w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" >
+        <div onClick={(e) => e.stopPropagation()}>
+          <h2 className="text-lg font-bold text-ink">Invitados — {tpl?.name}</h2>
+          <p className="text-sm text-ink-faint mb-4">
+            Agrega personas que asisten sin cuenta: una <strong>clase de prueba</strong> o un{' '}
+            <strong>acompañante (2×1)</strong>. Ocupan un lugar. {seats > 0 ? `Quedan ${seats} lugares.` : 'Clase llena.'}
+          </p>
+
+          {/* Selector de tipo */}
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <button
+              onClick={() => setKind('trial')}
+              className={`rounded-xl border p-3 text-sm text-left ${kind === 'trial' ? 'border-forest bg-forest/5 text-ink' : 'border-cream-dark text-ink-soft'}`}
+            >
+              <div className="font-semibold">Clase de prueba</div>
+              <div className="text-xs text-ink-faint">Alguien que viene a probar.</div>
+            </button>
+            <button
+              onClick={() => setKind('companion')}
+              className={`rounded-xl border p-3 text-sm text-left ${kind === 'companion' ? 'border-forest bg-forest/5 text-ink' : 'border-cream-dark text-ink-soft'}`}
+            >
+              <div className="font-semibold">Acompañante (2×1)</div>
+              <div className="text-xs text-ink-faint">Invitado de un alumno.</div>
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <Field label="Nombre">
+              <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Ana López" />
+            </Field>
+            <Field label="Teléfono (opcional, pero útil)">
+              <input className="input" value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))} placeholder="10 dígitos" />
+              <span className="mt-1 block text-xs text-ink-faint">Si después se registra con este teléfono, lo reconocerás en Miembros.</span>
+            </Field>
+            {kind === 'trial' ? (
+              <Field label="Lo que pagó por la clase">
+                <input className="input" type="number" min={0} value={cost} onChange={(e) => setCost(e.target.value)} />
+                <span className="mt-1 block text-xs text-ink-faint">0 si fue gratis.</span>
+              </Field>
+            ) : (
+              <Field label="Acompaña a">
+                <select className="input" value={hostId} onChange={(e) => setHostId(e.target.value)}>
+                  <option value="">Elige un alumno…</option>
+                  {students.map((s) => <option key={s.id} value={s.id}>{s.fullName}</option>)}
+                </select>
+              </Field>
+            )}
+            <Button className="w-full" disabled={!canAdd} onClick={submit}>Agregar</Button>
+          </div>
+
+          {/* Lista de invitados */}
+          <div className="mt-5 border-t border-cream-dark pt-3">
+            <h3 className="text-sm font-semibold text-ink mb-2">En esta clase ({guests.length})</h3>
+            {guests.length === 0 && <p className="text-sm text-ink-faint">Aún no hay invitados.</p>}
+            <div className="space-y-2">
+              {guests.map((g) => {
+                const host = g.hostUserId ? db.users.find((u) => u.id === g.hostUserId) : null;
+                return (
+                  <div key={g.id} className="flex items-center justify-between gap-2 rounded-lg bg-cream-dark/40 px-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="text-ink truncate">{g.name}</p>
+                      <p className="text-xs text-ink-faint">
+                        {g.kind === 'trial'
+                          ? `Clase de prueba${g.cost > 0 ? ` · ${usd(g.cost)}` : ' · gratis'}`
+                          : `Acompaña a ${host?.fullName ?? '—'}`}
+                        {g.phone ? ` · ${g.phone}` : ''}
+                      </p>
+                    </div>
+                    <Button variant="ghost" onClick={() => removeGuest(g.id)}>Quitar</Button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-end">
+            <Button variant="ghost" onClick={onClose}>Cerrar</Button>
+          </div>
+          <style>{`.input{width:100%;border:1px solid #E8E3D6;border-radius:.75rem;padding:.6rem .8rem;background:#fff;outline:none}.input:focus{box-shadow:0 0 0 2px var(--brand-primary)}`}</style>
+        </div>
+      </Card>
+    </div>
   );
 }
 
