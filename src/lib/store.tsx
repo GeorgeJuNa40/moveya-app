@@ -258,6 +258,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => setResyncHandler(null);
   }, [currentUserId]);
 
+  // Tiempo real (en vivo): nos suscribimos a los cambios de la base y, ante
+  // cualquiera, recargamos los datos del estudio. Así las pantallas abiertas
+  // reflejan al instante reservas, compras, créditos, estrellas, clases, etc.
+  // sin recargar. RLS asegura que solo llegan los cambios que el usuario puede
+  // ver (su estudio / lo suyo). El debounce agrupa ráfagas de cambios.
+  useEffect(() => {
+    if (!currentUserId) return;
+    const token = session?.access_token;
+    if (token) supabase.realtime.setAuth(token);
+
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleReload = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        loadDatabase()
+          .then((data) => setDb(data))
+          .catch(() => {});
+      }, 400);
+    };
+
+    const channel = supabase
+      .channel('moveya-live')
+      .on('postgres_changes', { event: '*', schema: 'public' }, scheduleReload)
+      .subscribe();
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, session?.access_token]);
+
   // Hidratación desde el registro: el teléfono (con lada) y la moneda quedan en
   // los metadatos de la cuenta. La primera vez que se carga la sesión, los
   // guardamos en la base (teléfono del usuario, moneda del estudio si es admin).
