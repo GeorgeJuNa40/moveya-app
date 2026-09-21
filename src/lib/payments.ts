@@ -10,7 +10,11 @@ type CheckoutBody =
 // Devuelve false si algo falla (para que quien llama reactive el botón).
 export async function startStripeCheckout(body: CheckoutBody): Promise<boolean> {
   try {
-    const { data, error } = await supabase.functions.invoke('stripe-checkout', { body });
+    // Enviamos el origen actual para que Stripe regrese EXACTAMENTE al mismo
+    // dominio desde donde el alumno/estudio inició (así conserva su sesión y no
+    // cae en el login). El servidor lo valida contra dominios permitidos.
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const { data, error } = await supabase.functions.invoke('stripe-checkout', { body: { ...body, origin } });
     if (error) {
       // Intenta leer el mensaje real que devolvió la función para mostrarlo.
       let detail = error.message || 'Error desconocido';

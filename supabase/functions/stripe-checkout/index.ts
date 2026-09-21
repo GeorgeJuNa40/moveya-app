@@ -24,6 +24,23 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
 });
 const APP_URL = (Deno.env.get('APP_URL') ?? '').replace(/\/$/, '');
 
+// Devuelve el origen (https://host) desde donde el cliente inició, SOLO si es un
+// dominio permitido; si no, usa APP_URL. Así Stripe regresa al mismo dominio del
+// usuario (conserva su sesión) sin abrir un "open redirect".
+function safeBase(origin: unknown): string {
+  try {
+    const u = new URL(String(origin));
+    if (u.protocol !== 'https:') return '';
+    const h = u.hostname;
+    if (h === 'moveyaapp.app' || h.endsWith('.moveyaapp.app') || h.endsWith('.vercel.app')) {
+      return `${u.protocol}//${u.host}`;
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
 // Precios mensuales de los planes del estudio (en centavos de USD).
 const PLAN_PRICES: Record<string, number> = { inicio: 2499, pro: 4499, premium: 8499 };
 
@@ -86,6 +103,8 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const kind = body.kind as string;
+    // Origen al que regresará Stripe (el mismo del usuario, o APP_URL de reserva).
+    const base = safeBase(body.origin) || APP_URL;
 
     if (kind === 'package') {
       const { data: pkg } = await supabase
@@ -140,8 +159,8 @@ Deno.serve(async (req) => {
           ...(fee > 0 ? { payment_intent_data: { application_fee_amount: fee } } : {}),
           // Al volver de Stripe, regresa DIRECTO a la pantalla del alumno (con
           // hash de la ruta) en vez de la raíz (que mandaba al login/dashboard).
-          success_url: `${APP_URL}/?pago=exito#/app/packages`,
-          cancel_url: `${APP_URL}/?pago=cancelado#/app/packages`,
+          success_url: `${base}/?pago=exito#/app/packages`,
+          cancel_url: `${base}/?pago=cancelado#/app/packages`,
           metadata: {
             kind: 'package',
             user_id: me.id,
@@ -207,8 +226,9 @@ Deno.serve(async (req) => {
         ],
         // Al volver de Stripe, regresa DIRECTO a la pantalla de Suscripción del
         // estudio (con hash de la ruta) en vez de la raíz (que mandaba al login).
-        success_url: `${APP_URL}/?suscripcion=exito#/admin/subscription`,
-        cancel_url: `${APP_URL}/?suscripcion=cancelado#/admin/subscription`,
+        // Tras pagar la membresía, el estudio entra DIRECTO a su dashboard.
+        success_url: `${base}/?suscripcion=exito#/admin`,
+        cancel_url: `${base}/?suscripcion=cancelado#/admin/subscription`,
         metadata: { kind: 'subscription', studio_id: me.studio_id, plan: metaPlan, founder: isFounder ? '1' : '0' },
       });
       return json({ url: session.url });
