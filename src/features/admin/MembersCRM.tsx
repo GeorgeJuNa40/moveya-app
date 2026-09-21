@@ -12,6 +12,12 @@ const STATE_META: Record<MembershipState, { label: string; tone: 'success' | 'wa
   none: { label: 'Sin plan', tone: 'neutral' },
 };
 
+// De dónde llegó el alumno (si vino como invitado y luego se registró).
+const ORIGIN_LABEL: Record<'trial' | 'companion', string> = {
+  trial: 'Llegó de prueba',
+  companion: 'Llegó por 2×1',
+};
+
 const METHOD_LABEL: Record<PaymentMethod, string> = {
   cash: 'Efectivo',
   card: 'Tarjeta',
@@ -131,10 +137,13 @@ export default function MembersCRM() {
                       <div className="flex items-center gap-2">
                         <Avatar url={s.avatarUrl} initials={s.avatarInitials} className="h-8 w-8 text-xs" />
                         <div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <p className="font-medium text-ink">{s.fullName}</p>
                             {isNewStudent(s.id) && (
                               <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand">Nuevo</span>
+                            )}
+                            {s.source && (
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{ORIGIN_LABEL[s.source]}</span>
                             )}
                           </div>
                           <p className="text-xs text-ink-faint">Alta {fmtDay(s.createdAt)}</p>
@@ -188,10 +197,13 @@ export default function MembersCRM() {
             <Card key={s.id} className="p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <p className="font-medium text-ink">{s.fullName}</p>
                     {isNewStudent(s.id) && (
                       <span className="rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand">Nuevo</span>
+                    )}
+                    {s.source && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{ORIGIN_LABEL[s.source]}</span>
                     )}
                   </div>
                   <p className="text-xs text-ink-faint">{s.phone} · {s.email}</p>

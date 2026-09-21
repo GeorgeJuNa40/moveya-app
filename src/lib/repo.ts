@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import { notifyError } from './notify';
 import type {
   Booking,
+  ClassGuest,
   ClassSession,
   ClassTemplate,
   Database,
@@ -77,8 +78,33 @@ function mapUser(r: Row): User {
     coachProfile: hasCoach
       ? { bio: r.coach_bio ?? '', specialties: r.coach_specialties ?? [], yearsExp: r.coach_years_exp ?? 0 }
       : undefined,
+    source: r.source ?? undefined,
   };
 }
+
+const mapClassGuest = (r: Row): ClassGuest => ({
+  id: r.id,
+  studioId: r.studio_id,
+  sessionId: r.session_id,
+  name: r.name,
+  phone: r.phone ?? undefined,
+  kind: r.kind ?? 'trial',
+  cost: Number(r.cost ?? 0),
+  hostUserId: r.host_user_id ?? null,
+  createdAt: r.created_at,
+});
+
+export const rowClassGuest = (g: ClassGuest): Row => ({
+  id: g.id,
+  studio_id: g.studioId,
+  session_id: g.sessionId,
+  name: g.name,
+  phone: g.phone ?? null,
+  kind: g.kind,
+  cost: g.cost,
+  host_user_id: g.hostUserId ?? null,
+  created_at: g.createdAt,
+});
 
 const mapPackage = (r: Row): Package => ({
   id: r.id,
@@ -151,6 +177,7 @@ const mapStar = (r: Row): StarEntry => ({
   delta: r.delta,
   reason: r.reason,
   createdAt: r.created_at,
+  rewardId: r.reward_id ?? undefined,
 });
 
 const mapReward = (r: Row): Reward => ({
@@ -186,6 +213,7 @@ function emptyDatabase(): Database {
     stars: [],
     rewards: [],
     goals: [],
+    classGuests: [],
   };
 }
 
@@ -205,6 +233,7 @@ export async function loadDatabase(): Promise<Database> {
     stars,
     rewards,
     goals,
+    classGuests,
   ] = await Promise.all([
     supabase.from('studios').select('*'),
     supabase.from('users').select('*'),
@@ -217,6 +246,7 @@ export async function loadDatabase(): Promise<Database> {
     supabase.from('star_entries').select('*'),
     supabase.from('rewards').select('*'),
     supabase.from('goals').select('*'),
+    supabase.from('class_guests').select('*'),
   ]);
 
   return {
@@ -231,6 +261,7 @@ export async function loadDatabase(): Promise<Database> {
     stars: (stars.data ?? []).map(mapStar),
     rewards: (rewards.data ?? []).map(mapReward),
     goals: (goals.data ?? []).map(mapGoal),
+    classGuests: (classGuests.data ?? []).map(mapClassGuest),
   };
 }
 
@@ -345,6 +376,7 @@ export const rowStar = (s: StarEntry): Row => ({
   delta: s.delta,
   reason: s.reason,
   created_at: s.createdAt,
+  reward_id: s.rewardId ?? null,
 });
 export const rowReward = (r: Reward): Row => ({
   id: r.id,

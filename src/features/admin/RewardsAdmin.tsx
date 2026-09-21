@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button, Badge } from '../../components/ui';
+import { fmtDay } from '../../lib/format';
 import type { Reward } from '../../lib/types';
 
 const emptyDraft = (studioId: string): Reward => ({
@@ -9,10 +10,53 @@ const emptyDraft = (studioId: string): Reward => ({
 
 // Plan de recompensas editable — el estudio incentiva a sus alumnos.
 export default function RewardsAdmin() {
-  const { db, currentStudio, upsertReward, deleteReward, updateBranding } = useStore();
+  const { db, currentStudio, studioUsers, starBalance, goalProgress, upsertReward, deleteReward, updateBranding } = useStore();
   const rewards = db.rewards.filter((r) => r.studioId === currentStudio!.id);
   const goalReward = currentStudio!.branding.goalStarReward ?? 5;
   const [draft, setDraft] = useState<Reward | null>(null);
+
+  const students = studioUsers('STUDENT');
+  const nameOf = (userId: string) => db.users.find((u) => u.id === userId)?.fullName ?? 'Alumno';
+
+  // Canjes recientes (quién canjeó qué y cuándo).
+  const redemptions = useMemo(
+    () =>
+      db.stars
+        .filter((s) => s.reason === 'redemption')
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 20)
+        .map((s) => ({
+          entry: s,
+          student: nameOf(s.userId),
+          reward: s.rewardId ? db.rewards.find((r) => r.id === s.rewardId)?.name : undefined,
+          cost: -s.delta,
+        })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [db.stars, db.rewards, db.users],
+  );
+
+  // Ranking de estrellas + a cuánto están de la recompensa activa más barata.
+  const cheapest = rewards.filter((r) => r.active).sort((a, b) => a.starCost - b.starCost)[0];
+  const ranking = useMemo(
+    () =>
+      students
+        .map((s) => ({ s, balance: starBalance(s.id) }))
+        .filter((x) => x.balance > 0)
+        .sort((a, b) => b.balance - a.balance),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [students, db.stars],
+  );
+
+  // Metas de los alumnos con su avance.
+  const goalsWithProgress = useMemo(
+    () =>
+      db.goals
+        .filter((g) => students.some((s) => s.id === g.userId))
+        .map((g) => ({ g, student: nameOf(g.userId), progress: goalProgress(g) }))
+        .sort((a, b) => Number(a.g.achieved) - Number(b.g.achieved)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [db.goals, students, db.bookings],
+  );
 
   const save = () => {
     if (!draft || !draft.name.trim()) return;
@@ -54,7 +98,7 @@ export default function RewardsAdmin() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {rewards.map((r) => {
-          const redeemed = db.stars.filter((s) => s.reason === 'redemption').length; // demo
+          const redeemed = db.stars.filter((s) => s.reason === 'redemption' && s.rewardId === r.id).length;
           return (
             <Card key={r.id} className="p-5 flex flex-col">
               <div className="flex items-start justify-between">
@@ -71,6 +115,78 @@ export default function RewardsAdmin() {
             </Card>
           );
         })}
+      </div>
+
+      {/* ---- Visibilidad para el estudio ---- */}
+      <div className="mt-8 grid gap-4 lg:grid-cols-3">
+        {/* Canjes recientes */}
+        <Card className="p-5">
+          <h2 className="font-semibold text-ink mb-1">Canjes recientes</h2>
+          <p className="text-xs text-ink-faint mb-3">Qué recompensa canjeó cada alumno.</p>
+          {redemptions.length === 0 && <p className="text-sm text-ink-faint">Aún no hay canjes.</p>}
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {redemptions.map(({ entry, student, reward, cost }) => (
+              <div key={entry.id} className="rounded-lg bg-cream-dark/40 px-3 py-2 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-ink truncate">{student}</span>
+                  <span className="shrink-0 text-brand font-semibold">★ {cost}</span>
+                </div>
+                <p className="text-xs text-ink-faint">{reward ?? 'Recompensa'} · {fmtDay(entry.createdAt)}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Estrellas de los alumnos */}
+        <Card className="p-5">
+          <h2 className="font-semibold text-ink mb-1">Estrellas de tus alumnos</h2>
+          <p className="text-xs text-ink-faint mb-3">
+            {cheapest ? <>Recompensa más cercana: <strong>{cheapest.name}</strong> (★ {cheapest.starCost}).</> : 'Crea una recompensa para ver el avance.'}
+          </p>
+          {ranking.length === 0 && <p className="text-sm text-ink-faint">Nadie tiene estrellas todavía.</p>}
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {ranking.map(({ s, balance }) => {
+              const missing = cheapest ? cheapest.starCost - balance : 0;
+              return (
+                <div key={s.id} className="flex items-center justify-between gap-2 rounded-lg bg-cream-dark/40 px-3 py-2 text-sm">
+                  <span className="font-medium text-ink truncate">{s.fullName}</span>
+                  <span className="shrink-0 text-xs">
+                    <span className="text-brand font-semibold">★ {balance}</span>
+                    {cheapest && (missing <= 0
+                      ? <span className="ml-2 rounded-full bg-green-100 px-2 py-0.5 font-semibold text-green-700">¡Ya puede canjear!</span>
+                      : <span className="ml-2 text-ink-faint">a {missing}★</span>)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        {/* Metas de los alumnos */}
+        <Card className="p-5">
+          <h2 className="font-semibold text-ink mb-1">Metas de tus alumnos</h2>
+          <p className="text-xs text-ink-faint mb-3">Avance de las metas de asistencia que se pusieron.</p>
+          {goalsWithProgress.length === 0 && <p className="text-sm text-ink-faint">Aún no hay metas.</p>}
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {goalsWithProgress.map(({ g, student, progress }) => {
+              const pct = Math.min(100, Math.round((progress / Math.max(1, g.targetValue)) * 100));
+              return (
+                <div key={g.id} className="rounded-lg bg-cream-dark/40 px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-ink truncate">{student}</span>
+                    {g.achieved
+                      ? <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">Cumplida</span>
+                      : <span className="shrink-0 text-xs text-ink-faint">{progress}/{g.targetValue}</span>}
+                  </div>
+                  <p className="text-xs text-ink-faint truncate">{g.title}</p>
+                  <div className="mt-1 h-1.5 w-full rounded-full bg-cream-dark">
+                    <div className="h-1.5 rounded-full bg-brand" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
       </div>
 
       {draft && (
