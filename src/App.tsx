@@ -135,6 +135,27 @@ export default function App() {
     }
   }, []);
 
+  // Auto-refresco: cuando el usuario vuelve a la pestaña/app (o la enfoca),
+  // recargamos los datos del servidor para no ver información vieja sin tener
+  // que refrescar a mano (p. ej. el estudio ve al instante una nueva reserva o
+  // compra al regresar a su pantalla). Con límite para no saturar.
+  useEffect(() => {
+    let last = 0;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - last < 8000) return; // como máximo cada 8s
+      last = now;
+      triggerResync();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, []);
+
   // Si faltan las llaves de conexión, avisa claramente (en vez de "Failed to fetch").
   if (!isSupabaseConfigured) {
     return (
