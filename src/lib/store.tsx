@@ -458,21 +458,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!ups.length) {
         return { state: 'none', planName: null, creditsLeft: 0, expiresAt: null, daysLeft: 0 };
       }
-      const up = ups.slice().sort((a, b) => b.purchasedAt.localeCompare(a.purchasedAt))[0];
-      const pkg = db.packages.find((p) => p.id === up.packageId);
-      const daysLeft = daysUntil(up.expiresAt);
-      const creditsLeft = up.creditsTotal - up.creditsUsed;
-      // "Por vencer" es la parte FINAL de la vigencia del paquete, no un número
-      // fijo de días. Así, un paquete recién comprado sale "Activa" aunque su
-      // vigencia sea corta (ej. Starter de 7 días); solo se marca "Por vencer"
-      // cerca del final. Para paquetes largos, el aviso es a los 7 días o menos.
-      const validity = pkg?.validityDays ?? 30;
-      const expiringWindow = Math.min(7, Math.max(1, Math.round(validity * 0.3)));
-      let state: MembershipState;
-      if (daysLeft <= 0 || creditsLeft <= 0) state = 'expired';
-      else if (daysLeft <= expiringWindow) state = 'expiring';
-      else state = 'active';
-      return { state, planName: pkg?.name ?? null, creditsLeft, expiresAt: up.expiresAt, daysLeft };
+      // Consideramos TODOS los paquetes usables (activos, con créditos y vigentes),
+      // no solo el más reciente: si el alumno tiene cualquiera activo, su membresía
+      // está activa, y las clases disponibles se SUMAN de todos.
+      const usable = ups.filter(isUsablePackage);
+      if (usable.length) {
+        // El que vence primero (el que se consume antes) define plan/vigencia.
+        const soonest = usable.slice().sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))[0];
+        const pkg = db.packages.find((p) => p.id === soonest.packageId);
+        const daysLeft = daysUntil(soonest.expiresAt);
+        const creditsLeft = usable.reduce((t, p) => t + Math.max(0, p.creditsTotal - p.creditsUsed), 0);
+        // "Por vencer" es la parte FINAL de la vigencia del paquete, no un número
+        // fijo de días. Así, un paquete recién comprado sale "Activa" aunque su
+        // vigencia sea corta; solo se marca "Por vencer" cerca del final.
+        const validity = pkg?.validityDays ?? 30;
+        const expiringWindow = Math.min(7, Math.max(1, Math.round(validity * 0.3)));
+        const state: MembershipState = daysLeft <= expiringWindow ? 'expiring' : 'active';
+        return { state, planName: pkg?.name ?? null, creditsLeft, expiresAt: soonest.expiresAt, daysLeft };
+      }
+      // Sin paquetes usables: mostramos el más reciente como vencido/agotado.
+      const latest = ups.slice().sort((a, b) => b.purchasedAt.localeCompare(a.purchasedAt))[0];
+      const pkg = db.packages.find((p) => p.id === latest.packageId);
+      return { state: 'expired', planName: pkg?.name ?? null, creditsLeft: 0, expiresAt: latest.expiresAt, daysLeft: daysUntil(latest.expiresAt) };
     },
     availableCredits(userId) {
       return db.userPackages
