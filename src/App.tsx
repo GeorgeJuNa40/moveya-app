@@ -62,6 +62,7 @@ const CoachesAdmin = lazyWithReload(() => import('./features/admin/CoachesAdmin'
 const RewardsAdmin = lazyWithReload(() => import('./features/admin/RewardsAdmin'));
 const ServicesConfig = lazyWithReload(() => import('./features/admin/ServicesConfig'));
 const WhatsappAgent = lazyWithReload(() => import('./features/admin/WhatsappAgent'));
+const Inbox = lazyWithReload(() => import('./features/admin/Inbox'));
 const Reports = lazyWithReload(() => import('./features/admin/Reports'));
 const Reminders = lazyWithReload(() => import('./features/admin/Reminders'));
 const SubscriptionScreen = lazyWithReload(() => import('./features/admin/SubscriptionScreen'));
@@ -256,6 +257,7 @@ export default function App() {
       <Route path="/admin/rewards" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="rewards"><RewardsAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/services" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="services"><ServicesConfig /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/whatsapp" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappAgent /></PlanGate></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/inbox" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><Inbox /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reports" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="reports"><Reports /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reminders" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Reminders /></SubscriptionGate></RequireRole>} />
       {/* Suscripción siempre accesible (allow) para poder regularizar el pago. */}

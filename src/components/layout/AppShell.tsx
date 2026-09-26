@@ -30,6 +30,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/admin/rewards', label: 'Recompensas', cap: 'rewards' },
     { to: '/admin/services', label: 'Servicios', cap: 'services' },
     { to: '/admin/whatsapp', label: 'WhatsApp IA', cap: 'whatsapp' },
+    { to: '/admin/inbox', label: 'Bandeja WhatsApp', short: 'Bandeja', cap: 'whatsapp' },
     { to: '/admin/reports', label: 'Reportes', cap: 'reports' },
     { to: '/admin/subscription', label: 'Suscripción' },
     { to: '/admin/settings', label: 'Configuración' },
@@ -106,6 +107,13 @@ function iconPaths(to: string): ReactNode {
       </>
     );
   if (to.includes('classes')) return <path d="M3 12h3l2.5-6 4 12L17 9h4" />;
+  if (to.includes('inbox'))
+    return (
+      <>
+        <path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h10a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 15 13H8l-4 3v-3H5" />
+        <path d="M17 9h2a1.5 1.5 0 0 1 1.5 1.5v5A1.5 1.5 0 0 1 19 17h-1v3l-4-3" />
+      </>
+    );
   if (to.includes('whatsapp'))
     return (
       <>
