@@ -3,19 +3,65 @@
 // ----------------------------------------------------------------------------
 // En cada despliegue, el build genera un id (__BUILD_ID__) y un archivo
 // /version.json con ESE id. La app revisa /version.json (al abrir, al volver a
-// la pestaña y cada minuto). Si el id del servidor es distinto al que está
-// corriendo, hay una versión nueva publicada: limpiamos cachés y recargamos una
-// sola vez. Así, aunque la app ya esté abierta o instalada, agarra lo más nuevo
-// sin que el usuario tenga que recargar a mano.
+// la pestaña y cada 30 s). Si el id del servidor es distinto al que está
+// corriendo, hay una versión nueva publicada.
+//
+// Estrategia en 2 pasos (para que NUNCA se quede pegada, ni siquiera una app
+// instalada con un service worker viejo):
+//   1) RECARGA SUAVE: limpia las cachés y recarga una vez. Conserva el service
+//      worker (y por tanto la suscripción a notificaciones push).
+//   2) Si tras la recarga suave SIGUE en la versión vieja (service worker
+//      atorado), RECARGA DURA: da de baja el/los service workers, limpia todo
+//      y recarga. Esto despega cualquier copia vieja sí o sí.
+// El sessionStorage evita bucles: cada paso se intenta una sola vez por versión.
 // ============================================================================
 
 declare const __BUILD_ID__: string;
 const CURRENT = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : '';
 
-const KEY = 'mya_reload_target'; // evita bucles de recarga
+const SOFT_KEY = 'mya_reload_target'; // versión para la que ya intentamos recarga suave
+const HARD_KEY = 'mya_hard_reload_target'; // versión para la que ya intentamos recarga dura
+
+async function clearCaches() {
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+  } catch {
+    /* ignore */
+  }
+}
+
+async function unregisterServiceWorkers() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+const read = (k: string) => {
+  try {
+    return sessionStorage.getItem(k) ?? '';
+  } catch {
+    return '';
+  }
+};
+const write = (k: string, v: string) => {
+  try {
+    sessionStorage.setItem(k, v);
+  } catch {
+    /* ignore */
+  }
+};
+
+let checking = false;
 
 async function check() {
-  if (!CURRENT || typeof fetch === 'undefined') return;
+  if (checking || !CURRENT || typeof fetch === 'undefined') return;
+  checking = true;
   try {
     const res = await fetch(`/version.json?_=${Date.now()}`, { cache: 'no-store' });
     if (!res.ok) return;
@@ -23,22 +69,41 @@ async function check() {
     const serverId = data?.id;
     if (!serverId || serverId === CURRENT) return;
 
-    // Ya intentamos recargar para esta versión y seguimos en la vieja: no hacemos
-    // bucle (la carga por red debería haberla actualizado). Se reintenta al
-    // siguiente despliegue.
-    let already = '';
-    try { already = sessionStorage.getItem(KEY) ?? ''; } catch { /* ignore */ }
-    if (already === serverId) return;
-    try { sessionStorage.setItem(KEY, serverId); } catch { /* ignore */ }
-
-    // Limpia las cachés del service worker y recarga para tomar la versión nueva.
+    // Hay una versión nueva. Pedimos también al service worker que se actualice.
     try {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((k) => caches.delete(k)));
-    } catch { /* ignore */ }
-    window.location.reload();
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        await reg?.update();
+      }
+    } catch {
+      /* ignore */
+    }
+
+    const softTried = read(SOFT_KEY) === serverId;
+    if (!softTried) {
+      // Paso 1: recarga suave (conserva el service worker y el push).
+      write(SOFT_KEY, serverId);
+      await clearCaches();
+      window.location.reload();
+      return;
+    }
+
+    // La recarga suave no bastó: seguimos en la versión vieja.
+    const hardTried = read(HARD_KEY) === serverId;
+    if (!hardTried) {
+      // Paso 2: recarga dura (da de baja el service worker atorado y limpia todo).
+      write(HARD_KEY, serverId);
+      await clearCaches();
+      await unregisterServiceWorkers();
+      window.location.reload();
+      return;
+    }
+    // Ya intentamos ambos pasos para esta versión: no hacemos bucle. Se
+    // reintentará en el siguiente despliegue.
   } catch {
     /* sin red o error: se reintenta luego */
+  } finally {
+    checking = false;
   }
 }
 
@@ -51,6 +116,6 @@ export function startVersionWatch() {
   }
   if (typeof window !== 'undefined') {
     window.addEventListener('focus', check);
-    setInterval(check, 60000); // revisa cada minuto mientras está abierta
+    setInterval(check, 30000); // revisa cada 30 s mientras está abierta
   }
 }
