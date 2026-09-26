@@ -157,7 +157,11 @@ interface StoreValue {
   upsertWhatsappTemplate: (t: WhatsappTemplate) => void;
   deleteWhatsappTemplate: (id: string) => void;
   addKnowledge: (text: string) => void;
+  addKnowledgeMany: (texts: string[]) => void;
   removeKnowledge: (index: number) => void;
+  // Datos que el bot ya conoce SOLO (paquetes, clases, horarios, dirección…) sin
+  // que el estudio tenga que reescribirlos: se arman de la info ya cargada.
+  studioAutoFacts: string[];
   // Suscripción SaaS
   activatePromo: () => void;
   subscribeToPlan: (plan: PlanId) => void;
@@ -395,12 +399,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Plan vigente del estudio (por defecto el más limitado si aún no hay dato).
   const plan: PlanId = currentStudio?.subscription?.plan ?? 'inicio';
 
+  // Lo que el bot ya sabe SOLO, a partir de la info ya cargada del estudio
+  // (paquetes, clases, dirección, horarios, política). Así no se reescribe nada.
+  const studioAutoFacts = useMemo(
+    () => (currentStudio ? buildAutoFacts(currentStudio, db) : []),
+    [currentStudio, db.packages, db.classTemplates],
+  );
+
   const value: StoreValue = {
     db,
     currentUser,
     currentStudio,
     authLoading,
     plan,
+    studioAutoFacts,
     can: (cap) => planHas(plan, cap),
 
     async signUp(input) {
@@ -977,6 +989,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addKnowledge(text) {
       patchStudio((s) => ({ ...s, whatsapp: { ...s.whatsapp, knowledge: [...s.whatsapp.knowledge, text] } }));
     },
+    addKnowledgeMany(texts) {
+      const clean = texts.map((t) => t.trim()).filter(Boolean);
+      if (!clean.length) return;
+      patchStudio((s) => ({ ...s, whatsapp: { ...s.whatsapp, knowledge: [...s.whatsapp.knowledge, ...clean] } }));
+    },
     removeKnowledge(index) {
       patchStudio((s) => ({
         ...s,
@@ -1122,14 +1139,91 @@ function bookingErrorMessage(msg: string): string {
 }
 
 // Genera una respuesta simulada del bot con base en la retro/conocimiento.
+// Normaliza: minúsculas y sin acentos (para comparar "dónde" == "donde").
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+const STOP = new Set([
+  'para', 'como', 'cuando', 'donde', 'cual', 'cuales', 'tienen', 'tiene', 'hay', 'una', 'uno', 'unos', 'unas',
+  'los', 'las', 'del', 'con', 'que', 'por', 'sus', 'este', 'esta', 'estan', 'muy', 'mas', 'pero', 'sobre',
+  'quiero', 'saber', 'me', 'la', 'el', 'un', 'de', 'en', 'y', 'o', 'a',
+]);
+
+// Intenciones frecuentes → cómo reconocer las líneas de la base que responden.
+const INTENTS: { re: RegExp; pick: RegExp }[] = [
+  { re: /(paquete|precio|costo|cuanto|cuesta|tarifa|mensualidad|plan|pagar|pago)/, pick: /paquete|precio|\$/i },
+  { re: /(direccion|donde|ubica|llegar|domicilio|estan|estamos|mapa)/, pick: /direccion|ubica|domicilio|calle|av\.|#/i },
+  { re: /(horario|hora|abren|cierran|atienden|atencion|abierto)/, pick: /horario|hora/i },
+  { re: /(clase|clases|tipos|reformer|mat|pilates|actividad)/, pick: /clase|tipos/i },
+  { re: /(cancel|reagenda|reprograma|penaliz|falta)/, pick: /cancel|politica/i },
+  { re: /(telefono|contacto|numero|llamar|whats)/, pick: /telefono|contacto/i },
+];
+
+// Simulador local del bot (adelanto). El bot REAL por WhatsApp usa IA y es más
+// capaz; esto solo da una idea rápida a partir de la info del estudio.
 export function botReply(question: string, knowledge: string[]): string {
-  const q = question.toLowerCase();
-  const hit = knowledge.find((k) => {
-    const words = k.toLowerCase().split(/\W+/).filter((w) => w.length > 4);
-    return words.some((w) => q.includes(w));
-  });
-  if (hit) return hit;
-  if (/hola|buenas|buenos/.test(q)) return '¡Hola! 👋 ¿En qué te puedo ayudar hoy?';
+  const q = norm(question);
+
+  // 1) Intenciones directas: devuelve las líneas relevantes (p. ej. todos los paquetes).
+  for (const it of INTENTS) {
+    if (it.re.test(q)) {
+      const lines = knowledge.filter((k) => it.pick.test(k));
+      if (lines.length) return lines.slice(0, 4).join('\n');
+    }
+  }
+
+  // 2) Coincidencia por palabras clave (la línea que más comparte con la pregunta).
+  const qWords = q.split(/\W+/).filter((w) => w.length > 3 && !STOP.has(w));
+  let best: string | null = null;
+  let bestScore = 0;
+  for (const k of knowledge) {
+    const kn = norm(k);
+    let score = 0;
+    for (const w of qWords) if (kn.includes(w)) score++;
+    if (score > bestScore) { bestScore = score; best = k; }
+  }
+  if (best && bestScore > 0) return best;
+
+  // 3) Cortesías / handoff / guía.
+  if (/hola|buenas|buenos|hey|que tal/.test(q))
+    return '¡Hola! 👋 ¿En qué te ayudo? Puedo contarte de paquetes, horarios, clases o ubicación.';
   if (/gracias/.test(q)) return '¡Con gusto! Aquí estamos para lo que necesites. 🙌';
-  return 'Gracias por tu mensaje. Un miembro del estudio te responderá en breve. Mientras tanto, ¿te ayudo con horarios, pagos o reservas?';
+  if (/humano|persona|asesor|agente|alguien/.test(q))
+    return 'Con gusto te comunico con una persona del estudio 🙋. En un momento te atienden.';
+  return 'Gracias por tu mensaje 🙏 ¿Te ayudo con horarios, paquetes, clases o ubicación? También puedo comunicarte con una persona.';
+}
+
+// ---------------------------------------------------------------------------
+// AUTO-NUTRICIÓN: arma los datos que el bot ya conoce SOLO, a partir de la
+// info que el estudio ya cargó en la app (paquetes, clases, dirección,
+// horarios, política de cancelación). Así el bot responde sin que el estudio
+// tenga que reescribir todo a mano.
+// ---------------------------------------------------------------------------
+export function buildAutoFacts(studio: Studio, db: Database): string[] {
+  const facts: string[] = [];
+  const cur = studio.branding?.currencyCode || 'USD';
+  facts.push(`Estudio: ${studio.name}.`);
+
+  const pkgs = db.packages.filter((p) => p.studioId === studio.id && p.active);
+  for (const p of pkgs) {
+    facts.push(
+      `Paquete "${p.name}": ${p.classCredits} clases por $${p.priceUsd} ${cur}, ` +
+        `vigencia ${p.validityDays} días.${p.description ? ' ' + p.description : ''}`,
+    );
+  }
+
+  const tpls = db.classTemplates.filter((t) => t.studioId === studio.id);
+  if (tpls.length) facts.push(`Tipos de clase que ofrecemos: ${tpls.map((t) => t.name).join(', ')}.`);
+
+  if (studio.address) facts.push(`Dirección: ${studio.address}.`);
+  if (studio.phone) facts.push(`Teléfono de contacto: ${studio.phone}.`);
+
+  const ip = studio.branding?.infoPage;
+  if (ip?.hours) facts.push(`Horario de atención: ${ip.hours}.`);
+  if (ip?.schedule) facts.push(`Horarios de clases: ${ip.schedule}.`);
+
+  if (studio.branding?.cancellationPolicy) facts.push(`Política de cancelación: ${studio.branding.cancellationPolicy}.`);
+  if (studio.branding?.cancellationHours)
+    facts.push(`Las clases se pueden cancelar hasta ${studio.branding.cancellationHours} horas antes.`);
+
+  return facts;
 }

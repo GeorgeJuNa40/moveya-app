@@ -9,16 +9,40 @@ import { notifySuccess, notifyError } from '../../lib/notify';
 export default function WhatsappAgent() {
   const {
     currentStudio, updateWhatsapp, upsertWhatsappTemplate, deleteWhatsappTemplate,
-    addKnowledge, removeKnowledge,
+    addKnowledge, addKnowledgeMany, removeKnowledge, studioAutoFacts,
   } = useStore();
   const wa = currentStudio!.whatsapp;
 
   const [tplDraft, setTplDraft] = useState<WhatsappTemplate | null>(null);
   const [newKnow, setNewKnow] = useState('');
+  const [bulk, setBulk] = useState(''); // pegar mucha info de golpe
+  const [showAuto, setShowAuto] = useState(false); // ver lo que el bot ya sabe
   const [chat, setChat] = useState<{ from: 'user' | 'bot'; text: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [manual, setManual] = useState(false); // mostrar el alta manual (Fase A)
+
+  // Agrega varias líneas de golpe (una por renglón) a la base de conocimiento.
+  const addBulk = (raw: string) => {
+    const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length) {
+      addKnowledgeMany(lines);
+      notifySuccess(`Se agregaron ${lines.length} dato(s) al bot.`);
+    }
+    setBulk('');
+  };
+
+  // Lee un archivo de texto (.txt/.md) y lo agrega al conocimiento.
+  const onFile = async (file?: File) => {
+    if (!file) return;
+    if (file.size > 2_000_000) { notifyError('archivo', 'El archivo es muy grande (máx. 2 MB).'); return; }
+    try {
+      const text = await file.text();
+      addBulk(text);
+    } catch {
+      notifyError('archivo', 'No pude leer el archivo. Copia y pega el texto en su lugar.');
+    }
+  };
 
   // Conecta el WhatsApp del estudio con el flujo oficial de Meta (Embedded Signup).
   const connect = async () => {
@@ -50,7 +74,7 @@ export default function WhatsappAgent() {
     if (!chatInput.trim()) return;
     const q = chatInput.trim();
     const reply = wa.botEnabled
-      ? botReply(q, wa.knowledge)
+      ? botReply(q, [...studioAutoFacts, ...wa.knowledge])
       : 'El bot está desactivado. Un miembro del estudio responderá pronto.';
     setChat((c) => [...c, { from: 'user', text: q }, { from: 'bot', text: reply }]);
     setChatInput('');
@@ -155,18 +179,63 @@ export default function WhatsappAgent() {
         {/* Base de conocimiento / retro */}
         <Card className="p-6">
           <h2 className="font-semibold text-ink mb-1">Retroalimentación del bot</h2>
-          <p className="text-sm text-ink-faint mb-3">Enséñale respuestas para que conteste por sí solo.</p>
-          <div className="space-y-2 max-h-44 overflow-y-auto mb-3">
+          <p className="text-sm text-ink-faint mb-3">
+            Agrega solo lo <b>extra</b> (preguntas frecuentes, promociones, indicaciones). El resto ya lo sabe solo.
+          </p>
+
+          {/* Lo que el bot ya sabe SOLO (auto-nutrición) */}
+          <div className="mb-3 rounded-2xl bg-brand-soft p-3 text-sm text-brand">
+            ✅ El bot ya conoce <b>tus paquetes, clases, horarios, dirección y política</b> automáticamente — no
+            necesitas reescribirlos.
+            <button onClick={() => setShowAuto((v) => !v)} className="ml-1 underline font-medium">
+              {showAuto ? 'ocultar' : `ver (${studioAutoFacts.length})`}
+            </button>
+            {showAuto && (
+              <ul className="mt-2 list-disc pl-5 text-ink-soft space-y-0.5">
+                {studioAutoFacts.map((f, i) => <li key={i}>{f}</li>)}
+                {studioAutoFacts.length === 0 && <li>Aún no hay datos. Carga tus paquetes y clases en la app.</li>}
+              </ul>
+            )}
+          </div>
+
+          {/* Lista de conocimiento extra agregado a mano */}
+          <div className="space-y-2 max-h-40 overflow-y-auto mb-3">
             {wa.knowledge.map((k, i) => (
               <div key={i} className="flex items-start justify-between gap-2 rounded-lg bg-cream-dark/40 px-3 py-2 text-sm">
                 <span className="text-ink-soft">{k}</span>
                 <button onClick={() => removeKnowledge(i)} className="text-red-600 shrink-0">✕</button>
               </div>
             ))}
+            {wa.knowledge.length === 0 && (
+              <p className="text-xs text-ink-faint">Todavía no agregas info extra. Puedes pegar todo de golpe abajo. 👇</p>
+            )}
           </div>
-          <div className="flex gap-2">
-            <input className="input" placeholder="Ej. El estacionamiento es gratuito." value={newKnow} onChange={(e) => setNewKnow(e.target.value)} />
+
+          {/* Agregar una línea */}
+          <div className="flex gap-2 mb-4">
+            <input className="input" placeholder="Ej. El estacionamiento es gratuito." value={newKnow} onChange={(e) => setNewKnow(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && newKnow.trim()) { addKnowledge(newKnow.trim()); setNewKnow(''); } }} />
             <Button onClick={() => { if (newKnow.trim()) { addKnowledge(newKnow.trim()); setNewKnow(''); } }}>Agregar</Button>
+          </div>
+
+          {/* Carga fácil: pegar mucho o subir archivo */}
+          <div className="rounded-2xl border border-dashed border-cream-dark p-3">
+            <p className="text-sm font-medium text-ink-soft mb-1">Carga rápida</p>
+            <p className="text-xs text-ink-faint mb-2">Pega aquí toda tu info (una idea por renglón) o sube un archivo .txt.</p>
+            <textarea
+              className="input"
+              rows={4}
+              placeholder={"Ej.\nOfrecemos clase de prueba a $150.\nHay regaderas y lockers.\nAceptamos tarjeta y transferencia."}
+              value={bulk}
+              onChange={(e) => setBulk(e.target.value)}
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Button onClick={() => addBulk(bulk)} disabled={!bulk.trim()}>Agregar todo</Button>
+              <label className="cursor-pointer rounded-2xl border border-cream-dark px-3 py-2 text-sm font-medium text-ink-soft hover:bg-brand-soft">
+                Subir archivo (.txt)
+                <input type="file" accept=".txt,.md,text/plain" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
+              </label>
+            </div>
+            <p className="mt-2 text-[11px] text-ink-faint">💡 ¿Tienes un PDF? Ábrelo, copia el texto y pégalo aquí.</p>
           </div>
         </Card>
 
@@ -195,7 +264,11 @@ export default function WhatsappAgent() {
 
         {/* Simulador del bot */}
         <Card className="p-6 lg:col-span-2">
-          <h2 className="font-semibold text-ink mb-3">Prueba al bot</h2>
+          <h2 className="font-semibold text-ink mb-1">Prueba al bot</h2>
+          <p className="text-xs text-ink-faint mb-3">
+            Adelanto rápido (busca por palabras). El bot <b>real por WhatsApp</b> usa IA y entiende mucho mejor toda tu
+            info. Prueba con: <i>"¿qué paquetes tienen?"</i> o <i>"¿dónde están?"</i>.
+          </p>
           <div className="rounded-xl bg-[#e7ded0]/40 border border-cream-dark p-4 h-56 overflow-y-auto space-y-2">
             {chat.length === 0 && <p className="text-sm text-ink-faint text-center mt-16">Escribe un mensaje para ver cómo responde el bot.</p>}
             {chat.map((m, i) => (
