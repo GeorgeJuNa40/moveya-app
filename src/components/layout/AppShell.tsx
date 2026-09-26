@@ -9,6 +9,7 @@ import InstallAppButton from '../InstallAppButton';
 import NotificationsButton from '../NotificationsButton';
 import NotificationsPrompt from '../NotificationsPrompt';
 import StudioLogo from '../StudioLogo';
+import { buildLabel } from '../../lib/version';
 
 interface NavItem {
   to: string;
@@ -206,6 +207,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         />
         <p className="text-xs text-ink-faint mt-1.5">
           powered by <span className="font-semibold">Move yA</span>
+          {buildLabel() && <span className="ml-1 text-ink-faint/70">· v{buildLabel()}</span>}
         </p>
       </div>
 

@@ -45,6 +45,7 @@ if ('serviceWorker' in navigator) {
         // despliegue nuevo se detecte en segundos (no al día siguiente).
         const forceUpdate = () => reg.update().catch(() => {});
         window.addEventListener('focus', forceUpdate);
+        window.addEventListener('pageshow', forceUpdate); // app reanudada desde segundo plano
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'visible') forceUpdate();
         });

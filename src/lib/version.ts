@@ -19,6 +19,21 @@
 declare const __BUILD_ID__: string;
 const CURRENT = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : '';
 
+// Id de esta compilación (para mostrarlo en la app y saber si es la última).
+export const BUILD_ID = CURRENT;
+// Etiqueta legible tipo "MM-DD HH:MM" a partir del id (timestamp del build).
+export function buildLabel(): string {
+  const n = Number(CURRENT);
+  if (!n) return '';
+  try {
+    const d = new Date(n);
+    const p = (x: number) => String(x).padStart(2, '0');
+    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  } catch {
+    return '';
+  }
+}
+
 const SOFT_KEY = 'mya_reload_target'; // versión para la que ya intentamos recarga suave
 const HARD_KEY = 'mya_hard_reload_target'; // versión para la que ya intentamos recarga dura
 
@@ -116,6 +131,9 @@ export function startVersionWatch() {
   }
   if (typeof window !== 'undefined') {
     window.addEventListener('focus', check);
+    // pageshow cubre cuando la app instalada se reanuda desde segundo plano
+    // (en Android/iOS muchas veces no dispara 'focus' ni 'visibilitychange').
+    window.addEventListener('pageshow', () => check());
     setInterval(check, 30000); // revisa cada 30 s mientras está abierta
   }
 }
