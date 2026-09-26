@@ -286,7 +286,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const channel = supabase
       .channel('moveya-live')
-      .on('postgres_changes', { event: '*', schema: 'public' }, scheduleReload)
+      .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+        // Las tablas de la Bandeja (wa_*) tienen su propio canal en la pantalla
+        // de chat; no recargamos TODO el estado por cada mensaje de WhatsApp.
+        const table = (payload as { table?: string })?.table ?? '';
+        if (table.startsWith('wa_')) return;
+        scheduleReload();
+      })
       .subscribe();
 
     return () => {

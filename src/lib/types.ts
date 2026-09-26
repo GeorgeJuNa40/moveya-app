@@ -239,6 +239,33 @@ export interface Goal {
   createdAt?: string; // inicio de la ventana de conteo (cuándo se creó la meta)
 }
 
+// --- Bandeja de WhatsApp (chats + handoff a humano) ---
+export type WaMode = 'bot' | 'human';
+
+export interface WaConversation {
+  id: string;
+  studioId: string;
+  contactPhone: string;
+  contactName?: string;
+  phoneNumberId?: string;
+  mode: WaMode; // 'bot' = responde el asistente | 'human' = contesta una persona
+  lastMessageAt?: string;
+  lastMessageText?: string;
+  lastDirection?: 'in' | 'out';
+  unread: number;
+  createdAt: string;
+}
+
+export interface WaMessage {
+  id: string;
+  conversationId: string;
+  studioId: string;
+  direction: 'in' | 'out';
+  sender: 'contact' | 'bot' | 'human';
+  body: string;
+  createdAt: string;
+}
+
 export interface Database {
   studios: Studio[];
   users: User[];
