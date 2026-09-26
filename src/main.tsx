@@ -38,7 +38,17 @@ if ('serviceWorker' in navigator) {
     // desde su caché), así detecta versiones nuevas de inmediato.
     navigator.serviceWorker
       .register('/sw.js', { updateViaCache: 'none' })
-      .then((reg) => reg.update().catch(() => {}))
+      .then((reg) => {
+        reg.update().catch(() => {});
+        // Chrome solo revisa el service worker cada ~24 h en apps instaladas.
+        // Lo forzamos cada vez que el usuario vuelve a la app, para que un
+        // despliegue nuevo se detecte en segundos (no al día siguiente).
+        const forceUpdate = () => reg.update().catch(() => {});
+        window.addEventListener('focus', forceUpdate);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') forceUpdate();
+        });
+      })
       .catch(() => {
         /* si falla el registro, la app sigue funcionando normal */
       });
