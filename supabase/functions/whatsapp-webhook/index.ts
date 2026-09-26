@@ -297,16 +297,42 @@ async function aiReply(studio: Studio, userText: string, knowledge: string[]): P
 // ---------------------------------------------------------------------------
 // Bot de reglas (GRATIS) — respuesta de arranque, personalizada con el estudio.
 // ---------------------------------------------------------------------------
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const STOP = new Set([
+  'para', 'como', 'cuando', 'donde', 'cual', 'cuales', 'tienen', 'tiene', 'hay', 'una', 'uno', 'los', 'las',
+  'del', 'con', 'que', 'por', 'sus', 'este', 'esta', 'estan', 'muy', 'mas', 'pero', 'quiero', 'saber',
+]);
+const INTENTS: { re: RegExp; pick: RegExp }[] = [
+  { re: /(paquete|precio|costo|cuanto|cuesta|tarifa|mensualidad|plan|pagar|pago)/, pick: /paquete|precio|\$/i },
+  { re: /(direccion|donde|ubica|llegar|domicilio|estan|estamos|mapa)/, pick: /direccion|ubica|domicilio|calle/i },
+  { re: /(horario|hora|abren|cierran|atienden|atencion|abierto)/, pick: /horario|hora/i },
+  { re: /(clase|clases|tipos|reformer|mat|pilates|actividad)/, pick: /clase|tipos/i },
+  { re: /(cancel|reagenda|reprograma|penaliz|falta)/, pick: /cancel|politica/i },
+  { re: /(telefono|contacto|numero|llamar|whats)/, pick: /telefono|contacto/i },
+];
+
 function rulesReply(question: string, studioName: string, knowledge: string[] = []): string {
-  const q = question.toLowerCase();
-  // 1) Intenta responder con la info REAL del estudio (paquetes, dirección, etc.).
-  const hit = (knowledge ?? []).find((k) => {
-    const words = k.toLowerCase().split(/\W+/).filter((w) => w.length > 4);
-    return words.some((w) => q.includes(w));
-  });
-  if (hit) return hit;
-  // 2) Respuestas guía de arranque.
-  if (/hola|buenas|buenos|hey|qué tal|que tal/.test(q))
+  const q = norm(question);
+  // 1) Intenciones directas con la info REAL del estudio.
+  for (const it of INTENTS) {
+    if (it.re.test(q)) {
+      const lines = (knowledge ?? []).filter((k) => it.pick.test(k));
+      if (lines.length) return lines.slice(0, 4).join('\n');
+    }
+  }
+  // 2) Coincidencia por palabras clave.
+  const qWords = q.split(/\W+/).filter((w) => w.length > 3 && !STOP.has(w));
+  let best: string | null = null;
+  let bestScore = 0;
+  for (const k of knowledge ?? []) {
+    const kn = norm(k);
+    let score = 0;
+    for (const w of qWords) if (kn.includes(w)) score++;
+    if (score > bestScore) { bestScore = score; best = k; }
+  }
+  if (best && bestScore > 0) return best;
+  // 3) Respuestas guía de arranque.
+  if (/hola|buenas|buenos|hey|que tal/.test(q))
     return `¡Hola! 👋 Soy el asistente de ${studioName}. Puedo ayudarte con horarios, paquetes o reservas. ¿Qué necesitas? (Si quieres, también puedo comunicarte con una persona.)`;
   if (/gracias/.test(q)) return '¡Con gusto! 🙌 Aquí estoy para lo que necesites.';
   if (/horario|clase|reserva|reservar|agenda/.test(q))
