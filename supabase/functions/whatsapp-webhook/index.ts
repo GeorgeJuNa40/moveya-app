@@ -181,30 +181,80 @@ Deno.serve(async (req) => {
 async function buildReply(studio: Studio | null, text: string): Promise<string> {
   const name = studio?.name ?? 'el estudio';
 
+  // AUTO-NUTRICIÓN: el bot ya conoce paquetes, clases, dirección, horarios y
+  // política del estudio a partir de la info ya cargada en la app. A eso se le
+  // suma la base de conocimiento "extra" que el estudio agregó a mano.
+  const autoFacts = studio ? await fetchAutoFacts(studio.id) : [];
+  const knowledge = [...autoFacts, ...(studio?.knowledge ?? [])];
+
   // Modo básico (reglas, GRATIS) si: no hay llave de Claude, no se identificó el
   // estudio, o el estudio aún no tiene la IA activada (p. ej. durante su prueba).
   if (!ANTHROPIC_API_KEY || !studio || !studio.aiActive) {
-    return rulesReply(text, name);
+    return rulesReply(text, name, knowledge);
   }
 
   // Tope de uso justo: contamos los mensajes con IA de este estudio este mes.
   const count = await bumpUsage(studio.id);
   if (count !== null && count > MONTHLY_CAP) {
     console.log(`🧯 Tope de uso justo alcanzado (${count}/${MONTHLY_CAP}) — uso reglas.`);
-    return rulesReply(text, name);
+    return rulesReply(text, name, knowledge);
   }
 
   // IA con la base de conocimiento del estudio; si algo falla, cae a reglas.
-  const ai = await aiReply(studio, text);
-  return ai ?? rulesReply(text, name);
+  const ai = await aiReply(studio, text, knowledge);
+  return ai ?? rulesReply(text, name, knowledge);
+}
+
+// Arma los datos que el bot ya conoce SOLO (paquetes, clases, dirección,
+// horarios, política) desde la info ya cargada en la app.
+async function fetchAutoFacts(studioId: string): Promise<string[]> {
+  if (!SUPABASE_URL || !SERVICE_KEY) return [];
+  const facts: string[] = [];
+  try {
+    const sres = await fetch(
+      `${SUPABASE_URL}/rest/v1/studios?select=name,phone,address,branding&id=eq.${encodeURIComponent(studioId)}`,
+      { headers: svc() },
+    );
+    const srow: Any = sres.ok ? (await sres.json())[0] : null;
+    const cur = srow?.branding?.currencyCode || 'USD';
+
+    const pres = await fetch(
+      `${SUPABASE_URL}/rest/v1/packages?select=name,price_usd,class_credits,validity_days,description&studio_id=eq.${encodeURIComponent(studioId)}&active=eq.true`,
+      { headers: svc() },
+    );
+    const pkgs: Any[] = pres.ok ? await pres.json() : [];
+    for (const p of pkgs) {
+      facts.push(
+        `Paquete "${p.name}": ${p.class_credits} clases por $${p.price_usd} ${cur}, vigencia ${p.validity_days} dias.` +
+          (p.description ? ' ' + p.description : ''),
+      );
+    }
+
+    const tres = await fetch(
+      `${SUPABASE_URL}/rest/v1/class_templates?select=name&studio_id=eq.${encodeURIComponent(studioId)}`,
+      { headers: svc() },
+    );
+    const tpls: Any[] = tres.ok ? await tres.json() : [];
+    if (tpls.length) facts.push(`Tipos de clase: ${tpls.map((t) => t.name).join(', ')}.`);
+
+    if (srow?.address) facts.push(`Direccion: ${srow.address}.`);
+    if (srow?.phone) facts.push(`Telefono: ${srow.phone}.`);
+    const ip = srow?.branding?.infoPage;
+    if (ip?.hours) facts.push(`Horario de atencion: ${ip.hours}.`);
+    if (ip?.schedule) facts.push(`Horarios de clases: ${ip.schedule}.`);
+    if (srow?.branding?.cancellationPolicy) facts.push(`Politica de cancelacion: ${srow.branding.cancellationPolicy}.`);
+  } catch (e) {
+    console.error('⚠️ autofacts:', (e as Error).message);
+  }
+  return facts;
 }
 
 // ---------------------------------------------------------------------------
 // Respuesta con IA (Claude Haiku 4.5) usando SOLO la base de conocimiento
 // del estudio. Breve, cálida y sin inventar precios/horarios.
 // ---------------------------------------------------------------------------
-async function aiReply(studio: Studio, userText: string): Promise<string | null> {
-  const kb = (studio.knowledge ?? []).map((k) => `- ${k}`).join('\n');
+async function aiReply(studio: Studio, userText: string, knowledge: string[]): Promise<string | null> {
+  const kb = (knowledge ?? []).map((k) => `- ${k}`).join('\n');
   const system =
     `Eres el asistente virtual de "${studio.name}", un estudio de Pilates. ` +
     `Respondes a los alumnos por WhatsApp de forma breve, cálida y clara ` +
@@ -247,8 +297,15 @@ async function aiReply(studio: Studio, userText: string): Promise<string | null>
 // ---------------------------------------------------------------------------
 // Bot de reglas (GRATIS) — respuesta de arranque, personalizada con el estudio.
 // ---------------------------------------------------------------------------
-function rulesReply(question: string, studioName: string): string {
+function rulesReply(question: string, studioName: string, knowledge: string[] = []): string {
   const q = question.toLowerCase();
+  // 1) Intenta responder con la info REAL del estudio (paquetes, dirección, etc.).
+  const hit = (knowledge ?? []).find((k) => {
+    const words = k.toLowerCase().split(/\W+/).filter((w) => w.length > 4);
+    return words.some((w) => q.includes(w));
+  });
+  if (hit) return hit;
+  // 2) Respuestas guía de arranque.
   if (/hola|buenas|buenos|hey|qué tal|que tal/.test(q))
     return `¡Hola! 👋 Soy el asistente de ${studioName}. Puedo ayudarte con horarios, paquetes o reservas. ¿Qué necesitas? (Si quieres, también puedo comunicarte con una persona.)`;
   if (/gracias/.test(q)) return '¡Con gusto! 🙌 Aquí estoy para lo que necesites.';

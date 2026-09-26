@@ -157,7 +157,11 @@ interface StoreValue {
   upsertWhatsappTemplate: (t: WhatsappTemplate) => void;
   deleteWhatsappTemplate: (id: string) => void;
   addKnowledge: (text: string) => void;
+  addKnowledgeMany: (texts: string[]) => void;
   removeKnowledge: (index: number) => void;
+  // Datos que el bot ya conoce SOLO (paquetes, clases, horarios, dirección…) sin
+  // que el estudio tenga que reescribirlos: se arman de la info ya cargada.
+  studioAutoFacts: string[];
   // Suscripción SaaS
   activatePromo: () => void;
   subscribeToPlan: (plan: PlanId) => void;
@@ -395,12 +399,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Plan vigente del estudio (por defecto el más limitado si aún no hay dato).
   const plan: PlanId = currentStudio?.subscription?.plan ?? 'inicio';
 
+  // Lo que el bot ya sabe SOLO, a partir de la info ya cargada del estudio
+  // (paquetes, clases, dirección, horarios, política). Así no se reescribe nada.
+  const studioAutoFacts = useMemo(
+    () => (currentStudio ? buildAutoFacts(currentStudio, db) : []),
+    [currentStudio, db.packages, db.classTemplates],
+  );
+
   const value: StoreValue = {
     db,
     currentUser,
     currentStudio,
     authLoading,
     plan,
+    studioAutoFacts,
     can: (cap) => planHas(plan, cap),
 
     async signUp(input) {
@@ -977,6 +989,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addKnowledge(text) {
       patchStudio((s) => ({ ...s, whatsapp: { ...s.whatsapp, knowledge: [...s.whatsapp.knowledge, text] } }));
     },
+    addKnowledgeMany(texts) {
+      const clean = texts.map((t) => t.trim()).filter(Boolean);
+      if (!clean.length) return;
+      patchStudio((s) => ({ ...s, whatsapp: { ...s.whatsapp, knowledge: [...s.whatsapp.knowledge, ...clean] } }));
+    },
     removeKnowledge(index) {
       patchStudio((s) => ({
         ...s,
@@ -1132,4 +1149,40 @@ export function botReply(question: string, knowledge: string[]): string {
   if (/hola|buenas|buenos/.test(q)) return '¡Hola! 👋 ¿En qué te puedo ayudar hoy?';
   if (/gracias/.test(q)) return '¡Con gusto! Aquí estamos para lo que necesites. 🙌';
   return 'Gracias por tu mensaje. Un miembro del estudio te responderá en breve. Mientras tanto, ¿te ayudo con horarios, pagos o reservas?';
+}
+
+// ---------------------------------------------------------------------------
+// AUTO-NUTRICIÓN: arma los datos que el bot ya conoce SOLO, a partir de la
+// info que el estudio ya cargó en la app (paquetes, clases, dirección,
+// horarios, política de cancelación). Así el bot responde sin que el estudio
+// tenga que reescribir todo a mano.
+// ---------------------------------------------------------------------------
+export function buildAutoFacts(studio: Studio, db: Database): string[] {
+  const facts: string[] = [];
+  const cur = studio.branding?.currencyCode || 'USD';
+  facts.push(`Estudio: ${studio.name}.`);
+
+  const pkgs = db.packages.filter((p) => p.studioId === studio.id && p.active);
+  for (const p of pkgs) {
+    facts.push(
+      `Paquete "${p.name}": ${p.classCredits} clases por $${p.priceUsd} ${cur}, ` +
+        `vigencia ${p.validityDays} días.${p.description ? ' ' + p.description : ''}`,
+    );
+  }
+
+  const tpls = db.classTemplates.filter((t) => t.studioId === studio.id);
+  if (tpls.length) facts.push(`Tipos de clase que ofrecemos: ${tpls.map((t) => t.name).join(', ')}.`);
+
+  if (studio.address) facts.push(`Dirección: ${studio.address}.`);
+  if (studio.phone) facts.push(`Teléfono de contacto: ${studio.phone}.`);
+
+  const ip = studio.branding?.infoPage;
+  if (ip?.hours) facts.push(`Horario de atención: ${ip.hours}.`);
+  if (ip?.schedule) facts.push(`Horarios de clases: ${ip.schedule}.`);
+
+  if (studio.branding?.cancellationPolicy) facts.push(`Política de cancelación: ${studio.branding.cancellationPolicy}.`);
+  if (studio.branding?.cancellationHours)
+    facts.push(`Las clases se pueden cancelar hasta ${studio.branding.cancellationHours} horas antes.`);
+
+  return facts;
 }
