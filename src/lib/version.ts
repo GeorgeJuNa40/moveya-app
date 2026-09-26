@@ -19,7 +19,6 @@
 declare const __BUILD_ID__: string;
 const CURRENT = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : '';
 
-// (prueba de auto-despliegue: verificar que el dominio siga solo al último build)
 // Id de esta compilación (para mostrarlo en la app y saber si es la última).
 export const BUILD_ID = CURRENT;
 // Etiqueta legible tipo "MM-DD HH:MM" a partir del id (timestamp del build).
