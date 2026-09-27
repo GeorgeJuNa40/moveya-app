@@ -45,6 +45,9 @@ const MODEL = 'claude-haiku-4-5';
 const MONTHLY_CAP = Number(Deno.env.get('WHATSAPP_AI_MONTHLY_CAP') ?? '2000') || 2000;
 // No repetir la notificación push al estudio más seguido que esto (anti-spam).
 const NOTIFY_THROTTLE_MS = 90_000;
+// Reactivación automática: si una conversación atendida por una persona queda
+// inactiva más de esto, el bot vuelve a tomar el control (config: minutos).
+const AUTO_RETURN_MS = (Number(Deno.env.get('WA_AUTO_RETURN_MINUTES') ?? '60') || 60) * 60_000;
 
 // Frases con las que un alumno pide hablar con una persona (handoff a humano).
 const HUMAN_INTENT =
@@ -127,6 +130,17 @@ Deno.serve(async (req) => {
           console.log('🤖 Bot desactivado por el estudio — no se responde.');
           await maybeNotifyStudio(studio, convo, from, text);
           return new Response('EVENT_RECEIVED', { status: 200 });
+        }
+
+        // REACTIVACIÓN AUTOMÁTICA: si la conversación estaba en modo humano pero
+        // quedó inactiva más de AUTO_RETURN_MS, el bot retoma el control solo.
+        if (convo && convo.mode === 'human' && convo.prevLastMessageAt) {
+          const idle = Date.now() - Date.parse(convo.prevLastMessageAt);
+          if (Number.isFinite(idle) && idle >= AUTO_RETURN_MS) {
+            console.log('🔄 Reactivando el bot por inactividad del humano.');
+            await setConvoMode(convo.id, 'bot');
+            convo.mode = 'bot';
+          }
         }
 
         // HANDOFF: si la conversación ya está en modo humano, el bot se calla y
@@ -299,49 +313,62 @@ async function aiReply(studio: Studio, userText: string, knowledge: string[]): P
 // ---------------------------------------------------------------------------
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const STOP = new Set([
-  'para', 'como', 'cuando', 'donde', 'cual', 'cuales', 'tienen', 'tiene', 'hay', 'una', 'uno', 'los', 'las',
-  'del', 'con', 'que', 'por', 'sus', 'este', 'esta', 'estan', 'muy', 'mas', 'pero', 'quiero', 'saber',
+  'para', 'como', 'cuando', 'donde', 'cual', 'cuales', 'tienen', 'tiene', 'hay', 'una', 'uno', 'unos', 'unas',
+  'los', 'las', 'del', 'con', 'que', 'por', 'sus', 'este', 'esta', 'estan', 'muy', 'mas', 'pero', 'sobre',
+  'quiero', 'saber', 'me', 'la', 'el', 'un', 'de', 'en', 'y', 'o', 'a',
 ]);
-const INTENTS: { re: RegExp; pick: RegExp }[] = [
-  { re: /(paquete|precio|costo|cuanto|cuesta|tarifa|mensualidad|plan|pagar|pago)/, pick: /paquete|precio|\$/i },
-  { re: /(direccion|donde|ubica|llegar|domicilio|estan|estamos|mapa)/, pick: /direccion|ubica|domicilio|calle/i },
-  { re: /(horario|hora|abren|cierran|atienden|atencion|abierto)/, pick: /horario|hora/i },
-  { re: /(clase|clases|tipos|reformer|mat|pilates|actividad)/, pick: /clase|tipos/i },
-  { re: /(cancel|reagenda|reprograma|penaliz|falta)/, pick: /cancel|politica/i },
-  { re: /(telefono|contacto|numero|llamar|whats)/, pick: /telefono|contacto/i },
-];
 
-function rulesReply(question: string, studioName: string, knowledge: string[] = []): string {
+// Expande la pregunta a términos + sinónimos (referido→link/registro, etc.).
+function expandTerms(q: string): string[] {
+  const base = q.split(/\W+/).filter((w) => w.length >= 3 && !STOP.has(w));
+  const extra: string[] = [];
+  const add = (...xs: string[]) => extra.push(...xs);
+  if (/referid|invita|recomend|amig|comparte|comparta/.test(q)) add('link', 'registr', 'unir', 'http');
+  if (/inscri|apunt|unir|registr|alta|membres/.test(q)) add('registr', 'link', 'unir', 'http', 'paquete');
+  if (/link|liga|url|pagina|sitio|web/.test(q)) add('http', 'link', '.app', '.com');
+  if (/precio|costo|cuesta|cuanto|tarifa|paquete|plan|pago|pagar|mensualidad/.test(q)) add('paquete', 'precio', '$');
+  if (/direccion|ubica|donde|lugar|mapa|llegar|domicilio/.test(q)) add('direccion', 'ubica', 'calle');
+  if (/horario|hora|abren|cierran|abierto|atienden/.test(q)) add('horario', 'hora');
+  if (/clase|reformer|mat|yoga|barre|pilates|funcional|disciplina/.test(q)) add('clase', 'tipos');
+  if (/cancel|reagend|reprogram|penaliz|falta|reembols/.test(q)) add('cancel', 'politica', 'reembols');
+  if (/telefono|contacto|numero|llamar|whats/.test(q)) add('telefono', 'contacto');
+  if (/estacion|parking|coche|carro|auto/.test(q)) add('estacion', 'parking');
+  return Array.from(new Set([...base, ...extra]));
+}
+
+// Busca en la base las líneas que mejor responden; devuelve varias e incluye la
+// URL cuando preguntan por link/registro. null si nada coincide.
+function matchKnowledge(question: string, knowledge: string[]): string | null {
   const q = norm(question);
-  // 1) Intenciones directas con la info REAL del estudio.
-  for (const it of INTENTS) {
-    if (it.re.test(q)) {
-      const lines = (knowledge ?? []).filter((k) => it.pick.test(k));
-      if (lines.length) return lines.slice(0, 4).join('\n');
-    }
-  }
-  // 2) Coincidencia por palabras clave.
-  const qWords = q.split(/\W+/).filter((w) => w.length > 3 && !STOP.has(w));
-  let best: string | null = null;
-  let bestScore = 0;
-  for (const k of knowledge ?? []) {
+  const ts = expandTerms(q);
+  if (!ts.length || !knowledge.length) return null;
+  const scored = knowledge.map((k) => {
     const kn = norm(k);
     let score = 0;
-    for (const w of qWords) if (kn.includes(w)) score++;
-    if (score > bestScore) { bestScore = score; best = k; }
+    for (const w of ts) if (kn.includes(w)) score++;
+    return { k, score };
+  });
+  const hits = scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
+  if (!hits.length) return null;
+  const top = hits.slice(0, 4).map((s) => s.k);
+  if (/referid|inscri|apunt|unir|registr|link|liga|membres|invita/.test(q)) {
+    for (const k of knowledge) {
+      if (/https?:\/\//i.test(k) && !top.includes(k)) { top.push(k); break; }
+    }
   }
-  if (best && bestScore > 0) return best;
-  // 3) Respuestas guía de arranque.
-  if (/hola|buenas|buenos|hey|que tal/.test(q))
+  return top.join('\n');
+}
+
+function rulesReply(question: string, studioName: string, knowledge: string[] = []): string {
+  // 1) Responde con la info REAL del estudio (paquetes, clases, link, etc.).
+  const m = matchKnowledge(question, knowledge ?? []);
+  if (m) return m;
+  // 2) Cortesías / guía de arranque.
+  const q = norm(question);
+  if (/^\s*(hola|buenas|buenos|hey|que tal|holi|ola)\b/.test(q))
     return `¡Hola! 👋 Soy el asistente de ${studioName}. Puedo ayudarte con horarios, paquetes o reservas. ¿Qué necesitas? (Si quieres, también puedo comunicarte con una persona.)`;
   if (/gracias/.test(q)) return '¡Con gusto! 🙌 Aquí estoy para lo que necesites.';
-  if (/horario|clase|reserva|reservar|agenda/.test(q))
-    return 'Con gusto 📅 Puedes ver los horarios y reservar tu clase desde la app. ¿Te paso el enlace?';
-  if (/pago|paquete|precio|costo|cuánto|cuanto/.test(q))
-    return 'Tenemos varios paquetes 💳 Puedes verlos y pagarlos desde la app. ¿Te ayudo a elegir uno?';
-  if (/ubicación|ubicacion|dónde|donde|dirección|direccion/.test(q))
-    return 'Con gusto te comparto la ubicación 📍. Un momento y te atendemos.';
-  return `Gracias por tu mensaje 🙏 En breve te atendemos en ${studioName}. Mientras tanto, ¿te ayudo con horarios, pagos o reservas? Si prefieres, escribe "quiero hablar con una persona".`;
+  return `Gracias por tu mensaje 🙏 En breve te atendemos en ${studioName}. Mientras tanto, ¿te ayudo con horarios, pagos, clases o ubicación? Si prefieres, escribe "quiero hablar con una persona".`;
 }
 
 // ---------------------------------------------------------------------------
@@ -360,6 +387,7 @@ interface Convo {
   id: string;
   mode: string; // 'bot' | 'human'
   lastNotifiedAt: string | null;
+  prevLastMessageAt: string | null; // última actividad ANTES de este mensaje
 }
 
 const digits = (s: string) => (s || '').replace(/\D/g, '');
@@ -452,7 +480,7 @@ async function recordInbound(
   try {
     // ¿Ya existe la conversación?
     const q = await fetch(
-      `${SUPABASE_URL}/rest/v1/wa_conversations?select=id,mode,unread,last_notified_at&studio_id=eq.${encodeURIComponent(
+      `${SUPABASE_URL}/rest/v1/wa_conversations?select=id,mode,unread,last_notified_at,last_message_at&studio_id=eq.${encodeURIComponent(
         studioId,
       )}&contact_phone=eq.${encodeURIComponent(contactPhone)}`,
       { headers: svc() },
@@ -462,7 +490,12 @@ async function recordInbound(
 
     if (rows[0]) {
       const r = rows[0];
-      convo = { id: r.id, mode: r.mode ?? 'bot', lastNotifiedAt: r.last_notified_at ?? null };
+      convo = {
+        id: r.id,
+        mode: r.mode ?? 'bot',
+        lastNotifiedAt: r.last_notified_at ?? null,
+        prevLastMessageAt: r.last_message_at ?? null,
+      };
       await fetch(`${SUPABASE_URL}/rest/v1/wa_conversations?id=eq.${encodeURIComponent(convo.id)}`, {
         method: 'PATCH',
         headers: { ...svc(), 'content-type': 'application/json' },
@@ -477,7 +510,7 @@ async function recordInbound(
       });
     } else {
       const id = crypto.randomUUID();
-      convo = { id, mode: 'bot', lastNotifiedAt: null };
+      convo = { id, mode: 'bot', lastNotifiedAt: null, prevLastMessageAt: null };
       await fetch(`${SUPABASE_URL}/rest/v1/wa_conversations`, {
         method: 'POST',
         headers: { ...svc(), 'content-type': 'application/json' },

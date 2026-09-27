@@ -3,6 +3,7 @@ import { useStore, botReply } from '../../lib/store';
 import { PageHeader, Card, Button, Toggle } from '../../components/ui';
 import type { WhatsappTemplate } from '../../lib/types';
 import { launchWhatsAppSignup, connectWhatsApp, whatsappSignupAvailable } from '../../lib/whatsapp';
+import { extractTextFromFile } from '../../lib/extractText';
 import { notifySuccess, notifyError } from '../../lib/notify';
 
 // Agente de IA para WhatsApp: recordatorios de pago, avisos y respuestas del bot.
@@ -21,6 +22,7 @@ export default function WhatsappAgent() {
   const [chatInput, setChatInput] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [manual, setManual] = useState(false); // mostrar el alta manual (Fase A)
+  const [reading, setReading] = useState(false); // leyendo un archivo (PDF/Word/txt)
 
   // Agrega varias líneas de golpe (una por renglón) a la base de conocimiento.
   const addBulk = (raw: string) => {
@@ -32,15 +34,22 @@ export default function WhatsappAgent() {
     setBulk('');
   };
 
-  // Lee un archivo de texto (.txt/.md) y lo agrega al conocimiento.
+  // Lee un archivo (.txt/.md/.csv, PDF o Word .docx) y agrega su texto al conocimiento.
   const onFile = async (file?: File) => {
     if (!file) return;
-    if (file.size > 2_000_000) { notifyError('archivo', 'El archivo es muy grande (máx. 2 MB).'); return; }
+    if (file.size > 15_000_000) { notifyError('archivo', 'El archivo es muy grande (máx. 15 MB).'); return; }
+    setReading(true);
     try {
-      const text = await file.text();
+      const text = await extractTextFromFile(file);
+      if (!text.trim()) {
+        notifyError('archivo', 'No encontré texto en el archivo. Si es un PDF escaneado (foto), copia y pega el texto.');
+        return;
+      }
       addBulk(text);
-    } catch {
-      notifyError('archivo', 'No pude leer el archivo. Copia y pega el texto en su lugar.');
+    } catch (e) {
+      notifyError('archivo', (e as Error)?.message ?? 'No pude leer el archivo. Copia y pega el texto en su lugar.');
+    } finally {
+      setReading(false);
     }
   };
 
@@ -217,10 +226,12 @@ export default function WhatsappAgent() {
             <Button onClick={() => { if (newKnow.trim()) { addKnowledge(newKnow.trim()); setNewKnow(''); } }}>Agregar</Button>
           </div>
 
-          {/* Carga fácil: pegar mucho o subir archivo */}
+          {/* Carga fácil: pegar mucho o subir archivo (PDF, Word o texto) */}
           <div className="rounded-2xl border border-dashed border-cream-dark p-3">
             <p className="text-sm font-medium text-ink-soft mb-1">Carga rápida</p>
-            <p className="text-xs text-ink-faint mb-2">Pega aquí toda tu info (una idea por renglón) o sube un archivo .txt.</p>
+            <p className="text-xs text-ink-faint mb-2">
+              Pega aquí toda tu info (una idea por renglón) o sube un archivo: <b>PDF</b>, <b>Word (.docx)</b> o texto (.txt/.csv).
+            </p>
             <textarea
               className="input"
               rows={4}
@@ -230,12 +241,20 @@ export default function WhatsappAgent() {
             />
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Button onClick={() => addBulk(bulk)} disabled={!bulk.trim()}>Agregar todo</Button>
-              <label className="cursor-pointer rounded-2xl border border-cream-dark px-3 py-2 text-sm font-medium text-ink-soft hover:bg-brand-soft">
-                Subir archivo (.txt)
-                <input type="file" accept=".txt,.md,text/plain" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
+              <label className={`cursor-pointer rounded-2xl border border-cream-dark px-3 py-2 text-sm font-medium text-ink-soft hover:bg-brand-soft ${reading ? 'opacity-60 pointer-events-none' : ''}`}>
+                {reading ? 'Leyendo archivo…' : 'Subir archivo (PDF, Word, txt)'}
+                <input
+                  type="file"
+                  accept=".txt,.md,.csv,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  className="hidden"
+                  disabled={reading}
+                  onChange={(e) => { onFile(e.target.files?.[0]); e.currentTarget.value = ''; }}
+                />
               </label>
             </div>
-            <p className="mt-2 text-[11px] text-ink-faint">💡 ¿Tienes un PDF? Ábrelo, copia el texto y pégalo aquí.</p>
+            <p className="mt-2 text-[11px] text-ink-faint">
+              💡 Sube el folleto, menú de precios o reglamento de tu estudio. Reviso el texto y lo agrego a la lista de arriba (puedes borrar lo que no quieras).
+            </p>
           </div>
         </Card>
 
@@ -266,8 +285,10 @@ export default function WhatsappAgent() {
         <Card className="p-6 lg:col-span-2">
           <h2 className="font-semibold text-ink mb-1">Prueba al bot</h2>
           <p className="text-xs text-ink-faint mb-3">
-            Adelanto rápido (busca por palabras). El bot <b>real por WhatsApp</b> usa IA y entiende mucho mejor toda tu
-            info. Prueba con: <i>"¿qué paquetes tienen?"</i> o <i>"¿dónde están?"</i>.
+            Vista previa: el bot <b>real por WhatsApp</b> usa esta misma info. {wa.aiActive
+              ? <>Con <b>IA activada</b> entiende aún mejor las preguntas.</>
+              : <>Al activar la <b>IA</b> entenderá mucho mejor las preguntas.</>} Prueba con:{' '}
+            <i>"¿qué paquetes tienen?"</i> o <i>"¿me pasas el link?"</i>.
           </p>
           <div className="rounded-xl bg-[#e7ded0]/40 border border-cream-dark p-4 h-56 overflow-y-auto space-y-2">
             {chat.length === 0 && <p className="text-sm text-ink-faint text-center mt-16">Escribe un mensaje para ver cómo responde el bot.</p>}
