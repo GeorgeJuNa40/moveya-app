@@ -1148,47 +1148,67 @@ const STOP = new Set([
   'quiero', 'saber', 'me', 'la', 'el', 'un', 'de', 'en', 'y', 'o', 'a',
 ]);
 
-// Intenciones frecuentes → cómo reconocer las líneas de la base que responden.
-const INTENTS: { re: RegExp; pick: RegExp }[] = [
-  { re: /(paquete|precio|costo|cuanto|cuesta|tarifa|mensualidad|plan|pagar|pago)/, pick: /paquete|precio|\$/i },
-  { re: /(direccion|donde|ubica|llegar|domicilio|estan|estamos|mapa)/, pick: /direccion|ubica|domicilio|calle|av\.|#/i },
-  { re: /(horario|hora|abren|cierran|atienden|atencion|abierto)/, pick: /horario|hora/i },
-  { re: /(clase|clases|tipos|reformer|mat|pilates|actividad)/, pick: /clase|tipos/i },
-  { re: /(cancel|reagenda|reprograma|penaliz|falta)/, pick: /cancel|politica/i },
-  { re: /(telefono|contacto|numero|llamar|whats)/, pick: /telefono|contacto/i },
-];
+// Expande la pregunta a términos de búsqueda + sinónimos, para que "referido",
+// "inscribirme", "me pasas la liga", etc. encuentren las líneas correctas.
+function expandTerms(q: string): string[] {
+  const base = q.split(/\W+/).filter((w) => w.length >= 3 && !STOP.has(w));
+  const extra: string[] = [];
+  const add = (...xs: string[]) => extra.push(...xs);
+  if (/referid|invita|recomend|amig|comparte|comparta/.test(q)) add('link', 'registr', 'unir', 'http');
+  if (/inscri|apunt|unir|registr|alta|membres|quiero entrar|como entro/.test(q)) add('registr', 'link', 'unir', 'http', 'paquete');
+  if (/link|liga|url|pagina|sitio|web/.test(q)) add('http', 'link', '.app', '.com');
+  if (/precio|costo|cuesta|cuanto|tarifa|paquete|plan|pago|pagar|mensualidad/.test(q)) add('paquete', 'precio', '$');
+  if (/direccion|ubica|donde|lugar|mapa|llegar|domicilio/.test(q)) add('direccion', 'ubica', 'calle');
+  if (/horario|hora|abren|cierran|abierto|atienden/.test(q)) add('horario', 'hora');
+  if (/clase|reformer|mat|yoga|barre|pilates|funcional|disciplina/.test(q)) add('clase', 'tipos');
+  if (/cancel|reagend|reprogram|penaliz|falta|reembols/.test(q)) add('cancel', 'politica', 'reembols');
+  if (/telefono|contacto|numero|llamar|whats/.test(q)) add('telefono', 'contacto');
+  if (/estacion|parking|coche|carro|auto/.test(q)) add('estacion', 'parking');
+  return Array.from(new Set([...base, ...extra]));
+}
 
-// Simulador local del bot (adelanto). El bot REAL por WhatsApp usa IA y es más
-// capaz; esto solo da una idea rápida a partir de la info del estudio.
+// Busca en la base de conocimiento las líneas que mejor responden a la pregunta.
+// Devuelve varias líneas (no solo una) y, si preguntan por link/registro, incluye
+// la URL aunque esté en un renglón aparte. null si nada coincide.
+export function matchKnowledge(question: string, knowledge: string[]): string | null {
+  const q = norm(question);
+  const ts = expandTerms(q);
+  if (!ts.length || !knowledge.length) return null;
+  const scored = knowledge.map((k) => {
+    const kn = norm(k);
+    let score = 0;
+    for (const w of ts) if (kn.includes(w)) score++;
+    return { k, score };
+  });
+  const hits = scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score);
+  if (!hits.length) return null;
+  const top = hits.slice(0, 4).map((s) => s.k);
+  // Si la intención es link/registro/referido, adjunta cualquier URL de la base.
+  if (/referid|inscri|apunt|unir|registr|link|liga|membres|invita/.test(q)) {
+    for (const k of knowledge) {
+      if (/https?:\/\//i.test(k) && !top.includes(k)) { top.push(k); break; }
+    }
+  }
+  return top.join('\n');
+}
+
+// Simulador local del bot (adelanto). El bot REAL por WhatsApp usa esta misma
+// lógica de reglas; con IA activada (Claude) entiende aún mejor.
 export function botReply(question: string, knowledge: string[]): string {
   const q = norm(question);
 
-  // 1) Intenciones directas: devuelve las líneas relevantes (p. ej. todos los paquetes).
-  for (const it of INTENTS) {
-    if (it.re.test(q)) {
-      const lines = knowledge.filter((k) => it.pick.test(k));
-      if (lines.length) return lines.slice(0, 4).join('\n');
-    }
-  }
+  // 1) Handoff a humano (prioridad): igual que el bot real.
+  if (/humano|persona|asesor|agente|representante|ejecutiv|operador|alguien que me atienda|hablar con alguien/.test(q))
+    return 'Con gusto te comunico con una persona del estudio 🙋. En un momento te atienden.';
 
-  // 2) Coincidencia por palabras clave (la línea que más comparte con la pregunta).
-  const qWords = q.split(/\W+/).filter((w) => w.length > 3 && !STOP.has(w));
-  let best: string | null = null;
-  let bestScore = 0;
-  for (const k of knowledge) {
-    const kn = norm(k);
-    let score = 0;
-    for (const w of qWords) if (kn.includes(w)) score++;
-    if (score > bestScore) { bestScore = score; best = k; }
-  }
-  if (best && bestScore > 0) return best;
+  // 2) Respuesta con la base de conocimiento (paquetes, clases, link, etc.).
+  const m = matchKnowledge(question, knowledge);
+  if (m) return m;
 
-  // 3) Cortesías / handoff / guía.
-  if (/hola|buenas|buenos|hey|que tal/.test(q))
+  // 3) Cortesías / guía de arranque.
+  if (/^\s*(hola|buenas|buenos|hey|que tal|holi|ola)\b/.test(q))
     return '¡Hola! 👋 ¿En qué te ayudo? Puedo contarte de paquetes, horarios, clases o ubicación.';
   if (/gracias/.test(q)) return '¡Con gusto! Aquí estamos para lo que necesites. 🙌';
-  if (/humano|persona|asesor|agente|alguien/.test(q))
-    return 'Con gusto te comunico con una persona del estudio 🙋. En un momento te atienden.';
   return 'Gracias por tu mensaje 🙏 ¿Te ayudo con horarios, paquetes, clases o ubicación? También puedo comunicarte con una persona.';
 }
 
