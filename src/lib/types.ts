@@ -44,6 +44,11 @@ export interface Branding {
   noShowPenaltyUsd?: number; // cargo (adeudo) por no asistir sin cancelar (0/omitido = sin penalización)
   bookingCutoffMinutes?: number; // minutos antes de la clase en que se cierran las reservas
   infoPage?: StudioInfoPage; // página informativa pública (opcional, la llena el estudio)
+  // Control de acceso (gimnasio/mixto): cómo se registra la entrada.
+  //  - 'member_qr' (def.): QR fijo en recepción, el miembro lo escanea con su app.
+  //  - 'staff_qr': el miembro muestra su QR y el staff lo escanea.
+  //  - 'manual': el staff marca la entrada a mano desde una lista.
+  checkinMode?: 'member_qr' | 'staff_qr' | 'manual';
 }
 
 // Servicio opcional editable por el estudio (Nutrición, Kinesiología, etc.).

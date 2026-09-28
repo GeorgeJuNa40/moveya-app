@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
 import { usd, daysUntil } from '../../lib/format';
 import { startStripeCheckout } from '../../lib/payments';
+import { accessCheckIn } from '../../lib/access';
+import { notifySuccess, notifyError } from '../../lib/notify';
 
 // Alumno: paquetes activos + catálogo. La compra se hace en la página segura de
 // Stripe (la app nunca recibe datos de tarjeta). El paquete se activa solo
@@ -23,6 +26,31 @@ export default function MyPackages() {
   const [buying, setBuying] = useState<string | null>(null);
   const studioType = currentStudio!.studioType ?? 'studio';
   const isGym = studioType === 'gym';
+  const showAccess = isGym || studioType === 'mixed'; // gimnasio/mixto usan check-in
+
+  // "Mi acceso": QR personal (para que el staff lo escane) + botón de auto-entrada.
+  const origin = window.location.origin;
+  const myQrUrl = `${origin}/#/checkin?s=${encodeURIComponent(currentStudio!.id)}&u=${encodeURIComponent(uid)}`;
+  const [myQr, setMyQr] = useState('');
+  const [checking, setChecking] = useState(false);
+  useEffect(() => {
+    if (!showAccess) return;
+    QRCode.toDataURL(myQrUrl, { width: 320, margin: 1, color: { dark: '#4A5D55', light: '#ffffff' } })
+      .then(setMyQr)
+      .catch(() => setMyQr(''));
+  }, [myQrUrl, showAccess]);
+
+  const selfCheckIn = async () => {
+    setChecking(true);
+    try {
+      const res = await accessCheckIn(undefined, 'member_self');
+      notifySuccess(res.duplicate ? '¡Ya estabas dentro!' : res.active ? '✅ ¡Entrada registrada!' : '⚠️ Entrada registrada, pero no tienes membresía activa.');
+    } catch (e) {
+      notifyError('acceso', (e as Error)?.message ?? 'No se pudo registrar');
+    } finally {
+      setChecking(false);
+    }
+  };
 
   const buy = async (packageId: string) => {
     setBuying(packageId);
@@ -43,6 +71,19 @@ export default function MyPackages() {
             ⚠️ Tienes un <strong>cargo pendiente de {usd(penalty)}</strong> por reservar y no asistir sin cancelar a tiempo.
             Cúbrelo en tu estudio para seguir al día.
           </p>
+        </Card>
+      )}
+
+      {showAccess && (
+        <Card className="mb-6 p-6 text-center">
+          <h2 className="font-semibold text-ink">Mi acceso</h2>
+          <p className="mt-1 text-sm text-ink-faint">
+            Escanea el QR de recepción para entrar, o muestra este código para que el estudio registre tu entrada.
+          </p>
+          {myQr && <img src={myQr} alt="Mi QR de acceso" className="mx-auto mt-4 h-44 w-44 rounded-2xl border border-cream-dark" />}
+          <Button className="mt-4" disabled={checking} onClick={selfCheckIn}>
+            {checking ? 'Registrando…' : 'Registrar mi entrada'}
+          </Button>
         </Card>
       )}
 
