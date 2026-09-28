@@ -31,6 +31,7 @@ export default function OnboardingScreen() {
 
   const [fullName, setFullName] = useState('');
   const [studioName, setStudioName] = useState('');
+  const [businessType, setBusinessType] = useState<'studio' | 'gym' | 'mixed'>('studio');
   const [ceu, setCeu] = useState(invitedCeu);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -115,7 +116,7 @@ export default function OnboardingScreen() {
         const contact = { phone: fullPhone, country: country.iso, currency: country.currency };
         if (mode === 'create') {
           if (!studioName.trim()) throw new Error('Escribe el nombre de tu estudio.');
-          await signUp({ fullName, email, password, studioName, ...contact });
+          await signUp({ fullName, email, password, studioName, studioType: businessType, ...contact });
         } else {
           if (!ceu.trim()) throw new Error('Escribe el Código de Estudio (CEU).');
           if (!birthDate) throw new Error('Indica tu fecha de nacimiento.');
@@ -217,6 +218,33 @@ export default function OnboardingScreen() {
             )}
             {mode === 'create' && (
               <Input label="Nombre del estudio" value={studioName} onChange={setStudioName} placeholder="Ej. Estudio Zen" required />
+            )}
+            {mode === 'create' && (
+              <div>
+                <span className="mb-1 block text-sm font-medium text-ink-soft">¿Qué tipo de negocio es?</span>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { v: 'studio', t: 'Estudio', d: 'Clases con cupo' },
+                    { v: 'gym', t: 'Gimnasio', d: 'Acceso libre' },
+                    { v: 'mixed', t: 'Mixto', d: 'Clases + acceso' },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.v}
+                      type="button"
+                      onClick={() => setBusinessType(opt.v)}
+                      className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                        businessType === opt.v
+                          ? 'border-brand bg-brand-soft text-brand'
+                          : 'border-cream-dark bg-white text-ink-soft hover:border-brand-soft'
+                      }`}
+                    >
+                      <span className="block text-sm font-semibold">{opt.t}</span>
+                      <span className="block text-[11px] leading-tight text-ink-faint">{opt.d}</span>
+                    </button>
+                  ))}
+                </div>
+                <span className="mt-1 block text-xs text-ink-faint">Podrás cambiarlo después en Configuración.</span>
+              </div>
             )}
             {mode === 'join' && !invitedCeu && (
               <Input

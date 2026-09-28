@@ -48,6 +48,7 @@ function mapStudio(r: Row): Studio {
     id: r.id,
     name: r.name,
     ceuCode: r.ceu_code,
+    studioType: (r.studio_type ?? 'studio') as Studio['studioType'],
     phone: r.phone ?? '',
     email: r.email ?? '',
     address: r.address ?? '',
@@ -297,6 +298,7 @@ export async function persistStudio(s: Studio) {
     .from('studios')
     .update({
       name: s.name,
+      studio_type: s.studioType,
       phone: s.phone,
       email: s.email,
       address: s.address,

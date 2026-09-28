@@ -67,6 +67,7 @@ export function seedDatabase(): Database {
         id: studioId,
         name: 'Zen Studio Pilates',
         ceuCode: 'ZEN-2024',
+        studioType: 'studio',
         phone: '52 55 1234 5678',
         email: 'hola@zenstudio.mx',
         address: 'Av. Reforma 123, CDMX',

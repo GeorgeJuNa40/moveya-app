@@ -38,6 +38,7 @@ export default function Settings() {
   // Borrador local: aquí viven los cambios hasta que se guardan.
   const makeDraft = () => ({
     name: s.name,
+    studioType: (s.studioType ?? 'studio') as 'studio' | 'gym' | 'mixed',
     phone: s.phone,
     email: s.email,
     address: s.address,
@@ -68,7 +69,7 @@ export default function Settings() {
   const removePhoto = (i: number) => setStudio({ photos: draft.photos.filter((_, idx) => idx !== i) });
 
   const save = () => {
-    updateStudio({ name: draft.name, phone: draft.phone, email: draft.email, address: draft.address, photos: draft.photos });
+    updateStudio({ name: draft.name, studioType: draft.studioType, phone: draft.phone, email: draft.email, address: draft.address, photos: draft.photos });
     updateBranding(draft.branding);
     setDirty(false);
   };
@@ -151,6 +152,33 @@ export default function Settings() {
               ))}
             </select>
           </Field>
+          <div>
+            <span className="mb-1 block text-sm font-medium text-ink-soft">Tipo de negocio</span>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { v: 'studio', t: 'Estudio', d: 'Clases con cupo' },
+                { v: 'gym', t: 'Gimnasio', d: 'Acceso libre' },
+                { v: 'mixed', t: 'Mixto', d: 'Clases + acceso' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setStudio({ studioType: opt.v })}
+                  className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                    draft.studioType === opt.v
+                      ? 'border-brand bg-brand-soft text-brand'
+                      : 'border-cream-dark bg-white text-ink-soft hover:border-brand-soft'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold">{opt.t}</span>
+                  <span className="block text-[11px] leading-tight text-ink-faint">{opt.d}</span>
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-ink-faint">
+              Define qué ve tu equipo y tus miembros. El <b>gimnasio</b> usará membresías y control de acceso (próximamente); el <b>mixto</b> combina clases y acceso.
+            </p>
+          </div>
         </Card>
 
         {/* Fotos */}

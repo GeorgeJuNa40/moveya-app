@@ -62,6 +62,7 @@ export interface SignUpInput {
   password: string;
   ceuCode?: string; // para unirse a un estudio existente
   studioName?: string; // para crear un estudio nuevo (ADMIN)
+  studioType?: 'studio' | 'gym' | 'mixed'; // tipo de negocio al crear (def. 'studio')
   role?: 'COACH' | 'STUDENT'; // rol al unirse por CEU (por defecto STUDENT)
   phone?: string; // teléfono con lada (ej. +52 55 1234 5678)
   birthDate?: string; // fecha de nacimiento (YYYY-MM-DD)
@@ -424,6 +425,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             full_name: input.fullName.trim(),
             ...(input.ceuCode ? { ceu_code: input.ceuCode.trim() } : {}),
             ...(input.studioName ? { studio_name: input.studioName.trim() } : {}),
+            ...(input.studioType ? { studio_type: input.studioType } : {}),
             ...(input.role ? { signup_role: input.role } : {}),
             ...(input.phone ? { phone: input.phone.trim() } : {}),
             ...(input.birthDate ? { birth_date: input.birthDate } : {}),

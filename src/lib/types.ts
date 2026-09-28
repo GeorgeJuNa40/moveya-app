@@ -93,10 +93,17 @@ export interface Subscription {
   currentPeriodEnd: string; // acceso hasta esta fecha
 }
 
+// Tipo de negocio: define cómo opera y qué ve en la app.
+//  - 'studio': clases con cupo y créditos (lo original).
+//  - 'gym':    membresía + acceso libre + check-in (sin clases obligatorias).
+//  - 'mixed':  gimnasio boutique con clases Y acceso libre.
+export type StudioType = 'studio' | 'gym' | 'mixed';
+
 export interface Studio {
   id: string;
   name: string;
   ceuCode: string;
+  studioType: StudioType; // tipo de negocio (default 'studio')
   phone: string;
   email: string;
   address: string;

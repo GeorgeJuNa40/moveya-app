@@ -182,7 +182,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   if (!currentUser || !currentStudio) return null;
   // Oculta del menú las funciones que el plan del estudio no incluye.
-  const nav = NAV_BY_ROLE[currentUser.role].filter((item) => !item.cap || can(item.cap));
+  // Adapta las etiquetas al tipo de negocio: un gimnasio maneja "Membresías"
+  // (acceso), no "Paquetes" (créditos por clase).
+  const isGym = currentStudio.studioType === 'gym';
+  const nav = NAV_BY_ROLE[currentUser.role]
+    .filter((item) => !item.cap || can(item.cap))
+    .map((item) => {
+      if (!isGym) return item;
+      if (item.to === '/admin/packages') return { ...item, label: 'Membresías' };
+      if (item.to === '/app/packages') return { ...item, label: 'Mi membresía', short: 'Membresía' };
+      return item;
+    });
 
   // Barra inferior (móvil): mostramos hasta 4 secciones + el botón "Más".
   // "Más" SIEMPRE aparece: abre el cajón con la cuenta (foto, notificaciones y
