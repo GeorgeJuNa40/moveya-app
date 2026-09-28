@@ -108,6 +108,15 @@ function iconPaths(to: string): ReactNode {
       </>
     );
   if (to.includes('classes')) return <path d="M3 12h3l2.5-6 4 12L17 9h4" />;
+  if (to.includes('access'))
+    return (
+      <>
+        <rect x="4" y="4" width="6" height="6" rx="1" />
+        <rect x="14" y="4" width="6" height="6" rx="1" />
+        <rect x="4" y="14" width="6" height="6" rx="1" />
+        <path d="M14 14h3v3M20 14v6M17 20h3" />
+      </>
+    );
   if (to.includes('inbox'))
     return (
       <>
@@ -185,6 +194,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // Adapta las etiquetas al tipo de negocio: un gimnasio maneja "Membresías"
   // (acceso), no "Paquetes" (créditos por clase).
   const isGym = currentStudio.studioType === 'gym';
+  const isGymish = isGym || currentStudio.studioType === 'mixed';
   const nav = NAV_BY_ROLE[currentUser.role]
     .filter((item) => !item.cap || can(item.cap))
     .map((item) => {
@@ -193,6 +203,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
       if (item.to === '/app/packages') return { ...item, label: 'Mi membresía', short: 'Membresía' };
       return item;
     });
+  // Gimnasio/mixto: agrega "Accesos" (check-in) junto a Membresías/Paquetes.
+  if (currentUser.role === 'STUDIO_ADMIN' && isGymish) {
+    const i = nav.findIndex((n) => n.to === '/admin/packages');
+    const accItem = { to: '/admin/access', label: 'Accesos' };
+    if (i >= 0) nav.splice(i + 1, 0, accItem);
+    else nav.push(accItem);
+  }
 
   // Barra inferior (móvil): mostramos hasta 4 secciones + el botón "Más".
   // "Más" SIEMPRE aparece: abre el cajón con la cuenta (foto, notificaciones y

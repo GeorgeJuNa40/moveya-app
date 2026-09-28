@@ -48,6 +48,8 @@ const ResetPassword = lazyWithReload(() => import('./features/onboarding/ResetPa
 const Landing = lazyWithReload(() => import('./features/public/Landing'));
 // Página pública informativa del estudio (sin login).
 const StudioInfoPage = lazyWithReload(() => import('./features/public/StudioInfoPage'));
+// Registro de entrada (check-in) — se abre al escanear el QR de acceso.
+const Checkin = lazyWithReload(() => import('./features/checkin/Checkin'));
 // Página pública de política de privacidad (sin login) — para publicar en Meta.
 const PrivacyPolicy = lazyWithReload(() => import('./features/public/PrivacyPolicy'));
 // Página pública de términos y condiciones (sin login).
@@ -63,6 +65,7 @@ const RewardsAdmin = lazyWithReload(() => import('./features/admin/RewardsAdmin'
 const ServicesConfig = lazyWithReload(() => import('./features/admin/ServicesConfig'));
 const WhatsappAgent = lazyWithReload(() => import('./features/admin/WhatsappAgent'));
 const Inbox = lazyWithReload(() => import('./features/admin/Inbox'));
+const AccessControl = lazyWithReload(() => import('./features/admin/AccessControl'));
 const Reports = lazyWithReload(() => import('./features/admin/Reports'));
 const Reminders = lazyWithReload(() => import('./features/admin/Reminders'));
 const SubscriptionScreen = lazyWithReload(() => import('./features/admin/SubscriptionScreen'));
@@ -199,6 +202,9 @@ export default function App() {
       <Route path="/privacy" element={<PrivacyPolicy />} />
       {/* Términos y condiciones PÚBLICOS (sin login). */}
       <Route path="/terms" element={<TermsOfService />} />
+      {/* Registro de entrada (check-in). Requiere sesión; la propia pantalla
+          maneja el caso "sin sesión" pidiendo iniciar sesión. */}
+      <Route path="/checkin" element={<Checkin />} />
 
       {/* Raíz del dominio. Con sesión → panel según rol. Sin sesión: si viene
           por link de invitación (?ceu=) va directo al registro; si no, muestra
@@ -258,6 +264,7 @@ export default function App() {
       <Route path="/admin/services" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="services"><ServicesConfig /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/whatsapp" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappAgent /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/inbox" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><Inbox /></PlanGate></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/access" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><AccessControl /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reports" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="reports"><Reports /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reminders" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Reminders /></SubscriptionGate></RequireRole>} />
       {/* Suscripción siempre accesible (allow) para poder regularizar el pago. */}
