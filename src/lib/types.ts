@@ -152,13 +152,20 @@ export interface ClassGuest {
   createdAt: string;
 }
 
+// Tipo de plan que vende el negocio:
+//  - 'credits': paquete por clases (descuenta 1 crédito por reserva). Lo original.
+//  - 'access':  membresía de acceso libre (entrar cuando quieras durante la
+//               vigencia; NO descuenta créditos). Para gimnasios/mixtos.
+export type PackageKind = 'credits' | 'access';
+
 export interface Package {
   id: string;
   studioId: string;
   name: string;
   description: string;
+  kind: PackageKind; // 'credits' (def.) o 'access'
   priceUsd: number;
-  classCredits: number;
+  classCredits: number; // solo relevante en 'credits'
   validityDays: number;
   active: boolean;
   eligibleClassIds: string[];
@@ -168,6 +175,7 @@ export interface UserPackage {
   id: string;
   userId: string;
   packageId: string;
+  kind: PackageKind; // heredado del paquete al comprarlo
   creditsTotal: number;
   creditsUsed: number;
   purchasedAt: string;

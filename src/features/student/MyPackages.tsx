@@ -21,6 +21,8 @@ export default function MyPackages() {
     .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
   const catalog = db.packages.filter((p) => p.studioId === currentStudio!.id && p.active);
   const [buying, setBuying] = useState<string | null>(null);
+  const studioType = currentStudio!.studioType ?? 'studio';
+  const isGym = studioType === 'gym';
 
   const buy = async (packageId: string) => {
     setBuying(packageId);
@@ -30,7 +32,10 @@ export default function MyPackages() {
 
   return (
     <>
-      <PageHeader title="Mis Paquetes" subtitle="Tus paquetes activos y el catálogo del estudio" />
+      <PageHeader
+        title={isGym ? 'Mi membresía' : 'Mis Paquetes'}
+        subtitle={isGym ? 'Tu membresía activa y el catálogo del estudio' : 'Tus paquetes activos y el catálogo del estudio'}
+      />
 
       {penalty > 0 && (
         <Card className="mb-6 p-4 border-amber-200 bg-amber-50">
@@ -48,11 +53,27 @@ export default function MyPackages() {
         <div className="grid gap-4 md:grid-cols-2 mb-8">
           {myPackages.map((up) => {
             const pkg = db.packages.find((p) => p.id === up.packageId)!;
+            const expired = daysUntil(up.expiresAt) <= 0;
+            const daysLeft = Math.max(0, daysUntil(up.expiresAt));
+            // Membresía de acceso libre: se muestra por vigencia, sin créditos.
+            if (up.kind === 'access') {
+              return (
+                <Card key={up.id} className="p-5">
+                  <div className="flex items-start justify-between">
+                    <h3 className="font-semibold text-ink">{pkg?.name ?? 'Membresía'}</h3>
+                    <Badge tone={expired ? 'danger' : 'success'}>{expired ? 'Vencida' : 'Activa'}</Badge>
+                  </div>
+                  <p className="mt-3 text-sm text-brand font-medium">🔓 Acceso libre</p>
+                  <p className="mt-1 text-sm text-ink-faint">
+                    {expired ? 'Tu membresía venció. Renueva para seguir entrando.' : `Vence en ${daysLeft} día(s).`}
+                  </p>
+                </Card>
+              );
+            }
             const left = Math.max(0, up.creditsTotal - up.creditsUsed);
             const pct = up.creditsTotal > 0
               ? Math.min(100, Math.max(0, (up.creditsUsed / up.creditsTotal) * 100))
               : 0;
-            const expired = daysUntil(up.expiresAt) <= 0;
             return (
               <Card key={up.id} className="p-5">
                 <div className="flex items-start justify-between">
@@ -64,7 +85,7 @@ export default function MyPackages() {
                 </div>
                 <div className="mt-2 flex justify-between text-sm text-ink-faint">
                   <span>{up.creditsUsed}/{up.creditsTotal} usadas</span>
-                  <span>Vence en {Math.max(0, daysUntil(up.expiresAt))} días</span>
+                  <span>Vence en {daysLeft} días</span>
                 </div>
               </Card>
             );
@@ -79,7 +100,9 @@ export default function MyPackages() {
             <h3 className="font-semibold text-ink">{p.name}</h3>
             <p className="text-sm text-ink-faint mt-1 flex-1">{p.description}</p>
             <div className="mt-4 flex items-end gap-1"><span className="text-2xl font-black text-brand">{usd(p.priceUsd)}</span></div>
-            <p className="text-sm text-ink-faint">{p.classCredits} clases · vigencia {p.validityDays} días</p>
+            <p className="text-sm text-ink-faint">
+              {p.kind === 'access' ? `🔓 Acceso libre · vigencia ${p.validityDays} días` : `${p.classCredits} clases · vigencia ${p.validityDays} días`}
+            </p>
             <Button className="mt-4" disabled={!!buying} onClick={() => buy(p.id)}>
               {buying === p.id ? 'Redirigiendo…' : 'Comprar'}
             </Button>

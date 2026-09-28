@@ -4,11 +4,12 @@ import { PageHeader, Card, Badge, Button, Modal } from '../../components/ui';
 import { usd } from '../../lib/format';
 import type { Package } from '../../lib/types';
 
-const emptyDraft = (studioId: string): Package => ({
+const emptyDraft = (studioId: string, kind: Package['kind'] = 'credits'): Package => ({
   id: 'new',
   studioId,
   name: '',
   description: '',
+  kind,
   priceUsd: 0,
   classCredits: 1,
   validityDays: 30,
@@ -22,22 +23,33 @@ export default function PackageManagement() {
   const { db, currentStudio, upsertPackage, togglePackageActive } = useStore();
   const studioId = currentStudio!.id;
   const currency = currentStudio!.branding.currencyCode ?? 'USD';
+  const studioType = currentStudio!.studioType ?? 'studio';
+  const isGym = studioType === 'gym';
+  const isMixed = studioType === 'mixed';
   const packages = db.packages.filter((p) => p.studioId === studioId);
   const templates = db.classTemplates.filter((t) => t.studioId === studioId);
 
-  const [draft, setDraft] = useState<Package | null>(null);
+  // Título/etiquetas según el tipo de negocio.
+  const pageTitle = isGym ? 'Membresías' : isMixed ? 'Paquetes y Membresías' : 'Gestión de Paquetes';
 
-  const startNew = () => setDraft(emptyDraft(studioId));
-  const startEdit = (p: Package) => setDraft({ ...p });
+  const [draft, setDraft] = useState<Package | null>(null);
+  const isAccess = draft?.kind === 'access';
+
+  // Un gimnasio arranca creando membresías de acceso; estudio/mixto, paquetes.
+  const startNew = () => setDraft(emptyDraft(studioId, isGym ? 'access' : 'credits'));
+  const startEdit = (p: Package) => setDraft({ ...p, kind: p.kind ?? 'credits' });
 
   const save = () => {
     if (!draft || !draft.name.trim()) return;
-    // Validación: precio no negativo, al menos 1 clase y 1 día de vigencia.
+    const access = draft.kind === 'access';
     const clean: Package = {
       ...draft,
       priceUsd: Math.max(0, draft.priceUsd || 0),
-      classCredits: Math.max(1, Math.floor(draft.classCredits || 1)),
+      // La membresía de acceso no usa créditos por clase.
+      classCredits: access ? 0 : Math.max(1, Math.floor(draft.classCredits || 1)),
       validityDays: Math.max(1, Math.floor(draft.validityDays || 1)),
+      // El acceso libre vale para todas las clases: no restringe por tipo.
+      eligibleClassIds: access ? [] : draft.eligibleClassIds,
     };
     upsertPackage(clean);
     setDraft(null);
@@ -57,9 +69,11 @@ export default function PackageManagement() {
   return (
     <>
       <PageHeader
-        title="Gestión de Paquetes"
-        subtitle="Define precios, vigencia y clases participantes"
-        action={<Button onClick={startNew}>+ Nuevo paquete</Button>}
+        title={pageTitle}
+        subtitle={isGym
+          ? 'Define tus membresías de acceso: precio y vigencia'
+          : 'Define precios, vigencia y clases participantes'}
+        action={<Button onClick={startNew}>+ Nuevo</Button>}
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -79,9 +93,14 @@ export default function PackageManagement() {
 
               <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                 <Metric label="Precio" value={usd(p.priceUsd)} />
-                <Metric label="Clases" value={`${p.classCredits}`} />
+                {p.kind === 'access'
+                  ? <Metric label="Tipo" value="Acceso" />
+                  : <Metric label="Clases" value={`${p.classCredits}`} />}
                 <Metric label="Vigencia" value={`${p.validityDays}d`} />
               </div>
+              {p.kind === 'access' && (
+                <p className="mt-2 text-center text-xs font-medium text-brand">🔓 Acceso libre durante la vigencia</p>
+              )}
 
               <div className="mt-3 flex flex-wrap gap-1">
                 {p.eligibleClassIds.map((cid) => {
@@ -110,7 +129,9 @@ export default function PackageManagement() {
         <Modal onClose={() => setDraft(null)} className="w-full max-w-lg">
           <Card className="p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-lg font-bold text-ink mb-4">
-              {draft.id === 'new' ? 'Nuevo paquete' : 'Editar paquete'}
+              {draft.id === 'new'
+                ? isAccess ? 'Nueva membresía' : 'Nuevo paquete'
+                : isAccess ? 'Editar membresía' : 'Editar paquete'}
             </h2>
             <div className="space-y-4">
               <Field label="Nombre">
@@ -128,7 +149,36 @@ export default function PackageManagement() {
                   onChange={(e) => setDraft({ ...draft, description: e.target.value })}
                 />
               </Field>
-              <div className="grid grid-cols-3 gap-3">
+
+              {/* Tipo de plan: solo estudios que son gimnasio/mixto pueden crear
+                  membresías de acceso. Un estudio de clases usa siempre créditos. */}
+              {studioType !== 'studio' && (
+                <div>
+                  <span className="mb-1 block text-sm font-medium text-ink-soft">Tipo de plan</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { v: 'credits', t: 'Paquete por clases', d: 'Descuenta 1 por reserva' },
+                      { v: 'access', t: 'Membresía de acceso', d: 'Acceso libre por vigencia' },
+                    ] as const).map((opt) => (
+                      <button
+                        key={opt.v}
+                        type="button"
+                        onClick={() => setDraft({ ...draft, kind: opt.v })}
+                        className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                          (draft.kind ?? 'credits') === opt.v
+                            ? 'border-brand bg-brand-soft text-brand'
+                            : 'border-cream-dark bg-white text-ink-soft'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold">{opt.t}</span>
+                        <span className="block text-[11px] leading-tight text-ink-faint">{opt.d}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className={`grid gap-3 ${isAccess ? 'grid-cols-2' : 'grid-cols-3'}`}>
                 <Field label={`Precio (${currency})`}>
                   <input
                     type="number"
@@ -139,15 +189,17 @@ export default function PackageManagement() {
                     onChange={(e) => setDraft({ ...draft, priceUsd: +e.target.value })}
                   />
                 </Field>
-                <Field label="Clases">
-                  <input
-                    type="number"
-                    min="1"
-                    className="input"
-                    value={draft.classCredits}
-                    onChange={(e) => setDraft({ ...draft, classCredits: +e.target.value })}
-                  />
-                </Field>
+                {!isAccess && (
+                  <Field label="Clases">
+                    <input
+                      type="number"
+                      min="1"
+                      className="input"
+                      value={draft.classCredits}
+                      onChange={(e) => setDraft({ ...draft, classCredits: +e.target.value })}
+                    />
+                  </Field>
+                )}
                 <Field label="Vigencia (días)">
                   <input
                     type="number"
@@ -158,26 +210,57 @@ export default function PackageManagement() {
                   />
                 </Field>
               </div>
-              <Field label="Clases participantes">
-                <div className="flex flex-wrap gap-2">
-                  {templates.map((t) => {
-                    const on = draft.eligibleClassIds.includes(t.id);
-                    return (
+
+              {isAccess ? (
+                <div>
+                  <span className="mb-1 block text-sm font-medium text-ink-soft">Vigencia rápida</span>
+                  <div className="flex flex-wrap gap-2">
+                    {([
+                      { d: 30, t: 'Mensual' },
+                      { d: 15, t: 'Quincenal' },
+                      { d: 7, t: 'Semanal' },
+                      { d: 1, t: 'Visita' },
+                    ] as const).map((opt) => (
                       <button
-                        key={t.id}
-                        onClick={() => toggleClass(t.id)}
+                        key={opt.d}
+                        type="button"
+                        onClick={() => setDraft({ ...draft, validityDays: opt.d })}
                         className={`rounded-full px-3 py-1.5 text-sm border transition ${
-                          on
+                          draft.validityDays === opt.d
                             ? 'bg-brand text-cream border-brand'
                             : 'bg-white text-ink-soft border-cream-dark'
                         }`}
                       >
-                        {t.name}
+                        {opt.t}
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
+                  <p className="mt-2 text-xs text-ink-faint">
+                    El miembro tendrá <b>acceso libre</b> durante la vigencia (no se descuentan clases). Ideal para gimnasio.
+                  </p>
                 </div>
-              </Field>
+              ) : (
+                <Field label="Clases participantes">
+                  <div className="flex flex-wrap gap-2">
+                    {templates.map((t) => {
+                      const on = draft.eligibleClassIds.includes(t.id);
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => toggleClass(t.id)}
+                          className={`rounded-full px-3 py-1.5 text-sm border transition ${
+                            on
+                              ? 'bg-brand text-cream border-brand'
+                              : 'bg-white text-ink-soft border-cream-dark'
+                          }`}
+                        >
+                          {t.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Field>
+              )}
             </div>
             <div className="mt-6 flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setDraft(null)}>
