@@ -93,7 +93,9 @@ export default function OnboardingScreen() {
     setPhone('');
     setBirthDate('');
     setSentReset(false);
-    setMode(m);
+    // Los links de invitación (?ceu=…) son exclusivos para unirse (alumno/coach):
+    // nunca deben llevar al registro de un estudio nuevo.
+    setMode(invitedCeu && m === 'create' ? 'join' : m);
   };
 
   const submit = async (e: React.FormEvent) => {
@@ -182,7 +184,7 @@ export default function OnboardingScreen() {
             </div>
           )}
 
-          <h1 className="text-2xl font-bold text-ink">
+          <h1 className="text-2xl font-bold text-ink text-center">
             {mode === 'login'
               ? 'Bienvenido de nuevo'
               : mode === 'forgot'
@@ -195,7 +197,7 @@ export default function OnboardingScreen() {
                       ? 'Crea tu cuenta'
                       : 'Únete a tu estudio'}
           </h1>
-          <p className="text-ink-faint mt-1 mb-6">
+          <p className="text-ink-faint mt-1 mb-6 text-center">
             {mode === 'login'
               ? 'Ingresa con tu correo y contraseña.'
               : mode === 'forgot'
@@ -345,20 +347,23 @@ export default function OnboardingScreen() {
           </form>
 
           {/* Cambiar de modo */}
-          <div className="mt-6 space-y-2 text-sm">
+          <div className="mt-6 space-y-2 text-sm text-center">
             {(mode === 'create' || mode === 'join') && (
-              <button onClick={() => changeMode('login')} className="text-ink-faint hover:text-ink">
+              <button onClick={() => changeMode('login')} className="block w-full text-ink-faint hover:text-ink">
                 ¿Ya tienes cuenta? <span className="text-brand font-medium">Inicia sesión</span>
               </button>
             )}
             {mode === 'login' && (
               <>
-                <button onClick={() => changeMode('join')} className="block text-ink-faint hover:text-ink">
+                <button onClick={() => changeMode('join')} className="block w-full text-ink-faint hover:text-ink">
                   ¿Tienes un CEU? <span className="text-brand font-medium">Únete a tu estudio</span>
                 </button>
-                <button onClick={() => changeMode('create')} className="block text-ink-faint hover:text-ink">
-                  ¿Eres un estudio nuevo? <span className="text-brand font-medium">Crea tu cuenta</span>
-                </button>
+                {/* El registro de estudio solo va en el link original (sin invitación). */}
+                {!invitedCeu && (
+                  <button onClick={() => changeMode('create')} className="block w-full text-ink-faint hover:text-ink">
+                    ¿Eres un estudio nuevo? <span className="text-brand font-medium">Crea tu cuenta</span>
+                  </button>
+                )}
               </>
             )}
           </div>
