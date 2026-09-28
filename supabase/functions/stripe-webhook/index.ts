@@ -112,11 +112,13 @@ async function applyPackage(m: Record<string, string>, s: Stripe.Checkout.Sessio
   const now = new Date();
   const expires = new Date(now.getTime() + pkg.validity_days * DAY);
 
+  const pkgKind = pkg.kind === 'access' ? 'access' : 'credits';
   await admin.from('user_packages').insert({
     id: crypto.randomUUID(),
     user_id: m.user_id,
     package_id: pkg.id,
-    credits_total: pkg.class_credits,
+    kind: pkgKind,
+    credits_total: pkgKind === 'access' ? 0 : pkg.class_credits,
     credits_used: 0,
     purchased_at: now.toISOString(),
     expires_at: expires.toISOString(),

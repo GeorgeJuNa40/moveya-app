@@ -70,9 +70,14 @@ export default function StudentDashboard() {
   const nextTpl = next ? db.classTemplates.find((t) => t.id === next.session.templateId) : null;
   const nextCoach = next ? db.users.find((u) => u.id === next.session.coachId) : null;
 
-  // Progreso del anillo: clases disponibles sobre el total del paquete vigente.
+  // Membresía de acceso libre vigente (gimnasio/mixto): se muestra por vigencia,
+  // no por créditos. Tiene prioridad en el hero.
+  const accessPkg = db.userPackages.find((p) => p.userId === uid && p.kind === 'access' && isUsablePackage(p)) ?? null;
+  const heroPkg = accessPkg ?? data.activePkg;
+
+  // Progreso del anillo: acceso libre = lleno; si no, clases disponibles / total.
   const pkgTotal = data.activePkg?.creditsTotal ?? 0;
-  const ringPct = pkgTotal > 0 ? creditsLeft / pkgTotal : creditsLeft > 0 ? 1 : 0;
+  const ringPct = accessPkg ? 1 : pkgTotal > 0 ? creditsLeft / pkgTotal : creditsLeft > 0 ? 1 : 0;
 
   return (
     <div className="space-y-6">
@@ -91,25 +96,32 @@ export default function StudentDashboard() {
         <div className="relative flex flex-col items-center gap-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-5">
             <ProgressRing pct={ringPct}>
-              <div>
-                <p className="text-4xl font-black text-ink">{creditsLeft}</p>
-                <p className="text-xs font-medium text-ink-faint">clases disponibles</p>
-              </div>
+              {accessPkg ? (
+                <div>
+                  <p className="text-3xl">🔓</p>
+                  <p className="text-xs font-medium text-ink-faint">Acceso libre</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-4xl font-black text-ink">{creditsLeft}</p>
+                  <p className="text-xs font-medium text-ink-faint">clases disponibles</p>
+                </div>
+              )}
             </ProgressRing>
             <div className="hidden sm:block">
-              {data.activePkg ? (
+              {heroPkg ? (
                 <>
-                  <p className="text-xs uppercase tracking-wide text-ink-faint">Tu paquete</p>
+                  <p className="text-xs uppercase tracking-wide text-ink-faint">{accessPkg ? 'Tu membresía' : 'Tu paquete'}</p>
                   <p className="text-lg font-bold text-ink">
-                    {db.packages.find((p) => p.id === data.activePkg!.packageId)?.name}
+                    {db.packages.find((p) => p.id === heroPkg.packageId)?.name}
                   </p>
                   <p className="mt-1 text-sm text-ink-soft">
-                    Vence en {daysUntil(data.activePkg.expiresAt)} días
+                    Vence en {daysUntil(heroPkg.expiresAt)} días
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-lg font-bold text-ink">Sin paquete activo</p>
+                  <p className="text-lg font-bold text-ink">Sin plan activo</p>
                   <p className="mt-1 text-sm text-ink-soft">Compra uno para reservar clases.</p>
                 </>
               )}

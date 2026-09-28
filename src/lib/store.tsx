@@ -353,10 +353,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       db.bookings.filter((b) => b.sessionId === sessionId && b.status !== 'CANCELED').length;
     if (seats <= 0) return;
     // Paquete usable: activo, con créditos y dentro de su vigencia.
-    const activePkg = db.userPackages.find(
+    // Prefiere la membresía de acceso (no gasta créditos); si no hay, un paquete.
+    const usablePkgs = db.userPackages.filter(
       (p) => p.userId === currentUser.id && isUsablePackage(p),
     );
-    if (!activePkg) return; // sin clases disponibles, no puede reservar
+    const activePkg = usablePkgs.find((p) => p.kind === 'access') ?? usablePkgs[0];
+    if (!activePkg) return; // sin clases/membresía disponible, no puede reservar
+    const consumes = activePkg.kind !== 'access'; // acceso libre NO descuenta
 
     if (existing) {
       setDb((prev) => ({
@@ -366,15 +369,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ? { ...b, status: 'RESERVED', userPackageId: activePkg.id }
             : b,
         ),
-        userPackages: prev.userPackages.map((p) =>
-          p.id === activePkg.id ? { ...p, creditsUsed: p.creditsUsed + 1 } : p,
-        ),
+        userPackages: consumes
+          ? prev.userPackages.map((p) =>
+              p.id === activePkg.id ? { ...p, creditsUsed: p.creditsUsed + 1 } : p,
+            )
+          : prev.userPackages,
       }));
       void dbUpdate('bookings', existing.id, {
         status: 'RESERVED',
         user_package_id: activePkg.id,
       });
-      void dbUpdate('user_packages', activePkg.id, { credits_used: activePkg.creditsUsed + 1 });
+      if (consumes) void dbUpdate('user_packages', activePkg.id, { credits_used: activePkg.creditsUsed + 1 });
       return;
     }
 
@@ -389,12 +394,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDb((prev) => ({
       ...prev,
       bookings: [...prev.bookings, booking],
-      userPackages: prev.userPackages.map((p) =>
-        p.id === activePkg.id ? { ...p, creditsUsed: p.creditsUsed + 1 } : p,
-      ),
+      userPackages: consumes
+        ? prev.userPackages.map((p) =>
+            p.id === activePkg.id ? { ...p, creditsUsed: p.creditsUsed + 1 } : p,
+          )
+        : prev.userPackages,
     }));
     void dbInsert('bookings', rowBooking(booking));
-    void dbUpdate('user_packages', activePkg.id, { credits_used: activePkg.creditsUsed + 1 });
+    if (consumes) void dbUpdate('user_packages', activePkg.id, { credits_used: activePkg.creditsUsed + 1 });
   };
 
   // Plan vigente del estudio (por defecto el más limitado si aún no hay dato).
@@ -1074,7 +1081,8 @@ function applyPurchase(
     id: newId(),
     userId,
     packageId: pkg.id,
-    creditsTotal: pkg.classCredits,
+    kind: pkg.kind ?? 'credits',
+    creditsTotal: pkg.kind === 'access' ? 0 : pkg.classCredits,
     creditsUsed: 0,
     purchasedAt: new Date().toISOString(),
     expiresAt: expires.toISOString(),
@@ -1120,14 +1128,19 @@ export function isSubscriptionActive(studio: Studio | null): boolean {
   return new Date(currentPeriodEnd).getTime() > Date.now();
 }
 
-// Un paquete es "usable" para reservar si está activo, le quedan créditos y
-// aún está dentro de su vigencia (no vencido).
+// Un paquete es "usable" para reservar si está activo y vigente. En 'credits'
+// además debe quedarle al menos un crédito; en 'access' (membresía de acceso
+// libre) basta con estar vigente — no descuenta créditos.
 export function isUsablePackage(p: UserPackage): boolean {
-  return (
-    p.active &&
-    p.creditsUsed < p.creditsTotal &&
-    new Date(p.expiresAt).getTime() > Date.now()
-  );
+  if (!p.active) return false;
+  if (new Date(p.expiresAt).getTime() <= Date.now()) return false;
+  if (p.kind === 'access') return true;
+  return p.creditsUsed < p.creditsTotal;
+}
+
+// ¿Es una membresía de acceso libre (no por créditos)?
+export function isAccessMembership(p: UserPackage): boolean {
+  return p.kind === 'access';
 }
 
 // Traduce los errores de la reserva (RPC book_session) a mensajes claros.
