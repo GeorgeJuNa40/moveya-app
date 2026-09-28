@@ -4,6 +4,7 @@ import { useStore, isUsablePackage } from '../../lib/store';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
 import { accessCheckIn, fetchTodayCheckins, subscribeCheckins, type Checkin } from '../../lib/access';
 import { notifySuccess, notifyError } from '../../lib/notify';
+import QrScanner, { parseCheckinQr } from '../checkin/QrScanner';
 
 // Pantalla "Accesos" (gimnasio/mixto): control de entrada de los miembros.
 //  - Modo de check-in configurable (QR fijo / staff escanea / manual).
@@ -23,6 +24,7 @@ export default function AccessControl() {
   const [checkins, setCheckins] = useState<Checkin[]>([]);
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
 
   // Miembros (alumnos) del estudio, para el registro manual.
   const students = useMemo(
@@ -60,6 +62,17 @@ export default function AccessControl() {
     } finally {
       setBusy(null);
     }
+  };
+
+  // El staff escaneó el QR personal de un miembro: registramos su entrada.
+  const onScan = (text: string) => {
+    setScanning(false);
+    const parsed = parseCheckinQr(text);
+    if (!parsed || parsed.studio !== studio.id || !parsed.user) {
+      notifyError('acceso', 'Ese código no es de un miembro de tu estudio.');
+      return;
+    }
+    void markManual(parsed.user, nameOf(parsed.user));
   };
 
   const filtered = search.trim()
@@ -112,15 +125,15 @@ export default function AccessControl() {
           </Card>
         )}
 
-        {/* Instrucción para el modo "staff escanea" */}
+        {/* Modo "staff escanea": escáner de cámara dentro de la app */}
         {mode === 'staff_qr' && (
-          <Card className="p-6">
-            <h2 className="font-semibold text-ink mb-1">El staff escanea al miembro</h2>
-            <p className="text-sm text-ink-soft">
-              Pide al miembro que abra <b>“Mi acceso”</b> en su app (verá su QR personal). Desde el celular de recepción,
-              abre la cámara y escanea ese QR: se registrará su entrada automáticamente.
+          <Card className="p-6 text-center">
+            <h2 className="font-semibold text-ink mb-1">Escanear al miembro</h2>
+            <p className="text-sm text-ink-soft mb-4">
+              Pide al miembro que abra <b>“Mi acceso”</b> en su app (verá su código). Aquí escaneas ese código y se registra su entrada.
             </p>
-            <p className="mt-3 text-xs text-ink-faint">💡 También puedes registrar entradas a mano en el panel de la derecha.</p>
+            <Button onClick={() => setScanning(true)}>📷 Escanear código</Button>
+            <p className="mt-3 text-xs text-ink-faint">💡 También puedes registrar entradas a mano abajo.</p>
           </Card>
         )}
 
@@ -173,6 +186,8 @@ export default function AccessControl() {
           )}
         </Card>
       </div>
+
+      {scanning && <QrScanner onResult={onScan} onClose={() => setScanning(false)} />}
     </>
   );
 }

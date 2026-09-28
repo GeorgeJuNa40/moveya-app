@@ -51,6 +51,7 @@ export default function StudentDashboard() {
   const { db, currentUser, currentStudio, starBalance, availableCredits } = useStore();
   const uid = currentUser!.id;
   const photos = currentStudio!.photos;
+  const isGym = (currentStudio!.studioType ?? 'studio') === 'gym'; // gimnasio puro: sin clases
 
   const data = useMemo(() => {
     const myBookings = db.bookings
@@ -128,13 +129,14 @@ export default function StudentDashboard() {
             </div>
           </div>
 
-          <Link to="/app/book" className="w-full sm:w-auto">
-            <Button className="w-full sm:w-auto">Reservar clase</Button>
+          <Link to={isGym ? '/app/packages' : '/app/book'} className="w-full sm:w-auto">
+            <Button className="w-full sm:w-auto">{isGym ? 'Registrar mi entrada' : 'Reservar clase'}</Button>
           </Link>
         </div>
       </Card>
 
-      {/* Próxima clase */}
+      {/* Próxima clase (solo donde hay clases: estudio/mixto) */}
+      {!isGym && (
       <Card className="p-5">
         <p className="text-xs uppercase tracking-wide text-ink-faint">Próxima clase</p>
         {next && nextTpl ? (
@@ -165,11 +167,16 @@ export default function StudentDashboard() {
           </div>
         )}
       </Card>
+      )}
 
       {/* Chips */}
       <div className="grid grid-cols-2 gap-4">
         <StatChip icon="★" value={stars} label="Estrellas" />
-        <StatChip icon="✦" value={data.myBookings.length} label="Próximas reservas" />
+        {isGym ? (
+          <StatChip icon="🔓" value={heroPkg ? `${Math.max(0, daysUntil(heroPkg.expiresAt))}d` : '—'} label="Días de membresía" />
+        ) : (
+          <StatChip icon="✦" value={data.myBookings.length} label="Próximas reservas" />
+        )}
       </div>
 
       {/* Conoce el estudio */}

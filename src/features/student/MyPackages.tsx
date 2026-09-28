@@ -6,6 +6,7 @@ import { usd, daysUntil } from '../../lib/format';
 import { startStripeCheckout } from '../../lib/payments';
 import { accessCheckIn } from '../../lib/access';
 import { notifySuccess, notifyError } from '../../lib/notify';
+import QrScanner, { parseCheckinQr } from '../checkin/QrScanner';
 
 // Alumno: paquetes activos + catálogo. La compra se hace en la página segura de
 // Stripe (la app nunca recibe datos de tarjeta). El paquete se activa solo
@@ -27,29 +28,46 @@ export default function MyPackages() {
   const studioType = currentStudio!.studioType ?? 'studio';
   const isGym = studioType === 'gym';
   const showAccess = isGym || studioType === 'mixed'; // gimnasio/mixto usan check-in
+  // Modo de check-in del estudio: define qué ve el alumno.
+  //  - 'member_qr': el alumno escanea el QR de recepción → ve "Escanear código".
+  //  - 'staff_qr': el gym escanea al alumno → ve solo SU código.
+  //  - 'manual': recepción lo marca → ve solo el estado de su membresía.
+  const checkinMode = currentStudio!.branding.checkinMode ?? 'member_qr';
 
-  // "Mi acceso": QR personal (para que el staff lo escane) + botón de auto-entrada.
+  // "Mi acceso": QR personal (para que el staff lo escanee) + escáner propio.
   const origin = window.location.origin;
   const myQrUrl = `${origin}/#/checkin?s=${encodeURIComponent(currentStudio!.id)}&u=${encodeURIComponent(uid)}`;
   const [myQr, setMyQr] = useState('');
   const [checking, setChecking] = useState(false);
+  const [scanning, setScanning] = useState(false);
   useEffect(() => {
-    if (!showAccess) return;
+    if (!showAccess || checkinMode !== 'staff_qr') return;
     QRCode.toDataURL(myQrUrl, { width: 320, margin: 1, color: { dark: '#4A5D55', light: '#ffffff' } })
       .then(setMyQr)
       .catch(() => setMyQr(''));
-  }, [myQrUrl, showAccess]);
+  }, [myQrUrl, showAccess, checkinMode]);
 
-  const selfCheckIn = async () => {
+  const doCheckIn = async (targetUser?: string) => {
     setChecking(true);
     try {
-      const res = await accessCheckIn(undefined, 'member_self');
+      const res = await accessCheckIn(targetUser, 'member_scan');
       notifySuccess(res.duplicate ? '¡Ya estabas dentro!' : res.active ? '✅ ¡Entrada registrada!' : '⚠️ Entrada registrada, pero no tienes membresía activa.');
     } catch (e) {
       notifyError('acceso', (e as Error)?.message ?? 'No se pudo registrar');
     } finally {
       setChecking(false);
     }
+  };
+
+  // El alumno escaneó el QR de recepción: validamos que sea de ESTE estudio.
+  const onScan = (text: string) => {
+    setScanning(false);
+    const parsed = parseCheckinQr(text);
+    if (!parsed || parsed.studio !== currentStudio!.id) {
+      notifyError('acceso', 'Ese código no es el de tu estudio.');
+      return;
+    }
+    void doCheckIn(); // registro propio
   };
 
   const buy = async (packageId: string) => {
@@ -77,15 +95,30 @@ export default function MyPackages() {
       {showAccess && (
         <Card className="mb-6 p-6 text-center">
           <h2 className="font-semibold text-ink">Mi acceso</h2>
-          <p className="mt-1 text-sm text-ink-faint">
-            Escanea el QR de recepción para entrar, o muestra este código para que el estudio registre tu entrada.
-          </p>
-          {myQr && <img src={myQr} alt="Mi QR de acceso" className="mx-auto mt-4 h-44 w-44 rounded-2xl border border-cream-dark" />}
-          <Button className="mt-4" disabled={checking} onClick={selfCheckIn}>
-            {checking ? 'Registrando…' : 'Registrar mi entrada'}
-          </Button>
+
+          {checkinMode === 'member_qr' && (
+            <>
+              <p className="mt-1 text-sm text-ink-faint">Escanea el código QR de la recepción para registrar tu entrada.</p>
+              <Button className="mt-4" disabled={checking} onClick={() => setScanning(true)}>
+                {checking ? 'Registrando…' : '📷 Escanear código'}
+              </Button>
+            </>
+          )}
+
+          {checkinMode === 'staff_qr' && (
+            <>
+              <p className="mt-1 text-sm text-ink-faint">Muestra este código en recepción para que registren tu entrada.</p>
+              {myQr && <img src={myQr} alt="Mi código de acceso" className="mx-auto mt-4 h-44 w-44 rounded-2xl border border-cream-dark" />}
+            </>
+          )}
+
+          {checkinMode === 'manual' && (
+            <p className="mt-2 text-sm text-ink-soft">Tu entrada la registra recepción cuando llegues. ¡Solo preséntate! 💚</p>
+          )}
         </Card>
       )}
+
+      {scanning && <QrScanner onResult={onScan} onClose={() => setScanning(false)} />}
 
       <h2 className="mb-3 font-semibold text-ink">Activos</h2>
       {myPackages.length === 0 ? (
