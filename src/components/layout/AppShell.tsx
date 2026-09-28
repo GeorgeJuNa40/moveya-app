@@ -195,7 +195,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // (acceso), no "Paquetes" (créditos por clase).
   const isGym = currentStudio.studioType === 'gym';
   const isGymish = isGym || currentStudio.studioType === 'mixed';
-  const nav = NAV_BY_ROLE[currentUser.role]
+  let nav = NAV_BY_ROLE[currentUser.role]
     .filter((item) => !item.cap || can(item.cap))
     .map((item) => {
       if (!isGym) return item;
@@ -203,6 +203,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
       if (item.to === '/app/packages') return { ...item, label: 'Mi membresía', short: 'Membresía' };
       return item;
     });
+  // Gimnasio puro: el alumno no reserva clases (no hay). Se oculta "Reservar".
+  if (currentUser.role === 'STUDENT' && isGym) {
+    nav = nav.filter((n) => n.to !== '/app/book');
+  }
   // Gimnasio/mixto: agrega "Accesos" (check-in) junto a Membresías/Paquetes.
   if (currentUser.role === 'STUDIO_ADMIN' && isGymish) {
     const i = nav.findIndex((n) => n.to === '/admin/packages');
