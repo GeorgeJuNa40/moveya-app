@@ -1,9 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../lib/store';
+import { supabase } from '../../lib/supabase';
 import { COUNTRIES, DEFAULT_COUNTRY_ISO, getCountry } from '../../lib/countries';
 
 type Mode = 'login' | 'join' | 'create' | 'forgot';
+
+// Datos públicos del estudio que invita (para el white-label de la invitación).
+interface InviteStudio {
+  name: string;
+  logoUrl?: string;
+  logoText?: string;
+  primaryColor?: string;
+  fontFamily?: string;
+}
 
 // Pantalla de inicio: registro real (crear estudio o unirse por CEU) e inicio
 // de sesión, contra Supabase. La redirección la hace App.tsx según el rol.
@@ -32,6 +42,47 @@ export default function OnboardingScreen() {
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [sentReset, setSentReset] = useState(false); // ya se envió el correo de recuperación
+
+  // WHITE-LABEL: si llega por invitación (?ceu=…), buscamos los datos públicos del
+  // estudio (nombre, logo, color) para mostrar "Te invitaron a unirte a …" con SU
+  // marca. Es una consulta pública (RPC get_public_studio), sin iniciar sesión.
+  const [invStudio, setInvStudio] = useState<InviteStudio | null>(null);
+  useEffect(() => {
+    if (!invitedCeu) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase.rpc('get_public_studio', { p_ceu: invitedCeu });
+      if (cancelled || !data) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const d = data as any;
+      const b = d.branding ?? {};
+      setInvStudio({
+        name: d.name,
+        logoUrl: b.logoUrl,
+        logoText: b.logoText,
+        primaryColor: b.primaryColor,
+        fontFamily: b.fontFamily,
+      });
+    })().catch(() => {
+      /* si falla, seguimos con la marca de Move yA */
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [invitedCeu]);
+
+  // Tiñe la pantalla con el color del estudio que invita (y lo restaura al salir).
+  useEffect(() => {
+    const root = document.documentElement;
+    const prevColor = root.style.getPropertyValue('--brand-primary');
+    const prevFont = root.style.getPropertyValue('--brand-font');
+    if (invStudio?.primaryColor) root.style.setProperty('--brand-primary', invStudio.primaryColor);
+    if (invStudio?.fontFamily) root.style.setProperty('--brand-font', invStudio.fontFamily);
+    return () => {
+      root.style.setProperty('--brand-primary', prevColor);
+      root.style.setProperty('--brand-font', prevFont);
+    };
+  }, [invStudio]);
 
   // Al cambiar de modo limpiamos la contraseña (y datos sensibles) para que los
   // campos no arrastren lo tecleado antes. El navegador seguirá ofreciendo tus
@@ -87,19 +138,49 @@ export default function OnboardingScreen() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
-      {/* Panel de marca — el logo en una tarjeta cream, limpio */}
+      {/* Panel de marca — el logo del ESTUDIO si es invitación; si no, Move yA */}
       <div className="hidden lg:flex items-center justify-center bg-forest p-12">
-        <div className="brand-float rounded-3xl p-8 shadow-zen" style={{ backgroundColor: '#F6F1E9' }}>
-          <img src="/logo-moveya.png" alt="Move yA" className="w-72 h-auto select-none" draggable={false} />
+        <div className="brand-float rounded-3xl p-8 shadow-zen text-center" style={{ backgroundColor: '#F6F1E9' }}>
+          {invStudio ? (
+            <>
+              {invStudio.logoUrl ? (
+                <img src={invStudio.logoUrl} alt={invStudio.name} className="mx-auto max-h-44 w-auto object-contain" />
+              ) : (
+                <div className="text-4xl font-black text-ink" style={{ fontFamily: invStudio.fontFamily }}>
+                  {invStudio.logoText || invStudio.name}
+                </div>
+              )}
+              <p className="mt-5 text-sm text-ink-faint">powered by <span className="font-semibold">Move yA</span></p>
+            </>
+          ) : (
+            <img src="/logo-moveya.png" alt="Move yA" className="w-72 h-auto select-none" draggable={false} />
+          )}
         </div>
       </div>
 
       {/* Panel de acceso */}
       <div className="flex items-center justify-center bg-cream p-6">
         <div className="w-full max-w-sm">
-          <div className="lg:hidden mb-8 flex justify-center">
-            <img src="/logo-moveya.png" alt="Move yA" className="brand-float w-52 h-auto select-none" draggable={false} />
-          </div>
+          {invStudio ? (
+            // WHITE-LABEL: el estudio te está invitando (con su logo y nombre).
+            <div className="mb-6 text-center">
+              <div className="mx-auto mb-3 grid h-20 w-20 place-items-center overflow-hidden rounded-2xl bg-white shadow-zen">
+                {invStudio.logoUrl ? (
+                  <img src={invStudio.logoUrl} alt={invStudio.name} className="h-full w-full object-contain p-1.5" />
+                ) : (
+                  <span className="text-2xl font-black text-brand">
+                    {(invStudio.logoText || invStudio.name || '?').charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <p className="text-ink-faint">Te invitaron a unirte a</p>
+              <p className="text-2xl font-bold text-ink" style={{ fontFamily: invStudio.fontFamily }}>{invStudio.name}</p>
+            </div>
+          ) : (
+            <div className="lg:hidden mb-8 flex justify-center">
+              <img src="/logo-moveya.png" alt="Move yA" className="brand-float w-52 h-auto select-none" draggable={false} />
+            </div>
+          )}
 
           <h1 className="text-2xl font-bold text-ink">
             {mode === 'login'
@@ -110,7 +191,9 @@ export default function OnboardingScreen() {
                   ? 'Crea tu estudio'
                   : isCoachInvite
                     ? 'Únete como coach'
-                    : 'Únete a tu estudio'}
+                    : invStudio
+                      ? 'Crea tu cuenta'
+                      : 'Únete a tu estudio'}
           </h1>
           <p className="text-ink-faint mt-1 mb-6">
             {mode === 'login'
@@ -121,7 +204,9 @@ export default function OnboardingScreen() {
                   ? 'Registra tu estudio y empieza tu prueba.'
                   : isCoachInvite
                     ? 'Regístrate como coach. El estudio deberá aprobarte para que empieces.'
-                    : 'Ingresa el Código de Estudio (CEU) que te dieron.'}
+                    : invStudio
+                      ? `Completa tus datos para unirte a ${invStudio.name} y reservar tus clases.`
+                      : 'Ingresa el Código de Estudio (CEU) que te dieron.'}
           </p>
 
           <form onSubmit={submit} className="space-y-3">
@@ -140,7 +225,7 @@ export default function OnboardingScreen() {
                 required
               />
             )}
-            {mode === 'join' && invitedCeu && (
+            {mode === 'join' && invitedCeu && !invStudio && (
               <div className="rounded-xl border border-cream-dark bg-cream-dark/30 px-4 py-3 text-sm text-ink-soft">
                 Te unes con el código{' '}
                 <span className="font-mono font-bold text-brand">{invitedCeu}</span>
