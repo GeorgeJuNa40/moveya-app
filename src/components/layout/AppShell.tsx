@@ -232,6 +232,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
     if (i >= 0) nav.splice(i + 1, 0, rutItem);
     else nav.push(rutItem);
   }
+  // Gimnasio/mixto: el coach gestiona las rutinas de sus miembros.
+  if (currentUser.role === 'COACH' && isGymish) {
+    nav.push({ to: '/coach/routines', label: 'Rutinas' });
+  }
 
   // Barra inferior (móvil): mostramos hasta 4 secciones + el botón "Más".
   // "Más" SIEMPRE aparece: abre el cajón con la cuenta (foto, notificaciones y

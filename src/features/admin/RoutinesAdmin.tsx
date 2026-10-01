@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button } from '../../components/ui';
 import {
   fetchRoutines, saveRoutine, deleteRoutine, fetchMeasurements,
-  type Routine, type Exercise, type Measurement,
+  fetchPendingCompletions, confirmCompletion,
+  fetchVideos, addVideo, deleteVideo,
+  type Routine, type Exercise, type Measurement, type Completion, type RoutineVideo,
 } from '../../lib/routines';
 import { notifySuccess } from '../../lib/notify';
 
@@ -27,6 +29,42 @@ export default function RoutinesAdmin() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Pendientes por confirmar (todo el estudio) y biblioteca de videos.
+  const [pending, setPending] = useState<Completion[]>([]);
+  const [videos, setVideos] = useState<RoutineVideo[]>([]);
+  const [vTitle, setVTitle] = useState('');
+  const [vUrl, setVUrl] = useState('');
+  const [vLevel, setVLevel] = useState('');
+  const [vArea, setVArea] = useState('');
+
+  const loadStudio = async () => {
+    setPending(await fetchPendingCompletions());
+    setVideos(await fetchVideos());
+  };
+  useEffect(() => {
+    void loadStudio();
+  }, []);
+
+  const doConfirm = async (id: string) => {
+    if (await confirmCompletion(id)) {
+      notifySuccess('Cumplimiento confirmado ✅');
+      setPending(await fetchPendingCompletions());
+    }
+  };
+  const addVideoHandler = async () => {
+    if (!vTitle.trim() || !vUrl.trim()) return;
+    const ok = await addVideo({ studioId, title: vTitle.trim(), url: vUrl.trim(), level: vLevel.trim() || null, area: vArea.trim() || null });
+    if (ok) {
+      notifySuccess('Video agregado.');
+      setVTitle(''); setVUrl(''); setVLevel(''); setVArea('');
+      setVideos(await fetchVideos());
+    }
+  };
+  const removeVideo = async (id: string) => {
+    if (await deleteVideo(id)) setVideos(await fetchVideos());
+  };
+
+  const nameOf = (uid: string) => db.users.find((u) => u.id === uid)?.fullName ?? 'Miembro';
   const selectedUser = students.find((u) => u.id === selected) ?? null;
 
   const loadMember = async (userId: string) => {
@@ -78,6 +116,25 @@ export default function RoutinesAdmin() {
   return (
     <>
       <PageHeader title="Rutinas" subtitle="Arma rutinas para tus miembros y revisa su progreso" />
+
+      {/* Pendientes por confirmar: el alumno marcó que cumplió; el coach confirma. */}
+      {pending.length > 0 && (
+        <Card className="mb-6 p-5">
+          <h2 className="font-semibold text-ink mb-2">Por confirmar <span className="text-ink-faint">({pending.length})</span></h2>
+          <p className="text-sm text-ink-faint mb-3">Tus miembros marcaron que cumplieron su rutina. Confírmalo para que les aparezca como "Logrado".</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {pending.map((c) => (
+              <div key={c.id} className="flex items-center justify-between rounded-xl bg-cream-dark/30 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-ink">{nameOf(c.userId)}</p>
+                  <p className="text-[11px] text-ink-faint">{new Date(c.day).toLocaleDateString('es-MX', { dateStyle: 'medium' })}</p>
+                </div>
+                <Button variant="secondary" onClick={() => doConfirm(c.id)}>Confirmar</Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
         {/* Miembros */}
@@ -207,6 +264,34 @@ export default function RoutinesAdmin() {
           )}
         </div>
       </div>
+
+      {/* Biblioteca de videos (rutinas genéricas por enlace, para todos los miembros) */}
+      <Card className="mt-6 p-5">
+        <h2 className="font-semibold text-ink mb-1">Biblioteca de videos</h2>
+        <p className="text-sm text-ink-faint mb-3">
+          Rutinas genéricas que ven todos tus miembros. Pega el enlace del video (YouTube/Vimeo).
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <input className="rounded-xl border border-cream-dark bg-white px-3 py-2 text-sm outline-none focus:ring-2 ring-brand" placeholder="Título (ej. Rutina pierna)" value={vTitle} onChange={(e) => setVTitle(e.target.value)} />
+          <input className="rounded-xl border border-cream-dark bg-white px-3 py-2 text-sm outline-none focus:ring-2 ring-brand" placeholder="Enlace del video" value={vUrl} onChange={(e) => setVUrl(e.target.value)} />
+          <input className="rounded-xl border border-cream-dark bg-white px-3 py-2 text-sm outline-none focus:ring-2 ring-brand" placeholder="Nivel (opcional)" value={vLevel} onChange={(e) => setVLevel(e.target.value)} />
+          <input className="rounded-xl border border-cream-dark bg-white px-3 py-2 text-sm outline-none focus:ring-2 ring-brand" placeholder="Zona/categoría (opcional)" value={vArea} onChange={(e) => setVArea(e.target.value)} />
+        </div>
+        <div className="mt-2"><Button onClick={addVideoHandler} disabled={!vTitle.trim() || !vUrl.trim()}>+ Agregar video</Button></div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {videos.map((v) => (
+            <div key={v.id} className="flex items-center justify-between gap-2 rounded-xl border border-cream-dark p-3">
+              <div className="min-w-0">
+                <a href={v.url} target="_blank" rel="noreferrer" className="block truncate font-medium text-brand hover:underline">▶ {v.title}</a>
+                <p className="text-[11px] text-ink-faint">{[v.level, v.area].filter(Boolean).join(' · ')}</p>
+              </div>
+              <button onClick={() => removeVideo(v.id)} className="shrink-0 text-red-600">✕</button>
+            </div>
+          ))}
+          {videos.length === 0 && <p className="text-sm text-ink-faint">Aún no hay videos.</p>}
+        </div>
+      </Card>
     </>
   );
 }

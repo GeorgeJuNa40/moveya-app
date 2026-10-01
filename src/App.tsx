@@ -278,6 +278,7 @@ export default function App() {
       <Route path="/coach" element={<RequireRole role="COACH"><CoachGate><CoachDashboard /></CoachGate></RequireRole>} />
       <Route path="/coach/calendar" element={<RequireRole role="COACH"><CoachGate><CoachCalendar /></CoachGate></RequireRole>} />
       <Route path="/coach/profile" element={<RequireRole role="COACH"><CoachGate><CoachProfile /></CoachGate></RequireRole>} />
+      <Route path="/coach/routines" element={<RequireRole role="COACH"><CoachGate><RoutinesAdmin /></CoachGate></RequireRole>} />
 
       {/* ---- USUARIO (Alumno) ---- */}
       <Route path="/app" element={<RequireRole role="STUDENT"><StudentDashboard /></RequireRole>} />
