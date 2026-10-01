@@ -173,6 +173,68 @@ Deno.serve(async (req) => {
       return json({ url: session.url });
     }
 
+    // Domiciliación: membresía de cobro MENSUAL automático (cargo directo a la
+    // cuenta Connect del gimnasio, modo suscripción de Stripe).
+    if (kind === 'membership_sub') {
+      const { data: pkg } = await supabase
+        .from('packages')
+        .select('*')
+        .eq('id', body.packageId)
+        .single();
+      if (!pkg) return json({ error: 'Membresía no encontrada' }, 404);
+      if (pkg.kind !== 'access' || !pkg.recurring) {
+        return json({ error: 'Esta membresía no es de cobro automático.' }, 400);
+      }
+
+      const { data: studio } = await supabase
+        .from('studios')
+        .select('branding, stripe_account_id, stripe_charges_enabled')
+        .eq('id', me.studio_id)
+        .single();
+
+      const acct = studio?.stripe_account_id as string | undefined;
+      if (!acct || !studio?.stripe_charges_enabled) {
+        return json(
+          { error: 'El estudio aún no activó los pagos en línea. Pídele que conecte su cuenta de Stripe.' },
+          400,
+        );
+      }
+      const currency = (studio?.branding?.currencyCode ?? 'USD').toLowerCase();
+      const amountMinor = Math.round(Number(pkg.price_usd) * 100);
+
+      const session = await stripe.checkout.sessions.create(
+        {
+          mode: 'subscription',
+          line_items: [
+            {
+              quantity: 1,
+              price_data: {
+                currency,
+                unit_amount: amountMinor,
+                recurring: { interval: 'month' }, // domiciliación mensual
+                product_data: { name: pkg.name, description: pkg.description || undefined },
+              },
+            },
+          ],
+          // Comisión de Move yA como % de cada cobro mensual (si está configurada).
+          subscription_data: {
+            metadata: { kind: 'membership_sub', user_id: me.id, studio_id: me.studio_id, package_id: pkg.id },
+            ...(FEE_PERCENT > 0 ? { application_fee_percent: FEE_PERCENT } : {}),
+          },
+          success_url: `${base}/?pago=exito#/app/packages`,
+          cancel_url: `${base}/?pago=cancelado#/app/packages`,
+          metadata: {
+            kind: 'membership_sub',
+            user_id: me.id,
+            studio_id: me.studio_id,
+            package_id: pkg.id,
+          },
+        },
+        { stripeAccount: acct },
+      );
+      return json({ url: session.url });
+    }
+
     if (kind === 'subscription') {
       if (me.role !== 'STUDIO_ADMIN') return json({ error: 'Solo el estudio' }, 403);
       const plan = String(body.plan);
@@ -234,7 +296,7 @@ Deno.serve(async (req) => {
       return json({ url: session.url });
     }
 
-    return json({ error: 'kind inválido (usa "package" o "subscription")' }, 400);
+    return json({ error: 'kind inválido (usa "package", "membership_sub" o "subscription")' }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

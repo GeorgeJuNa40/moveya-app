@@ -169,6 +169,7 @@ export interface Package {
   name: string;
   description: string;
   kind: PackageKind; // 'credits' (def.) o 'access'
+  recurring?: boolean; // membresía de cobro mensual automático (domiciliación)
   priceUsd: number;
   classCredits: number; // solo relevante en 'credits'
   validityDays: number;
@@ -186,6 +187,8 @@ export interface UserPackage {
   purchasedAt: string;
   expiresAt: string;
   active: boolean;
+  stripeSubscriptionId?: string; // si es membresía domiciliada (cobro recurrente)
+  cancelAtPeriodEnd?: boolean; // la domiciliación se cancela al terminar el periodo
 }
 
 export interface ClassTemplate {

@@ -4,6 +4,7 @@ import { notifyError } from './notify';
 // Datos para iniciar un pago con Stripe (vía la Edge Function stripe-checkout).
 type CheckoutBody =
   | { kind: 'package'; packageId: string }
+  | { kind: 'membership_sub'; packageId: string } // membresía con cobro mensual (domiciliación)
   | { kind: 'subscription'; plan: string };
 
 // Pide a Stripe una sesión de pago y redirige a su página segura.
@@ -41,6 +42,32 @@ export async function startStripeCheckout(body: CheckoutBody): Promise<boolean> 
   } catch (e) {
     console.error('stripe-checkout exception:', e);
     notifyError('pago', String((e as Error)?.message ?? e));
+    return false;
+  }
+}
+
+// Cancela la domiciliación (cobro mensual) de una membresía. El acceso se
+// conserva hasta el final del periodo ya pagado. Devuelve true si se solicitó.
+export async function cancelMembership(userPackageId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.functions.invoke('membership-cancel', { body: { userPackageId } });
+    if (error) {
+      let detail = error.message || 'No se pudo cancelar';
+      try {
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.clone === 'function') {
+          const b = await ctx.clone().json();
+          if (b?.error) detail = String(b.error);
+        }
+      } catch {
+        /* sin cuerpo JSON */
+      }
+      notifyError('cancelar domiciliación', detail);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    notifyError('cancelar domiciliación', String((e as Error)?.message ?? e));
     return false;
   }
 }

@@ -10,6 +10,7 @@ const emptyDraft = (studioId: string, kind: Package['kind'] = 'credits'): Packag
   name: '',
   description: '',
   kind,
+  recurring: false,
   priceUsd: 0,
   classCredits: 1,
   validityDays: 30,
@@ -47,7 +48,9 @@ export default function PackageManagement() {
       priceUsd: Math.max(0, draft.priceUsd || 0),
       // La membresía de acceso no usa créditos por clase.
       classCredits: access ? 0 : Math.max(1, Math.floor(draft.classCredits || 1)),
-      validityDays: Math.max(1, Math.floor(draft.validityDays || 1)),
+      // Domiciliación: solo en membresías de acceso; si está activa, ciclo mensual.
+      recurring: access ? !!draft.recurring : false,
+      validityDays: access && draft.recurring ? 30 : Math.max(1, Math.floor(draft.validityDays || 1)),
       // El acceso libre vale para todas las clases: no restringe por tipo.
       eligibleClassIds: access ? [] : draft.eligibleClassIds,
     };
@@ -99,7 +102,9 @@ export default function PackageManagement() {
                 <Metric label="Vigencia" value={`${p.validityDays}d`} />
               </div>
               {p.kind === 'access' && (
-                <p className="mt-2 text-center text-xs font-medium text-brand">🔓 Acceso libre durante la vigencia</p>
+                <p className="mt-2 text-center text-xs font-medium text-brand">
+                  🔓 Acceso libre {p.recurring ? '· 🔁 cobro mensual automático' : 'durante la vigencia'}
+                </p>
               )}
 
               <div className="mt-3 flex flex-wrap gap-1">
@@ -212,31 +217,54 @@ export default function PackageManagement() {
               </div>
 
               {isAccess ? (
-                <div>
-                  <span className="mb-1 block text-sm font-medium text-ink-soft">Vigencia rápida</span>
-                  <div className="flex flex-wrap gap-2">
-                    {([
-                      { d: 30, t: 'Mensual' },
-                      { d: 15, t: 'Quincenal' },
-                      { d: 7, t: 'Semanal' },
-                      { d: 1, t: 'Visita' },
-                    ] as const).map((opt) => (
-                      <button
-                        key={opt.d}
-                        type="button"
-                        onClick={() => setDraft({ ...draft, validityDays: opt.d })}
-                        className={`rounded-full px-3 py-1.5 text-sm border transition ${
-                          draft.validityDays === opt.d
-                            ? 'bg-brand text-cream border-brand'
-                            : 'bg-white text-ink-soft border-cream-dark'
-                        }`}
-                      >
-                        {opt.t}
-                      </button>
-                    ))}
-                  </div>
-                  <p className="mt-2 text-xs text-ink-faint">
-                    El miembro tendrá <b>acceso libre</b> durante la vigencia (no se descuentan clases). Ideal para gimnasio.
+                <div className="space-y-3">
+                  {/* Domiciliación: cobro mensual automático */}
+                  <button
+                    type="button"
+                    onClick={() => setDraft({ ...draft, recurring: !draft.recurring })}
+                    className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${
+                      draft.recurring ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'
+                    }`}
+                  >
+                    <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${draft.recurring ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
+                      {draft.recurring ? '✓' : ''}
+                    </span>
+                    <span>
+                      <span className="block text-sm font-semibold text-ink">Cobro mensual automático (domiciliación)</span>
+                      <span className="block text-xs text-ink-faint">Se le cobra al miembro cada mes con su tarjeta, sin que tenga que volver a pagar. Requiere tu cuenta de Stripe conectada.</span>
+                    </span>
+                  </button>
+
+                  {!draft.recurring && (
+                    <div>
+                      <span className="mb-1 block text-sm font-medium text-ink-soft">Vigencia rápida</span>
+                      <div className="flex flex-wrap gap-2">
+                        {([
+                          { d: 30, t: 'Mensual' },
+                          { d: 15, t: 'Quincenal' },
+                          { d: 7, t: 'Semanal' },
+                          { d: 1, t: 'Visita' },
+                        ] as const).map((opt) => (
+                          <button
+                            key={opt.d}
+                            type="button"
+                            onClick={() => setDraft({ ...draft, validityDays: opt.d })}
+                            className={`rounded-full px-3 py-1.5 text-sm border transition ${
+                              draft.validityDays === opt.d
+                                ? 'bg-brand text-cream border-brand'
+                                : 'bg-white text-ink-soft border-cream-dark'
+                            }`}
+                          >
+                            {opt.t}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <p className="text-xs text-ink-faint">
+                    {draft.recurring
+                      ? '🔁 Se renueva y cobra cada mes automáticamente hasta que el miembro (o tú) la cancele.'
+                      : 'El miembro tendrá acceso libre durante la vigencia (no se descuentan clases). Ideal para gimnasio.'}
                   </p>
                 </div>
               ) : (

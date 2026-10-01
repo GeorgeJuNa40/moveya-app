@@ -113,6 +113,7 @@ const mapPackage = (r: Row): Package => ({
   name: r.name,
   description: r.description ?? '',
   kind: (r.kind ?? 'credits') as Package['kind'],
+  recurring: r.recurring ?? false,
   priceUsd: Number(r.price_usd),
   classCredits: r.class_credits,
   validityDays: r.validity_days,
@@ -130,6 +131,8 @@ const mapUserPackage = (r: Row): UserPackage => ({
   purchasedAt: r.purchased_at,
   expiresAt: r.expires_at,
   active: r.active,
+  stripeSubscriptionId: r.stripe_subscription_id ?? undefined,
+  cancelAtPeriodEnd: r.cancel_at_period_end ?? false,
 });
 
 const mapClassTemplate = (r: Row): ClassTemplate => ({
@@ -321,6 +324,7 @@ export const rowPackage = (p: Package): Row => ({
   name: p.name,
   description: p.description,
   kind: p.kind ?? 'credits',
+  recurring: p.recurring ?? false,
   price_usd: p.priceUsd,
   class_credits: p.classCredits,
   validity_days: p.validityDays,
