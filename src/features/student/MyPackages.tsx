@@ -3,10 +3,11 @@ import QRCode from 'qrcode';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
 import { usd, daysUntil } from '../../lib/format';
-import { startStripeCheckout } from '../../lib/payments';
+import { startStripeCheckout, cancelMembership } from '../../lib/payments';
 import { accessCheckIn } from '../../lib/access';
-import { notifySuccess, notifyError } from '../../lib/notify';
+import { notifySuccess, notifyError, triggerResync } from '../../lib/notify';
 import QrScanner, { parseCheckinQr } from '../checkin/QrScanner';
+import type { Package } from '../../lib/types';
 
 // Alumno: paquetes activos + catálogo. La compra se hace en la página segura de
 // Stripe (la app nunca recibe datos de tarjeta). El paquete se activa solo
@@ -70,10 +71,25 @@ export default function MyPackages() {
     void doCheckIn(); // registro propio
   };
 
-  const buy = async (packageId: string) => {
-    setBuying(packageId);
-    const ok = await startStripeCheckout({ kind: 'package', packageId });
+  const buy = async (p: Package) => {
+    setBuying(p.id);
+    // Membresía con domiciliación → suscripción mensual; si no, compra única.
+    const ok = p.kind === 'access' && p.recurring
+      ? await startStripeCheckout({ kind: 'membership_sub', packageId: p.id })
+      : await startStripeCheckout({ kind: 'package', packageId: p.id });
     if (!ok) setBuying(null); // si falla, reactiva el botón (si funciona, ya redirige)
+  };
+
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const cancelDomiciliacion = async (userPackageId: string) => {
+    if (!confirm('¿Cancelar el cobro mensual? Conservarás el acceso hasta el final del periodo ya pagado.')) return;
+    setCancelling(userPackageId);
+    const ok = await cancelMembership(userPackageId);
+    setCancelling(null);
+    if (ok) {
+      notifySuccess('Domiciliación cancelada. Tu acceso sigue hasta el final del periodo.');
+      [1500, 4000].forEach((ms) => setTimeout(triggerResync, ms));
+    }
   };
 
   return (
@@ -141,6 +157,22 @@ export default function MyPackages() {
                   <p className="mt-1 text-sm text-ink-faint">
                     {expired ? 'Tu membresía venció. Renueva para seguir entrando.' : `Vence en ${daysLeft} día(s).`}
                   </p>
+                  {up.stripeSubscriptionId && (
+                    up.cancelAtPeriodEnd ? (
+                      <p className="mt-2 text-xs text-amber-700">🔁 Domiciliación cancelada · tu acceso sigue hasta el final del periodo.</p>
+                    ) : (
+                      <>
+                        <p className="mt-2 text-xs text-ink-faint">🔁 Mensualidad automática activa.</p>
+                        <button
+                          onClick={() => cancelDomiciliacion(up.id)}
+                          disabled={cancelling === up.id}
+                          className="mt-2 text-xs font-medium text-red-600 hover:underline disabled:opacity-60"
+                        >
+                          {cancelling === up.id ? 'Cancelando…' : 'Cancelar domiciliación'}
+                        </button>
+                      </>
+                    )
+                  )}
                 </Card>
               );
             }
@@ -173,12 +205,19 @@ export default function MyPackages() {
           <Card key={p.id} className="p-5 flex flex-col">
             <h3 className="font-semibold text-ink">{p.name}</h3>
             <p className="text-sm text-ink-faint mt-1 flex-1">{p.description}</p>
-            <div className="mt-4 flex items-end gap-1"><span className="text-2xl font-black text-brand">{usd(p.priceUsd)}</span></div>
+            <div className="mt-4 flex items-end gap-1">
+              <span className="text-2xl font-black text-brand">{usd(p.priceUsd)}</span>
+              {p.kind === 'access' && p.recurring && <span className="pb-0.5 text-sm text-ink-faint">/mes</span>}
+            </div>
             <p className="text-sm text-ink-faint">
-              {p.kind === 'access' ? `🔓 Acceso libre · vigencia ${p.validityDays} días` : `${p.classCredits} clases · vigencia ${p.validityDays} días`}
+              {p.kind === 'access'
+                ? p.recurring
+                  ? '🔓 Acceso libre · 🔁 se cobra cada mes'
+                  : `🔓 Acceso libre · vigencia ${p.validityDays} días`
+                : `${p.classCredits} clases · vigencia ${p.validityDays} días`}
             </p>
-            <Button className="mt-4" disabled={!!buying} onClick={() => buy(p.id)}>
-              {buying === p.id ? 'Redirigiendo…' : 'Comprar'}
+            <Button className="mt-4" disabled={!!buying} onClick={() => buy(p)}>
+              {buying === p.id ? 'Redirigiendo…' : p.kind === 'access' && p.recurring ? 'Suscribirme' : 'Comprar'}
             </Button>
           </Card>
         ))}
