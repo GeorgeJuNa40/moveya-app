@@ -51,7 +51,9 @@ export default function StudentDashboard() {
   const { db, currentUser, currentStudio, starBalance, availableCredits } = useStore();
   const uid = currentUser!.id;
   const photos = currentStudio!.photos;
-  const isGym = (currentStudio!.studioType ?? 'studio') === 'gym'; // gimnasio puro: sin clases
+  const studioType = currentStudio!.studioType ?? 'studio';
+  const isGym = studioType === 'gym'; // gimnasio puro: sin clases
+  const isGymish = isGym || studioType === 'mixed'; // gym/mixto: rutinas + acceso
 
   const data = useMemo(() => {
     const myBookings = db.bookings
@@ -178,6 +180,19 @@ export default function StudentDashboard() {
           <StatChip icon="✦" value={data.myBookings.length} label="Próximas reservas" />
         )}
       </div>
+
+      {/* Acceso rápido a la rutina (gym/mixto) */}
+      {isGymish && (
+        <Link to="/app/routine" className="block">
+          <Card className="flex items-center justify-between p-5 hover:shadow-zen">
+            <div>
+              <p className="font-semibold text-ink">🏋️ Mi rutina</p>
+              <p className="text-sm text-ink-soft">Tu plan de entrenamiento y tu progreso.</p>
+            </div>
+            <span className="text-brand">→</span>
+          </Card>
+        </Link>
+      )}
 
       {/* Conoce el estudio */}
       {photos.length > 0 && (

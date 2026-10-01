@@ -108,6 +108,13 @@ function iconPaths(to: string): ReactNode {
       </>
     );
   if (to.includes('classes')) return <path d="M3 12h3l2.5-6 4 12L17 9h4" />;
+  if (to.includes('routine'))
+    return (
+      <>
+        <path d="M6.5 9v6M4 10.5v3M17.5 9v6M20 10.5v3" strokeLinecap="round" />
+        <path d="M6.5 12h11" />
+      </>
+    );
   if (to.includes('access'))
     return (
       <>
@@ -203,16 +210,27 @@ export default function AppShell({ children }: { children: ReactNode }) {
       if (item.to === '/app/packages') return { ...item, label: 'Mi membresía', short: 'Membresía' };
       return item;
     });
-  // Gimnasio puro: el alumno no reserva clases (no hay). Se oculta "Reservar".
-  if (currentUser.role === 'STUDENT' && isGym) {
-    nav = nav.filter((n) => n.to !== '/app/book');
+  // Gimnasio puro: no hay clases → se ocultan "Clases" y "Calendario" (admin) y
+  // "Reservar" (alumno).
+  if (isGym) {
+    nav = nav.filter((n) => n.to !== '/admin/classes' && n.to !== '/admin/calendar' && n.to !== '/app/book');
   }
-  // Gimnasio/mixto: agrega "Accesos" (check-in) junto a Membresías/Paquetes.
+  // Gimnasio/mixto: agrega "Accesos" (check-in) y "Rutinas" al menú del estudio.
   if (currentUser.role === 'STUDIO_ADMIN' && isGymish) {
     const i = nav.findIndex((n) => n.to === '/admin/packages');
-    const accItem = { to: '/admin/access', label: 'Accesos' };
-    if (i >= 0) nav.splice(i + 1, 0, accItem);
-    else nav.push(accItem);
+    const extras = [
+      { to: '/admin/access', label: 'Accesos' },
+      { to: '/admin/routines', label: 'Rutinas' },
+    ];
+    if (i >= 0) nav.splice(i + 1, 0, ...extras);
+    else nav.push(...extras);
+  }
+  // Gimnasio/mixto: el alumno ve "Mi rutina".
+  if (currentUser.role === 'STUDENT' && isGymish) {
+    const i = nav.findIndex((n) => n.to === '/app/packages');
+    const rutItem = { to: '/app/routine', label: 'Mi rutina', short: 'Rutina' };
+    if (i >= 0) nav.splice(i + 1, 0, rutItem);
+    else nav.push(rutItem);
   }
 
   // Barra inferior (móvil): mostramos hasta 4 secciones + el botón "Más".

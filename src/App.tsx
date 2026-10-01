@@ -66,6 +66,7 @@ const ServicesConfig = lazyWithReload(() => import('./features/admin/ServicesCon
 const WhatsappAgent = lazyWithReload(() => import('./features/admin/WhatsappAgent'));
 const Inbox = lazyWithReload(() => import('./features/admin/Inbox'));
 const AccessControl = lazyWithReload(() => import('./features/admin/AccessControl'));
+const RoutinesAdmin = lazyWithReload(() => import('./features/admin/RoutinesAdmin'));
 const Reports = lazyWithReload(() => import('./features/admin/Reports'));
 const Reminders = lazyWithReload(() => import('./features/admin/Reminders'));
 const SubscriptionScreen = lazyWithReload(() => import('./features/admin/SubscriptionScreen'));
@@ -81,6 +82,7 @@ const MyPackages = lazyWithReload(() => import('./features/student/MyPackages'))
 const Rewards = lazyWithReload(() => import('./features/student/Rewards'));
 const OptionalServices = lazyWithReload(() => import('./features/student/OptionalServices'));
 const StudentCoaches = lazyWithReload(() => import('./features/student/StudentCoaches'));
+const MyRoutine = lazyWithReload(() => import('./features/student/MyRoutine'));
 
 // Pantalla de carga mientras se descarga el código de una sección.
 function Splash() {
@@ -265,6 +267,7 @@ export default function App() {
       <Route path="/admin/whatsapp" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappAgent /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/inbox" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><Inbox /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/access" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><AccessControl /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/routines" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><RoutinesAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reports" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="reports"><Reports /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reminders" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Reminders /></SubscriptionGate></RequireRole>} />
       {/* Suscripción siempre accesible (allow) para poder regularizar el pago. */}
@@ -282,6 +285,7 @@ export default function App() {
       <Route path="/app/packages" element={<RequireRole role="STUDENT"><MyPackages /></RequireRole>} />
       <Route path="/app/rewards" element={<RequireRole role="STUDENT"><Rewards /></RequireRole>} />
       <Route path="/app/coaches" element={<RequireRole role="STUDENT"><StudentCoaches /></RequireRole>} />
+      <Route path="/app/routine" element={<RequireRole role="STUDENT"><MyRoutine /></RequireRole>} />
       <Route path="/app/services" element={<RequireRole role="STUDENT"><OptionalServices /></RequireRole>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
