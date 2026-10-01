@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button } from '../../components/ui';
-import { fetchRoutines, fetchMeasurements, addMeasurement, type Routine, type Measurement } from '../../lib/routines';
+import {
+  fetchRoutines, fetchMeasurements, addMeasurement, markRoutineDone, fetchMyCompletions, fetchVideos,
+  type Routine, type Measurement, type Completion, type RoutineVideo,
+} from '../../lib/routines';
 import { notifySuccess } from '../../lib/notify';
 
 // Alumno (gym/mixto): ve su rutina asignada y registra su peso (seguimiento).
@@ -12,18 +15,41 @@ export default function MyRoutine() {
 
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const [completions, setCompletions] = useState<Completion[]>([]);
+  const [videos, setVideos] = useState<RoutineVideo[]>([]);
   const [weight, setWeight] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [marking, setMarking] = useState<string | null>(null);
+
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 
   const load = async () => {
     setRoutines(await fetchRoutines(uid));
     setMeasurements(await fetchMeasurements(uid));
+    setCompletions(await fetchMyCompletions(uid));
+    setVideos(await fetchVideos());
   };
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid]);
+
+  // Estado de HOY de una rutina: sin marcar / pendiente de coach / logrado.
+  const todayStatus = (routineId: string): 'none' | 'pending' | 'done' => {
+    const c = completions.find((x) => x.routineId === routineId && x.day === todayStr);
+    if (!c) return 'none';
+    return c.coachConfirmed ? 'done' : 'pending';
+  };
+  const markDone = async (routineId: string) => {
+    setMarking(routineId);
+    const ok = await markRoutineDone(routineId);
+    setMarking(null);
+    if (ok) {
+      notifySuccess('¡Registrado! Tu coach lo confirmará. 💪');
+      setCompletions(await fetchMyCompletions(uid));
+    }
+  };
 
   const addWeight = async () => {
     const w = parseFloat(weight.replace(',', '.'));
@@ -52,7 +78,9 @@ export default function MyRoutine() {
         </Card>
       ) : (
         <div className="mb-6 grid gap-4 md:grid-cols-2">
-          {routines.map((r) => (
+          {routines.map((r) => {
+            const st = todayStatus(r.id);
+            return (
             <Card key={r.id} className="p-5">
               <h3 className="font-semibold text-ink">{r.title}</h3>
               <ul className="mt-3 space-y-2">
@@ -68,9 +96,46 @@ export default function MyRoutine() {
                   </li>
                 ))}
               </ul>
+              {/* Cumplimiento de hoy (2 pasos: tú marcas, el coach confirma) */}
+              <div className="mt-3 border-t border-cream-dark pt-3">
+                {st === 'done' ? (
+                  <p className="text-sm font-medium text-green-700">✅ Logrado hoy · confirmado por tu coach</p>
+                ) : st === 'pending' ? (
+                  <p className="text-sm font-medium text-amber-700">⏳ Marcada como cumplida · esperando que tu coach la confirme</p>
+                ) : (
+                  <Button className="w-full" disabled={marking === r.id} onClick={() => markDone(r.id)}>
+                    {marking === r.id ? 'Registrando…' : 'Marcar como cumplida hoy'}
+                  </Button>
+                )}
+              </div>
             </Card>
-          ))}
+          );})}
         </div>
+      )}
+
+      {/* Biblioteca de videos (rutinas genéricas del estudio) */}
+      {videos.length > 0 && (
+        <Card className="mb-6 p-5">
+          <h2 className="font-semibold text-ink mb-1">Rutinas en video</h2>
+          <p className="text-sm text-ink-faint mb-3">Entrenamientos guiados que puedes hacer por tu cuenta.</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {videos.map((v) => (
+              <a
+                key={v.id}
+                href={v.url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-xl border border-cream-dark p-3 hover:bg-brand-soft"
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand">▶</span>
+                <span className="min-w-0">
+                  <span className="block truncate font-medium text-ink">{v.title}</span>
+                  {(v.level || v.area) && <span className="block text-[11px] text-ink-faint">{[v.level, v.area].filter(Boolean).join(' · ')}</span>}
+                </span>
+              </a>
+            ))}
+          </div>
+        </Card>
       )}
 
       {/* Seguimiento: peso */}

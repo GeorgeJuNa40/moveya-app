@@ -135,3 +135,130 @@ export async function addMeasurement(m: {
   }
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// Cumplimiento de rutina: el alumno marca, el coach confirma (dos pasos).
+// ---------------------------------------------------------------------------
+export interface Completion {
+  id: string;
+  routineId: string;
+  userId: string;
+  day: string;
+  memberDone: boolean;
+  coachConfirmed: boolean;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapCompletion = (r: any): Completion => ({
+  id: r.id,
+  routineId: r.routine_id,
+  userId: r.user_id,
+  day: r.day,
+  memberDone: !!r.member_done,
+  coachConfirmed: !!r.coach_confirmed,
+});
+
+// Alumno: marca que cumplió su rutina hoy (queda pendiente de confirmación).
+export async function markRoutineDone(routineId: string): Promise<boolean> {
+  const { error } = await supabase.rpc('mark_routine_done', { p_routine_id: routineId });
+  if (error) {
+    notifyError('rutina', error.message);
+    return false;
+  }
+  return true;
+}
+
+// Coach/admin: confirma que efectivamente se cumplió.
+export async function confirmCompletion(id: string): Promise<boolean> {
+  const { error } = await supabase.rpc('confirm_routine_completion', { p_id: id });
+  if (error) {
+    notifyError('confirmar', error.message);
+    return false;
+  }
+  return true;
+}
+
+// Cumplimientos de un miembro (para mostrarle su estado por rutina).
+export async function fetchMyCompletions(userId: string): Promise<Completion[]> {
+  const { data, error } = await supabase
+    .from('routine_completions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(90);
+  if (error) return [];
+  return (data ?? []).map(mapCompletion);
+}
+
+// Pendientes por confirmar del estudio (lo que el staff debe revisar).
+export async function fetchPendingCompletions(): Promise<Completion[]> {
+  const { data, error } = await supabase
+    .from('routine_completions')
+    .select('*')
+    .eq('member_done', true)
+    .eq('coach_confirmed', false)
+    .order('created_at', { ascending: false })
+    .limit(100);
+  if (error) return [];
+  return (data ?? []).map(mapCompletion);
+}
+
+// ---------------------------------------------------------------------------
+// Biblioteca de videos (rutinas genéricas por enlace, estilo Smart Fit).
+// ---------------------------------------------------------------------------
+export interface RoutineVideo {
+  id: string;
+  title: string;
+  url: string;
+  level?: string | null;
+  area?: string | null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapVideo = (r: any): RoutineVideo => ({
+  id: r.id,
+  title: r.title,
+  url: r.url,
+  level: r.level ?? null,
+  area: r.area ?? null,
+});
+
+export async function fetchVideos(): Promise<RoutineVideo[]> {
+  const { data, error } = await supabase
+    .from('routine_videos')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return (data ?? []).map(mapVideo);
+}
+
+export async function addVideo(v: {
+  studioId: string;
+  title: string;
+  url: string;
+  level?: string | null;
+  area?: string | null;
+}): Promise<boolean> {
+  const { error } = await supabase.from('routine_videos').insert({
+    id: crypto.randomUUID(),
+    studio_id: v.studioId,
+    title: v.title,
+    url: v.url,
+    level: v.level ?? null,
+    area: v.area ?? null,
+  });
+  if (error) {
+    notifyError('videos', error.message);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteVideo(id: string): Promise<boolean> {
+  const { error } = await supabase.from('routine_videos').delete().eq('id', id);
+  if (error) {
+    notifyError('videos', error.message);
+    return false;
+  }
+  return true;
+}
