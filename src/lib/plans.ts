@@ -7,7 +7,8 @@ import type { PlanId } from './types';
 export interface Plan {
   id: PlanId;
   name: string;
-  priceUsd: number;
+  priceUsd: number; // precio mensual (USD)
+  priceUsdYear: number; // precio anual (USD) — 2 meses gratis
   tagline: string;
   highlight?: boolean; // plan destacado ("Más popular")
   features: string[];
@@ -15,6 +16,16 @@ export interface Plan {
 
 export const PROMO_PRICE = 1;
 export const PROMO_TRIAL_DAYS = 14;
+
+// Facturación anual: pagar al año = 2 meses gratis (~17% de ahorro).
+export type BillingInterval = 'monthly' | 'annual';
+// Precio del plan según el periodo elegido.
+export const planPrice = (p: Plan, interval: BillingInterval): number =>
+  interval === 'annual' ? p.priceUsdYear : p.priceUsd;
+// Equivalente mensual de un plan anual (para el "equivale a $X/mes").
+export const annualPerMonth = (p: Plan): number => Math.round((p.priceUsdYear / 12) * 100) / 100;
+// Ahorro anual vs pagar 12 meses sueltos.
+export const annualSavings = (p: Plan): number => Math.round((p.priceUsd * 12 - p.priceUsdYear) * 100) / 100;
 export const PROMO_PLAN: PlanId = 'premium'; // plan que se habilita durante la prueba (todo Premium)
 
 // Programa Fundador (primeros 10 estudios): acceso Premium al precio de Pro +
@@ -57,6 +68,7 @@ export const PLANS: Plan[] = [
     id: 'inicio',
     name: 'Inicio',
     priceUsd: 24.99,
+    priceUsdYear: 249,
     tagline: 'Para estudios que están comenzando',
     features: [
       'Hasta 50 alumnos activos',
@@ -71,8 +83,8 @@ export const PLANS: Plan[] = [
     id: 'pro',
     name: 'Pro',
     priceUsd: 44.99,
+    priceUsdYear: 449,
     tagline: 'El favorito de los estudios en marcha',
-    highlight: true,
     features: [
       'Todo lo del plan Inicio',
       'Alumnos ilimitados',
@@ -88,9 +100,12 @@ export const PLANS: Plan[] = [
     id: 'premium',
     name: 'Premium',
     priceUsd: 84.99,
+    priceUsdYear: 799,
     tagline: 'Para estudios en pleno crecimiento',
+    highlight: true,
     features: [
       'Todo lo del plan Pro',
+      'Alumnos ilimitados',
       'Coaches ilimitados',
       'Agente de WhatsApp con IA',
       'Reportes avanzados',

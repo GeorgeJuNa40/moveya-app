@@ -5,7 +5,7 @@ import { notifyError } from './notify';
 type CheckoutBody =
   | { kind: 'package'; packageId: string }
   | { kind: 'membership_sub'; packageId: string } // membresía con cobro mensual (domiciliación)
-  | { kind: 'subscription'; plan: string };
+  | { kind: 'subscription'; plan: string; billing?: 'monthly' | 'annual' };
 
 // Pide a Stripe una sesión de pago y redirige a su página segura.
 // Devuelve false si algo falla (para que quien llama reactive el botón).

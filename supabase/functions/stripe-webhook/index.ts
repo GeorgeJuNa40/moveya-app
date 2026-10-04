@@ -145,11 +145,11 @@ async function applyPackage(m: Record<string, string>, s: Stripe.Checkout.Sessio
   });
 }
 
-// Precios mensuales de referencia (informativos) — deben coincidir con plans.ts.
+// Precios de referencia (informativos) — deben coincidir con plans.ts.
 const PLAN_PRICE_USD: Record<string, number> = { inicio: 24.99, pro: 44.99, premium: 84.99 };
+const PLAN_PRICE_USD_YEAR: Record<string, number> = { inicio: 249, pro: 449, premium: 799 };
 
 async function applySubscription(m: Record<string, string>, s: Stripe.Checkout.Session) {
-  const end = new Date(Date.now() + 30 * DAY);
   const { data: studio } = await admin
     .from('studios')
     .select('subscription, whatsapp')
@@ -158,14 +158,23 @@ async function applySubscription(m: Record<string, string>, s: Stripe.Checkout.S
 
   const plan = m.plan; // 'inicio' | 'pro' | 'premium' (el fundador llega como 'premium')
   const isFounder = m.founder === '1';
-  // Fundador: Premium al precio de Pro + el bot ($10) en un solo cargo.
-  const priceUsd = isFounder ? PLAN_PRICE_USD.pro + 10 : (PLAN_PRICE_USD[plan] ?? 0);
+  // Periodo contratado: anual solo si se pidió explícitamente (el fundador es mensual).
+  const billing: 'monthly' | 'annual' = !isFounder && m.billing === 'annual' ? 'annual' : 'monthly';
+  // Acceso hasta el fin del periodo pagado (las renovaciones usan el periodo real de Stripe).
+  const end = new Date(Date.now() + (billing === 'annual' ? 365 : 30) * DAY);
+  // Fundador: Premium al precio de Pro + el bot ($10) en un solo cargo mensual.
+  const priceUsd = isFounder
+    ? PLAN_PRICE_USD.pro + 10
+    : billing === 'annual'
+      ? PLAN_PRICE_USD_YEAR[plan] ?? 0
+      : PLAN_PRICE_USD[plan] ?? 0;
 
   const next = {
     ...(studio?.subscription ?? {}),
     status: 'ACTIVE',
     plan,
     priceUsd,
+    billingInterval: billing,
     isPromo: false, // ya está pagando: termina la promo de lanzamiento
     founder: isFounder,
     currentPeriodEnd: end.toISOString(),
