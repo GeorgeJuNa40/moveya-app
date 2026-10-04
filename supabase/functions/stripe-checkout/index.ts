@@ -41,8 +41,10 @@ function safeBase(origin: unknown): string {
   }
 }
 
-// Precios mensuales de los planes del estudio (en centavos de USD).
+// Precios de los planes del estudio (en centavos de USD).
 const PLAN_PRICES: Record<string, number> = { inicio: 2499, pro: 4499, premium: 8499 };
+// Precios ANUALES (2 meses gratis). Deben coincidir con plans.ts (priceUsdYear).
+const PLAN_PRICES_YEAR: Record<string, number> = { inicio: 24900, pro: 44900, premium: 79900 };
 
 // -------- Comisión de plataforma (Move yA) sobre los pagos en línea de alumnos
 // Se cobra AL ESTUDIO: sale de su parte del cargo directo (no se le suma al
@@ -244,6 +246,10 @@ Deno.serve(async (req) => {
       // a FOUNDER_LIMIT estudios; al llenarse, todo vuelve a los precios normales.
       const isFounder = plan === 'founder';
       const metaPlan = isFounder ? 'premium' : plan; // por debajo, el fundador ES premium
+      // Periodo de cobro: mensual (por defecto) o anual (2 meses gratis). El
+      // programa Fundador es SIEMPRE mensual (precio especial de por vida).
+      const billing = !isFounder && body.billing === 'annual' ? 'annual' : 'monthly';
+      const interval: 'month' | 'year' = billing === 'annual' ? 'year' : 'month';
       let amount: number;
       let productName: string;
 
@@ -268,9 +274,9 @@ Deno.serve(async (req) => {
         amount = PLAN_PRICES.pro + Math.round(botUsd * 100); // Premium al precio de Pro + bot
         productName = 'Move yA · Fundador (acceso Premium + Bot WhatsApp)';
       } else {
-        amount = PLAN_PRICES[plan];
+        amount = billing === 'annual' ? PLAN_PRICES_YEAR[plan] : PLAN_PRICES[plan];
         if (!amount) return json({ error: 'Plan inválido' }, 400);
-        productName = `Move yA · Plan ${plan}`;
+        productName = `Move yA · Plan ${plan}${billing === 'annual' ? ' (anual)' : ''}`;
       }
 
       const session = await stripe.checkout.sessions.create({
@@ -281,7 +287,7 @@ Deno.serve(async (req) => {
             price_data: {
               currency: 'usd', // la suscripción SaaS se cobra en USD
               unit_amount: amount,
-              recurring: { interval: 'month' },
+              recurring: { interval }, // 'month' o 'year' (anual = 2 meses gratis)
               product_data: { name: productName },
             },
           },
@@ -291,7 +297,13 @@ Deno.serve(async (req) => {
         // Tras pagar la membresía, el estudio entra DIRECTO a su dashboard.
         success_url: `${base}/?suscripcion=exito#/admin`,
         cancel_url: `${base}/?suscripcion=cancelado#/admin/subscription`,
-        metadata: { kind: 'subscription', studio_id: me.studio_id, plan: metaPlan, founder: isFounder ? '1' : '0' },
+        metadata: {
+          kind: 'subscription',
+          studio_id: me.studio_id,
+          plan: metaPlan,
+          founder: isFounder ? '1' : '0',
+          billing, // 'monthly' | 'annual' — lo lee el webhook para fijar el periodo
+        },
       });
       return json({ url: session.url });
     }

@@ -1,7 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { PLANS, PROMO_PRICE, PROMO_TRIAL_DAYS, FOUNDER_PRICE_USD } from '../../lib/plans';
+import {
+  PLANS, PROMO_PRICE, PROMO_TRIAL_DAYS, FOUNDER_PRICE_USD,
+  planPrice, annualPerMonth, annualSavings, type BillingInterval, type Plan,
+} from '../../lib/plans';
+
+// Monto de un plan según el periodo (mensual/anual) + nota de ahorro en anual.
+function AmountBlock({ p, billing }: { p: Plan; billing: BillingInterval }) {
+  const price = planPrice(p, billing);
+  return (
+    <>
+      <div className="amt">${price}<small> USD/{billing === 'annual' ? 'año' : 'mes'}</small></div>
+      {billing === 'annual' && (
+        <div className="amt-sub">≈ ${annualPerMonth(p)}/mes · ahorras ${annualSavings(p)} al año</div>
+      )}
+    </>
+  );
+}
 
 // Landing pública (cara comercial) — estilo "Premium Zen Tech": claro, sereno,
 // con fotos y transiciones suaves. Vive en el dominio, sin login. Los botones
@@ -62,6 +78,7 @@ const STAR_GOAL = 8;
 export default function Landing() {
   const root = useRef<HTMLDivElement>(null);
   const [stars, setStars] = useState(0);
+  const [billing, setBilling] = useState<BillingInterval>('monthly');
 
   // Programa Fundador: abierto mientras queden lugares; al llenarse la barra
   // cambia sola a la promo de $1 · 14 días.
@@ -282,6 +299,16 @@ export default function Landing() {
             <h2>Precios simples, sin letras chiquitas</h2>
             <p className="lead">Empieza por <b className="hl">${PROMO_PRICE}</b> con {PROMO_TRIAL_DAYS} días de acceso <b className="hl">Premium</b>. Si no te suma, cancelas.</p>
           </div>
+
+          <div className="billtoggle reveal" role="tablist" aria-label="Periodo de facturación">
+            <button type="button" className={billing === 'monthly' ? 'on' : ''} onClick={() => setBilling('monthly')}>
+              Mensual
+            </button>
+            <button type="button" className={billing === 'annual' ? 'on' : ''} onClick={() => setBilling('annual')}>
+              Anual <span className="save">2 meses gratis</span>
+            </button>
+          </div>
+
           {(() => {
             // Plan destacado (Premium) primero y más grande; los otros dos debajo.
             const featured = PLANS.find((p) => p.highlight) ?? PLANS[PLANS.length - 1];
@@ -294,7 +321,7 @@ export default function Landing() {
                     <div className="feat-head">
                       <div className="pn">{featured.name}</div>
                       <div className="tl">{featured.tagline}</div>
-                      <div className="amt">${featured.priceUsd}<small> USD/mes</small></div>
+                      <AmountBlock p={featured} billing={billing} />
                       <Link className="btn btn-primary" to={REGISTRO}>Empezar por ${PROMO_PRICE}</Link>
                     </div>
                     <ul>
@@ -309,7 +336,7 @@ export default function Landing() {
                     <div className="price reveal" key={p.id} style={{ transitionDelay: `${i * 110}ms` }}>
                       <div className="pn">{p.name}</div>
                       <div className="tl">{p.tagline}</div>
-                      <div className="amt">${p.priceUsd}<small> USD/mes</small></div>
+                      <AmountBlock p={p} billing={billing} />
                       <ul>
                         {p.features.slice(0, 5).map((f) => (
                           <li key={f}><span className="ck">✓</span> {f}</li>
@@ -506,6 +533,13 @@ const CSS = `
 .mya-land .price li{display:flex;gap:10px;font-size:13.5px;color:var(--ink)}
 .mya-land .price li .ck{color:var(--mint);font-weight:800}
 .mya-land .price .btn{margin-top:22px;justify-content:center}
+
+/* Toggle mensual / anual */
+.mya-land .billtoggle{display:inline-flex;gap:4px;margin:26px auto 0;padding:5px;background:var(--cream2);border:1px solid var(--line);border-radius:999px;position:relative;left:50%;transform:translateX(-50%)}
+.mya-land .billtoggle button{border:0;background:transparent;color:var(--muted);font-weight:700;font-size:14px;padding:9px 20px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .2s,color .2s}
+.mya-land .billtoggle button.on{background:var(--card);color:var(--sage);box-shadow:0 8px 20px -12px rgba(43,58,50,.5)}
+.mya-land .billtoggle .save{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;background:var(--mint);color:var(--sage);padding:2px 7px;border-radius:999px}
+.mya-land .amt-sub{color:var(--muted);font-size:13px;margin-top:-2px;margin-bottom:2px}
 
 /* Plan destacado (Premium): primero y más grande */
 .mya-land .price-feat{margin-top:46px;padding:36px 38px}

@@ -94,6 +94,7 @@ export interface Subscription {
   trialDays: number; // días de prueba de la promo (14)
   isPromo: boolean; // registrado dentro de la ventana de lanzamiento (3 meses)
   founder?: boolean; // parte del programa Fundador (primeros 10): Premium + bot a precio especial de por vida
+  billingInterval?: 'monthly' | 'annual'; // periodo de cobro del plan (mensual por defecto)
   trialEndsAt: string; // fin de la prueba
   currentPeriodEnd: string; // acceso hasta esta fecha
 }
