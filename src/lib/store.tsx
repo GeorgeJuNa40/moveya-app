@@ -713,6 +713,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // ---- Metas del alumno (las crea el propio alumno) ----
     createGoal(title, target, periodEnd) {
       if (!currentUser) return;
+      // Máximo 1 meta activa a la vez (igual que el candado del servidor).
+      if (db.goals.some((g) => g.userId === currentUser.id && !g.achieved)) {
+        notifyError('metas', 'Ya tienes una meta activa. Complétala o elimínala antes de crear otra.');
+        return;
+      }
       const goal: Goal = {
         id: newId(),
         userId: currentUser.id,

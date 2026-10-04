@@ -136,6 +136,43 @@ $$;
 
 
 -- ----------------------------------------------------------------------------
+-- 2b) LÍMITE de metas activas por alumno: cierra el "multiplicador" (crear
+--     muchas metas y que la MISMA asistencia cuente para todas). El alumno
+--     puede tener como máximo UNA meta sin lograr a la vez; el staff no tiene
+--     límite (gestiona las metas de sus miembros).
+-- ----------------------------------------------------------------------------
+create or replace function public.guard_goals_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_caller text := auth.uid()::text;
+  v_role   text;
+  v_open   int;
+begin
+  if v_caller is null then return new; end if; -- service role
+  select role::text into v_role from public.users where id = v_caller;
+  if v_role in ('STUDIO_ADMIN','COACH') then return new; end if; -- staff sin límite
+  if new.user_id = v_caller then
+    select count(*) into v_open from public.goals
+      where user_id = v_caller and achieved = false;
+    if v_open >= 1 then
+      raise exception 'GOAL_LIMIT';  -- ya tiene una meta activa
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_guard_goals_insert on public.goals;
+create trigger trg_guard_goals_insert
+  before insert on public.goals
+  for each row execute function public.guard_goals_insert();
+
+
+-- ----------------------------------------------------------------------------
 -- 3) Quita el EXECUTE público de funciones que NO deben llamarse desde la API.
 --    (Siguen funcionando por trigger / cron / service role.)
 -- ----------------------------------------------------------------------------
