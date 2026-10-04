@@ -151,7 +151,7 @@ export default function Landing() {
         <div className="wrap navin">
           <Link className="brand" to={REGISTRO} aria-label="Move yA">
             <LotusMark className="mark" />
-            <span className="wordmark">move <i>yA</i></span>
+            <span className="wordmark">Move <i>yA</i></span>
           </Link>
           <div className="navbtns">
             <Link className="btn btn-ghost" to={LOGIN}>Entrar</Link>
@@ -282,21 +282,57 @@ export default function Landing() {
             <h2>Precios simples, sin letras chiquitas</h2>
             <p className="lead">Empieza por <b className="hl">${PROMO_PRICE}</b> con {PROMO_TRIAL_DAYS} días de acceso <b className="hl">Premium</b>. Si no te suma, cancelas.</p>
           </div>
-          <div className="prices">
-            {PLANS.map((p, i) => (
-              <div className={`price reveal${p.highlight ? ' hi' : ''}`} key={p.id} style={{ transitionDelay: `${i * 110}ms` }}>
-                {p.highlight && <div className="badge">Más elegido</div>}
-                <div className="pn">{p.name}</div>
-                <div className="tl">{p.tagline}</div>
-                <div className="amt">${p.priceUsd}<small> USD/mes</small></div>
-                <ul>
-                  {p.features.slice(0, 5).map((f) => (
-                    <li key={f}><span className="ck">✓</span> {f}</li>
+          {(() => {
+            // Plan destacado (Premium) primero y más grande; los otros dos debajo.
+            const featured = PLANS.find((p) => p.highlight) ?? PLANS[PLANS.length - 1];
+            const rest = PLANS.filter((p) => p.id !== featured.id);
+            return (
+              <>
+                <div className="price price-feat hi reveal">
+                  <div className="badge">Más elegido</div>
+                  <div className="feat-grid">
+                    <div className="feat-head">
+                      <div className="pn">{featured.name}</div>
+                      <div className="tl">{featured.tagline}</div>
+                      <div className="amt">${featured.priceUsd}<small> USD/mes</small></div>
+                      <Link className="btn btn-primary" to={REGISTRO}>Empezar por ${PROMO_PRICE}</Link>
+                    </div>
+                    <ul>
+                      {featured.features.map((f) => (
+                        <li key={f}><span className="ck">✓</span> {f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+                <div className="prices prices-rest">
+                  {rest.map((p, i) => (
+                    <div className="price reveal" key={p.id} style={{ transitionDelay: `${i * 110}ms` }}>
+                      <div className="pn">{p.name}</div>
+                      <div className="tl">{p.tagline}</div>
+                      <div className="amt">${p.priceUsd}<small> USD/mes</small></div>
+                      <ul>
+                        {p.features.slice(0, 5).map((f) => (
+                          <li key={f}><span className="ck">✓</span> {f}</li>
+                        ))}
+                      </ul>
+                      <Link className="btn btn-ghost" to={REGISTRO}>Empezar por ${PROMO_PRICE}</Link>
+                    </div>
                   ))}
-                </ul>
-                <Link className={`btn ${p.highlight ? 'btn-primary' : 'btn-ghost'}`} to={REGISTRO}>Empezar por ${PROMO_PRICE}</Link>
-              </div>
-            ))}
+                </div>
+              </>
+            );
+          })()}
+
+          <div className="wa-more reveal">
+            <p>¿Dudas antes de empezar? Escríbenos y te ayudamos a elegir tu plan.</p>
+            <a
+              className="btn btn-wa"
+              href="https://wa.me/5216691098426?text=Hola%2C%20quiero%20m%C3%A1s%20informaci%C3%B3n%20sobre%20Move%20yA"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span className="wa-ic">✆</span> Más información por WhatsApp
+            </a>
           </div>
         </div>
       </section>
@@ -312,7 +348,7 @@ export default function Landing() {
 
       <footer>
         <div className="wrap footin">
-          <div className="brand"><LotusMark className="mark" /><span className="wordmark">move <i>yA</i></span></div>
+          <div className="brand"><LotusMark className="mark" /><span className="wordmark">Move <i>yA</i></span></div>
           <div className="foot-links">
             <a href="#precios">Precios</a>
             <Link to="/privacy">Privacidad</Link>
@@ -471,6 +507,28 @@ const CSS = `
 .mya-land .price li .ck{color:var(--mint);font-weight:800}
 .mya-land .price .btn{margin-top:22px;justify-content:center}
 
+/* Plan destacado (Premium): primero y más grande */
+.mya-land .price-feat{margin-top:46px;padding:36px 38px}
+.mya-land .price-feat .feat-grid{display:grid;grid-template-columns:.85fr 1.15fr;gap:30px;align-items:center}
+.mya-land .price-feat .feat-head{display:flex;flex-direction:column}
+.mya-land .price-feat .pn{font-size:30px}
+.mya-land .price-feat .tl{font-size:14px;margin-top:3px}
+.mya-land .price-feat .amt{font-size:58px;margin:14px 0 2px}
+.mya-land .price-feat .amt small{font-size:16px}
+.mya-land .price-feat .btn{margin-top:22px;align-self:flex-start}
+.mya-land .price-feat ul{margin:0;grid-template-columns:1fr 1fr;gap:12px}
+.mya-land .price-feat li{font-size:14.5px}
+
+/* Los otros dos planes, tamaño normal, centrados debajo */
+.mya-land .prices-rest{grid-template-columns:repeat(2,1fr);max-width:760px;margin:18px auto 0}
+
+/* Más información por WhatsApp */
+.mya-land .wa-more{text-align:center;margin-top:34px}
+.mya-land .wa-more p{color:var(--muted);font-size:14.5px;margin:0 0 14px}
+.mya-land .btn-wa{background:#25D366;color:#fff;box-shadow:0 14px 30px -14px rgba(37,211,102,.7)}
+.mya-land .btn-wa:hover{background:#1ebe5a;transform:translateY(-1px);box-shadow:0 20px 42px -14px rgba(37,211,102,.7)}
+.mya-land .btn-wa .wa-ic{font-size:16px}
+
 /* Final */
 .mya-land .final{position:relative;z-index:2;text-align:center;padding:20px 22px 88px}
 .mya-land .finalbox{max-width:840px;margin:0 auto;background:linear-gradient(160deg,var(--sage),var(--sage2));color:var(--cream);border-radius:34px;padding:60px 28px;box-shadow:0 50px 100px -50px rgba(43,58,50,.7)}
@@ -495,6 +553,10 @@ const CSS = `
   .mya-land .game{grid-template-columns:1fr;gap:26px}
   .mya-land .game-media{order:2;max-height:420px;aspect-ratio:16/11}
   .mya-land .grid3,.mya-land .steps,.mya-land .prices{grid-template-columns:1fr}
+  .mya-land .price-feat .feat-grid{grid-template-columns:1fr;gap:18px}
+  .mya-land .price-feat ul{grid-template-columns:1fr}
+  .mya-land .price-feat .amt{font-size:48px}
+  .mya-land .prices-rest{max-width:460px}
   .mya-land .gallery{grid-template-columns:1fr 1fr;grid-auto-rows:180px}
   .mya-land .gallery .g-tall{grid-row:span 2}
 }

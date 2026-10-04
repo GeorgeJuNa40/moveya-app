@@ -72,7 +72,6 @@ export const PLANS: Plan[] = [
     name: 'Pro',
     priceUsd: 44.99,
     tagline: 'El favorito de los estudios en marcha',
-    highlight: true,
     features: [
       'Todo lo del plan Inicio',
       'Alumnos ilimitados',
@@ -89,6 +88,7 @@ export const PLANS: Plan[] = [
     name: 'Premium',
     priceUsd: 84.99,
     tagline: 'Para estudios en pleno crecimiento',
+    highlight: true,
     features: [
       'Todo lo del plan Pro',
       'Coaches ilimitados',
