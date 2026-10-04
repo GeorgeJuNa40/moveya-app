@@ -593,6 +593,9 @@ const CSS = `
   .mya-land .price-feat .amt{font-size:48px}
   .mya-land .prices-rest{max-width:460px}
   .mya-land .gallery{gap:14px}
+  /* En pantallas chicas la imagen horizontal se ve COMPLETA (sin recorte). */
+  .mya-land .gallery .g-wide{aspect-ratio:auto;max-height:none}
+  .mya-land .gallery .g-wide img{height:auto;object-fit:contain;animation:none}
 }
 @media (max-width:520px){
   .mya-land .navin{padding:11px 18px}
