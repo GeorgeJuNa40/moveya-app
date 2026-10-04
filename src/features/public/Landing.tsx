@@ -235,9 +235,9 @@ export default function Landing() {
           </div>
         </div>
         <div className="wrap gallery">
-          <Shot src="/landing/disc-1.jpg" alt="Clase grupal en colchoneta" className="g-tall" />
-          <Shot src="/landing/disc-2.jpg" alt="Pilates reformer con aro" className="g-wide" />
-          <Shot src="/landing/disc-3.jpg" alt="Clase de pilates mat" className="g-wide" />
+          <Shot src="/landing/disc-1.jpg" alt="Clase grupal en colchoneta" className="g-wide" />
+          <Shot src="/landing/disc-2.jpg" alt="Pilates reformer con aro" className="g-tall" />
+          <Shot src="/landing/disc-3.jpg" alt="Clase de pilates mat" className="g-tall" />
         </div>
       </section>
 
@@ -485,9 +485,10 @@ const CSS = `
 .mya-land .disc b{color:var(--clay);font-weight:700}
 
 /* Galería de disciplinas */
-.mya-land .gallery{display:grid;grid-template-columns:1fr 1fr 1fr;grid-auto-rows:210px;gap:16px;margin-top:40px}
-.mya-land .gallery .g-tall{grid-row:span 2}
-.mya-land .gallery .shot{border-radius:22px}
+.mya-land .gallery{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px}
+.mya-land .gallery .shot{border-radius:22px;height:auto}
+.mya-land .gallery .g-wide{grid-column:1 / -1;aspect-ratio:16/7;max-height:420px}
+.mya-land .gallery .g-tall{aspect-ratio:3/4;max-height:460px}
 
 .mya-land .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:46px}
 .mya-land .feat{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px;transition:transform .25s,border-color .25s,box-shadow .25s,opacity .8s,translate .8s;min-width:0;box-shadow:0 16px 40px -30px rgba(43,58,50,.5)}
@@ -535,7 +536,7 @@ const CSS = `
 .mya-land .price .btn{margin-top:22px;justify-content:center}
 
 /* Toggle mensual / anual */
-.mya-land .billtoggle{display:inline-flex;gap:4px;margin:26px auto 0;padding:5px;background:var(--cream2);border:1px solid var(--line);border-radius:999px;position:relative;left:50%;transform:translateX(-50%)}
+.mya-land .billtoggle{display:flex;width:fit-content;max-width:100%;gap:4px;margin:26px auto 0;padding:5px;background:var(--cream2);border:1px solid var(--line);border-radius:999px}
 .mya-land .billtoggle button{border:0;background:transparent;color:var(--muted);font-weight:700;font-size:14px;padding:9px 20px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .2s,color .2s}
 .mya-land .billtoggle button.on{background:var(--card);color:var(--sage);box-shadow:0 8px 20px -12px rgba(43,58,50,.5)}
 .mya-land .billtoggle .save{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;background:var(--mint);color:var(--sage);padding:2px 7px;border-radius:999px}
@@ -591,8 +592,7 @@ const CSS = `
   .mya-land .price-feat ul{grid-template-columns:1fr}
   .mya-land .price-feat .amt{font-size:48px}
   .mya-land .prices-rest{max-width:460px}
-  .mya-land .gallery{grid-template-columns:1fr 1fr;grid-auto-rows:180px}
-  .mya-land .gallery .g-tall{grid-row:span 2}
+  .mya-land .gallery{gap:14px}
 }
 @media (max-width:520px){
   .mya-land .navin{padding:11px 18px}
@@ -608,8 +608,9 @@ const CSS = `
   .mya-land .fcard-bot{left:-6px}
   .mya-land section{padding:54px 0}
   .mya-land .starcard{flex-direction:column;text-align:center}
-  .mya-land .gallery{grid-template-columns:1fr;grid-auto-rows:200px}
-  .mya-land .gallery .g-tall{grid-row:span 1}
+  .mya-land .gallery{grid-template-columns:1fr 1fr}
+  .mya-land .billtoggle button{padding:8px 14px;font-size:13px}
+  .mya-land .billtoggle .save{font-size:9.5px;padding:2px 6px}
 }
 @media (prefers-reduced-motion:reduce){
   .mya-land *{animation:none!important;transition:none!important}
