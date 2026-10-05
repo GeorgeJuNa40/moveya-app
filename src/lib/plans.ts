@@ -40,6 +40,11 @@ export const planPriceCur = (p: Plan, currency: Currency, interval: BillingInter
   currency === 'MXN'
     ? (interval === 'annual' ? p.priceMxnYear : p.priceMxn)
     : (interval === 'annual' ? p.priceUsdYear : p.priceUsd);
+// Equivalente mensual y ahorro anual, según la moneda.
+export const annualPerMonthCur = (p: Plan, c: Currency): number =>
+  c === 'MXN' ? Math.round(p.priceMxnYear / 12) : annualPerMonth(p);
+export const annualSavingsCur = (p: Plan, c: Currency): number =>
+  c === 'MXN' ? p.priceMxn * 12 - p.priceMxnYear : annualSavings(p);
 export const PROMO_PLAN: PlanId = 'premium'; // plan que se habilita durante la prueba (todo Premium)
 
 // Programa Fundador (primeros 10 estudios): acceso Premium al precio de Pro +
@@ -48,6 +53,9 @@ export const PROMO_PLAN: PlanId = 'premium'; // plan que se habilita durante la 
 export const FOUNDER_CODE = 'FUNDADOR10';
 export const FOUNDER_BOT_USD = 10;
 export const FOUNDER_PRICE_USD = 44.99 + FOUNDER_BOT_USD; // Pro + bot = 54.99
+// Equivalente en pesos (Mercado Pago): Pro MXN + bot. Ajustable.
+export const FOUNDER_BOT_MXN = 200;
+export const FOUNDER_PRICE_MXN = 899 + FOUNDER_BOT_MXN; // Pro MXN + bot = 1099
 
 // ---------------------------------------------------------------------------
 // Capacidades por plan. Cada función "premium/pro" está protegida con una de
