@@ -22,12 +22,17 @@ const PLATFORM_TOKEN = Deno.env.get('MP_ACCESS_TOKEN') ?? '';
 const APP_URL = (Deno.env.get('APP_URL') ?? '').replace(/\/$/, '');
 const FEE_PERCENT = Number(Deno.env.get('PLATFORM_FEE_PERCENT') ?? '0') || 0;
 
-// Precios mensuales de la suscripción SaaS en MXN (MP México cobra en pesos).
-// Ajustables por secret sin tocar código; si no, usa estos por defecto.
+// Precios de la suscripción SaaS en MXN (MP México cobra en pesos). Mensuales y
+// anuales (2 meses gratis). Ajustables por secret sin tocar código.
 const SAAS_MXN: Record<string, number> = {
   inicio: Number(Deno.env.get('MP_PLAN_INICIO_MXN') ?? '499') || 499,
   pro: Number(Deno.env.get('MP_PLAN_PRO_MXN') ?? '899') || 899,
   premium: Number(Deno.env.get('MP_PLAN_PREMIUM_MXN') ?? '1699') || 1699,
+};
+const SAAS_MXN_YEAR: Record<string, number> = {
+  inicio: Number(Deno.env.get('MP_PLAN_INICIO_MXN_YEAR') ?? '4990') || 4990,
+  pro: Number(Deno.env.get('MP_PLAN_PRO_MXN_YEAR') ?? '8990') || 8990,
+  premium: Number(Deno.env.get('MP_PLAN_PREMIUM_MXN_YEAR') ?? '16990') || 16990,
 };
 
 const cors = {
@@ -134,14 +139,19 @@ Deno.serve(async (req) => {
       if (me.role !== 'STUDIO_ADMIN') return json({ error: 'Solo el estudio' }, 403);
       if (!PLATFORM_TOKEN) return json({ error: 'Falta MP_ACCESS_TOKEN de la plataforma' }, 500);
       const plan = String(body.plan ?? '');
-      const amount = SAAS_MXN[plan];
+      const billing = body.billing === 'annual' ? 'annual' : 'monthly';
+      const amount = billing === 'annual' ? SAAS_MXN_YEAR[plan] : SAAS_MXN[plan];
       if (!amount) return json({ error: 'Plan inválido' }, 400);
-      const ref = JSON.stringify({ kind: 'subscription', studio_id: me.studio_id, plan });
+      // Anual = se cobra cada 12 meses (2 meses gratis ya reflejados en el monto).
+      const recurring = billing === 'annual'
+        ? { frequency: 12, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' }
+        : { frequency: 1, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' };
+      const ref = JSON.stringify({ kind: 'subscription', studio_id: me.studio_id, plan, billing });
       const { ok, data } = await mpFetch('/preapproval', PLATFORM_TOKEN, {
-        reason: `Move yA · Plan ${plan}`,
+        reason: `Move yA · Plan ${plan}${billing === 'annual' ? ' (anual)' : ''}`,
         external_reference: ref,
         payer_email: me.email,
-        auto_recurring: { frequency: 1, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' },
+        auto_recurring: recurring,
         back_url: `${APP_URL}/?suscripcion=exito#/admin`,
         notification_url: notifyUrl(),
         status: 'pending',
