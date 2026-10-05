@@ -46,6 +46,78 @@ export async function startStripeCheckout(body: CheckoutBody): Promise<boolean> 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Mercado Pago (además de Stripe). El estudio decide qué proveedor acepta y el
+// alumno elige con cuál pagar. Mismo contrato de respuesta: { url }.
+// ---------------------------------------------------------------------------
+export type PayProvider = 'stripe' | 'mercadopago';
+
+// Checkout genérico: enruta al Edge Function del proveedor elegido.
+export async function startCheckout(provider: PayProvider, body: CheckoutBody): Promise<boolean> {
+  const fn = provider === 'mercadopago' ? 'mp-checkout' : 'stripe-checkout';
+  try {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const { data, error } = await supabase.functions.invoke(fn, { body: { ...body, origin } });
+    if (error) {
+      let detail = error.message || 'Error desconocido';
+      try {
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.clone === 'function') { const b = await ctx.clone().json(); if (b?.error) detail = String(b.error); }
+      } catch { /* sin cuerpo JSON */ }
+      notifyError('pago', detail);
+      return false;
+    }
+    const url = (data as { url?: string } | null)?.url;
+    if (!url) { notifyError('pago', 'No se recibió el enlace de pago.'); return false; }
+    window.location.href = url;
+    return true;
+  } catch (e) {
+    notifyError('pago', String((e as Error)?.message ?? e));
+    return false;
+  }
+}
+
+// ---- Conexión de la cuenta de Mercado Pago del estudio (marketplace) ----
+async function invokeMpConnect(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { data, error } = await supabase.functions.invoke('mp-connect', { body });
+  if (error) {
+    let detail = error.message || 'Error desconocido';
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.clone === 'function') { const b = await ctx.clone().json(); if (b?.error) detail = String(b.error); }
+    } catch { /* sin cuerpo JSON */ }
+    throw new Error(detail);
+  }
+  return (data as Record<string, unknown>) ?? {};
+}
+
+// Inicia el OAuth de MP (redirige a Mercado Pago para autorizar).
+export async function startMpOnboarding(): Promise<boolean> {
+  try {
+    const data = await invokeMpConnect({ action: 'authorize' });
+    const url = data.url as string | undefined;
+    if (!url) { notifyError('Mercado Pago', 'No se recibió el enlace de conexión.'); return false; }
+    window.location.href = url;
+    return true;
+  } catch (e) { notifyError('Mercado Pago', String((e as Error)?.message ?? e)); return false; }
+}
+
+// Se llama cuando MP regresa a la app con ?mp=callback&code=... (canjea el code).
+export async function finishMpOnboarding(code: string): Promise<boolean> {
+  try { const d = await invokeMpConnect({ action: 'callback', code }); return Boolean(d.connected); }
+  catch (e) { notifyError('Mercado Pago', String((e as Error)?.message ?? e)); return false; }
+}
+
+export async function getMpConnectStatus(): Promise<{ connected: boolean }> {
+  try { const d = await invokeMpConnect({ action: 'status' }); return { connected: Boolean(d.connected) }; }
+  catch { return { connected: false }; }
+}
+
+export async function disconnectMp(): Promise<boolean> {
+  try { const d = await invokeMpConnect({ action: 'disconnect' }); return !d.connected; }
+  catch { return false; }
+}
+
 // Cancela la domiciliación (cobro mensual) de una membresía. El acceso se
 // conserva hasta el final del periodo ya pagado. Devuelve true si se solicitó.
 export async function cancelMembership(userPackageId: string): Promise<boolean> {

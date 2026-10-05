@@ -2,18 +2,33 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import {
-  PLANS, PROMO_PRICE, PROMO_TRIAL_DAYS, FOUNDER_PRICE_USD,
-  planPrice, annualPerMonth, annualSavings, type BillingInterval, type Plan,
+  PLANS, PROMO_PRICE, PROMO_PRICE_MXN, PROMO_TRIAL_DAYS, FOUNDER_PRICE_USD, FOUNDER_PRICE_MXN,
+  planPriceCur, annualPerMonthCur, annualSavingsCur, CURRENCY_SUFFIX,
+  type BillingInterval, type Plan, type Currency,
 } from '../../lib/plans';
 
-// Monto de un plan según el periodo (mensual/anual) + nota de ahorro en anual.
-function AmountBlock({ p, billing }: { p: Plan; billing: BillingInterval }) {
-  const price = planPrice(p, billing);
+// Detecta si el visitante está en México (zona horaria o idioma) para mostrar
+// los precios en pesos (MXN) automáticamente; si no, en USD.
+function detectCurrency(): Currency {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const mx = ['Mexico_City', 'Monterrey', 'Tijuana', 'Merida', 'Cancun', 'Chihuahua',
+      'Hermosillo', 'Mazatlan', 'Matamoros', 'Ojinaga', 'Bahia_Banderas', 'Ciudad_Juarez'];
+    if (mx.some((z) => tz.includes(z))) return 'MXN';
+    const langs = [navigator.language, ...(navigator.languages ?? [])].join(',').toLowerCase();
+    if (langs.includes('-mx')) return 'MXN';
+  } catch { /* sin acceso: usa USD */ }
+  return 'USD';
+}
+
+// Monto de un plan según moneda + periodo (mensual/anual) + nota de ahorro.
+function AmountBlock({ p, billing, currency }: { p: Plan; billing: BillingInterval; currency: Currency }) {
+  const price = planPriceCur(p, currency, billing);
   return (
     <>
-      <div className="amt">${price}<small> USD/{billing === 'annual' ? 'año' : 'mes'}</small></div>
+      <div className="amt">${price}<small> {CURRENCY_SUFFIX[currency]}/{billing === 'annual' ? 'año' : 'mes'}</small></div>
       {billing === 'annual' && (
-        <div className="amt-sub">≈ ${annualPerMonth(p)}/mes · ahorras ${annualSavings(p)} al año</div>
+        <div className="amt-sub">≈ ${annualPerMonthCur(p, currency)}/mes · ahorras ${annualSavingsCur(p, currency)} al año</div>
       )}
     </>
   );
@@ -79,6 +94,10 @@ export default function Landing() {
   const root = useRef<HTMLDivElement>(null);
   const [stars, setStars] = useState(0);
   const [billing, setBilling] = useState<BillingInterval>('monthly');
+  // Moneda automática: México -> pesos (MXN); otros -> USD.
+  const [currency] = useState<Currency>(detectCurrency);
+  const promo = currency === 'MXN' ? PROMO_PRICE_MXN : PROMO_PRICE;
+  const founderPrice = currency === 'MXN' ? FOUNDER_PRICE_MXN : FOUNDER_PRICE_USD;
 
   // Programa Fundador: abierto mientras queden lugares; al llenarse la barra
   // cambia sola a la promo de $1 · 14 días.
@@ -172,7 +191,7 @@ export default function Landing() {
           </Link>
           <div className="navbtns">
             <Link className="btn btn-ghost" to={LOGIN}>Entrar</Link>
-            <Link className="btn btn-primary" to={REGISTRO}>Prueba ${PROMO_PRICE}</Link>
+            <Link className="btn btn-primary" to={REGISTRO}>Prueba ${promo}</Link>
           </div>
         </div>
       </nav>
@@ -181,12 +200,12 @@ export default function Landing() {
         {founderOpen ? (
           <>
             <span className="chip">Programa Fundador</span> Los primeros 10 estudios conservan Premium a{' '}
-            <b>${FOUNDER_PRICE_USD}/mes de por vida</b>{remaining !== null && <> · <b>quedan {remaining} de 10</b></>}.{' '}
+            <b>${founderPrice}/mes de por vida</b>{remaining !== null && <> · <b>quedan {remaining} de 10</b></>}.{' '}
             <Link to={REGISTRO}>Apartar mi lugar →</Link>
           </>
         ) : (
           <>
-            <span className="chip">Oferta</span> Prueba Move yA completo por <b>${PROMO_PRICE}</b> · {PROMO_TRIAL_DAYS} días con acceso Premium.{' '}
+            <span className="chip">Oferta</span> Prueba Move yA completo por <b>${promo}</b> · {PROMO_TRIAL_DAYS} días con acceso Premium.{' '}
             <Link to={REGISTRO}>Empezar →</Link>
           </>
         )}
@@ -198,7 +217,7 @@ export default function Landing() {
           <h1>Tu estudio,<br /><span className="ital">en su mejor forma.</span></h1>
           <p className="sub">Reservas, pagos con tarjeta, paquetes y recordatorios por WhatsApp — en una sola app con la cara de tu marca. Menos caos, más clases llenas.</p>
           <div className="cta">
-            <Link className="btn btn-primary" to={REGISTRO}>Empieza por ${PROMO_PRICE} · {PROMO_TRIAL_DAYS} días</Link>
+            <Link className="btn btn-primary" to={REGISTRO}>Empieza por ${promo} · {PROMO_TRIAL_DAYS} días</Link>
             <a className="btn btn-ghost" href="#como">Ver cómo funciona</a>
           </div>
           <div className="reassure">
@@ -263,7 +282,7 @@ export default function Landing() {
             <h2>Gamificación que llena clases</h2>
             <p className="lead">Move yA premia la constancia: tus alumnos ganan estrellas por asistir y persiguen metas. Pruébalo 👉</p>
             <div className="kpis">
-              <div className="kpi"><b data-count={PROMO_PRICE} data-pre="$">${PROMO_PRICE}</b><span>Primer mes</span></div>
+              <div className="kpi"><b data-count={promo} data-pre="$">${promo}</b><span>Primer mes</span></div>
               <div className="kpi"><b data-count={PROMO_TRIAL_DAYS}>{PROMO_TRIAL_DAYS}</b><span>Días Premium</span></div>
               <div className="kpi"><b data-count="10">10</b><span>Lugares Fundador</span></div>
             </div>
@@ -297,7 +316,7 @@ export default function Landing() {
         <div className="wrap">
           <div className="center reveal">
             <h2>Precios simples, sin letras chiquitas</h2>
-            <p className="lead">Empieza por <b className="hl">${PROMO_PRICE}</b> con {PROMO_TRIAL_DAYS} días de acceso <b className="hl">Premium</b>. Si no te suma, cancelas.</p>
+            <p className="lead">Empieza por <b className="hl">${promo}</b> con {PROMO_TRIAL_DAYS} días de acceso <b className="hl">Premium</b>. Si no te suma, cancelas.</p>
           </div>
 
           <div className="billtoggle reveal" role="tablist" aria-label="Periodo de facturación">
@@ -321,8 +340,8 @@ export default function Landing() {
                     <div className="feat-head">
                       <div className="pn">{featured.name}</div>
                       <div className="tl">{featured.tagline}</div>
-                      <AmountBlock p={featured} billing={billing} />
-                      <Link className="btn btn-primary" to={REGISTRO}>Empezar por ${PROMO_PRICE}</Link>
+                      <AmountBlock p={featured} billing={billing} currency={currency} />
+                      <Link className="btn btn-primary" to={REGISTRO}>Empezar por ${promo}</Link>
                     </div>
                     <ul>
                       {featured.features.map((f) => (
@@ -336,13 +355,13 @@ export default function Landing() {
                     <div className="price reveal" key={p.id} style={{ transitionDelay: `${i * 110}ms` }}>
                       <div className="pn">{p.name}</div>
                       <div className="tl">{p.tagline}</div>
-                      <AmountBlock p={p} billing={billing} />
+                      <AmountBlock p={p} billing={billing} currency={currency} />
                       <ul>
                         {p.features.slice(0, 5).map((f) => (
                           <li key={f}><span className="ck">✓</span> {f}</li>
                         ))}
                       </ul>
-                      <Link className="btn btn-ghost" to={REGISTRO}>Empezar por ${PROMO_PRICE}</Link>
+                      <Link className="btn btn-ghost" to={REGISTRO}>Empezar por ${promo}</Link>
                     </div>
                   ))}
                 </div>
@@ -368,7 +387,7 @@ export default function Landing() {
         <div className="finalbox reveal">
           <LotusMark className="final-mark" />
           <h2>Tu próxima clase llena empieza hoy</h2>
-          <p className="lead" style={{ marginTop: 14 }}>Prueba Move yA completo por ${PROMO_PRICE} · {PROMO_TRIAL_DAYS} días con acceso Premium. Con tu marca desde el primer día.</p>
+          <p className="lead" style={{ marginTop: 14 }}>Prueba Move yA completo por ${promo} · {PROMO_TRIAL_DAYS} días con acceso Premium. Con tu marca desde el primer día.</p>
           <Link className="btn btn-primary big" to={REGISTRO}>Crear mi estudio</Link>
         </div>
       </div>

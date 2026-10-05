@@ -9,6 +9,8 @@ export interface Plan {
   name: string;
   priceUsd: number; // precio mensual (USD)
   priceUsdYear: number; // precio anual (USD) — 2 meses gratis
+  priceMxn: number; // precio mensual (MXN) — para Mercado Pago
+  priceMxnYear: number; // precio anual (MXN) — 2 meses gratis
   tagline: string;
   highlight?: boolean; // plan destacado ("Más popular")
   features: string[];
@@ -26,6 +28,23 @@ export const planPrice = (p: Plan, interval: BillingInterval): number =>
 export const annualPerMonth = (p: Plan): number => Math.round((p.priceUsdYear / 12) * 100) / 100;
 // Ahorro anual vs pagar 12 meses sueltos.
 export const annualSavings = (p: Plan): number => Math.round((p.priceUsd * 12 - p.priceUsdYear) * 100) / 100;
+
+// Moneda de cobro: Stripe cobra en USD; Mercado Pago (México) en MXN. El precio
+// NO se convierte por tipo de cambio: son precios FIJOS que fijaste para cada
+// moneda, y la pantalla muestra el de la moneda/proveedor elegido.
+export type Currency = 'USD' | 'MXN';
+export const PROMO_PRICE_MXN = 20; // la promo de bienvenida en pesos (tu gancho)
+export const CURRENCY_SUFFIX: Record<Currency, string> = { USD: 'USD', MXN: 'MXN' };
+// Precio del plan según moneda + periodo (mensual/anual).
+export const planPriceCur = (p: Plan, currency: Currency, interval: BillingInterval): number =>
+  currency === 'MXN'
+    ? (interval === 'annual' ? p.priceMxnYear : p.priceMxn)
+    : (interval === 'annual' ? p.priceUsdYear : p.priceUsd);
+// Equivalente mensual y ahorro anual, según la moneda.
+export const annualPerMonthCur = (p: Plan, c: Currency): number =>
+  c === 'MXN' ? Math.round(p.priceMxnYear / 12) : annualPerMonth(p);
+export const annualSavingsCur = (p: Plan, c: Currency): number =>
+  c === 'MXN' ? p.priceMxn * 12 - p.priceMxnYear : annualSavings(p);
 export const PROMO_PLAN: PlanId = 'premium'; // plan que se habilita durante la prueba (todo Premium)
 
 // Programa Fundador (primeros 10 estudios): acceso Premium al precio de Pro +
@@ -34,6 +53,9 @@ export const PROMO_PLAN: PlanId = 'premium'; // plan que se habilita durante la 
 export const FOUNDER_CODE = 'FUNDADOR10';
 export const FOUNDER_BOT_USD = 10;
 export const FOUNDER_PRICE_USD = 44.99 + FOUNDER_BOT_USD; // Pro + bot = 54.99
+// Equivalente en pesos (Mercado Pago): Pro MXN + bot. Ajustable.
+export const FOUNDER_BOT_MXN = 200;
+export const FOUNDER_PRICE_MXN = 899 + FOUNDER_BOT_MXN; // Pro MXN + bot = 1099
 
 // ---------------------------------------------------------------------------
 // Capacidades por plan. Cada función "premium/pro" está protegida con una de
@@ -69,6 +91,8 @@ export const PLANS: Plan[] = [
     name: 'Inicio',
     priceUsd: 24.99,
     priceUsdYear: 249,
+    priceMxn: 499,
+    priceMxnYear: 4990,
     tagline: 'Para estudios que están comenzando',
     features: [
       'Hasta 50 alumnos activos',
@@ -84,6 +108,8 @@ export const PLANS: Plan[] = [
     name: 'Pro',
     priceUsd: 44.99,
     priceUsdYear: 449,
+    priceMxn: 899,
+    priceMxnYear: 8990,
     tagline: 'El favorito de los estudios en marcha',
     features: [
       'Todo lo del plan Inicio',
@@ -101,6 +127,8 @@ export const PLANS: Plan[] = [
     name: 'Premium',
     priceUsd: 84.99,
     priceUsdYear: 799,
+    priceMxn: 1699,
+    priceMxnYear: 16990,
     tagline: 'Para estudios en pleno crecimiento',
     highlight: true,
     features: [
