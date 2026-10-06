@@ -78,6 +78,10 @@ Deno.serve(async (req) => {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const body = await req.json().catch(() => ({}));
     const kind = String(body.kind ?? '');
+    // En sandbox el comprador debe ser un usuario de prueba (si no, MP rechaza con
+    // "payer and collector must be real or test users"). MP_TEST_PAYER_EMAIL
+    // fuerza ese correo de prueba; en producción NO se define y usa el real.
+    const payerEmail = Deno.env.get('MP_TEST_PAYER_EMAIL') || me.email;
 
     // Token MP del estudio (marketplace). Necesario para cobros de alumnos.
     const studioToken = async (studioId: string): Promise<string | null> => {
@@ -124,7 +128,7 @@ Deno.serve(async (req) => {
       const { ok, data } = await mpFetch('/preapproval', token, {
         reason: pkg.name,
         external_reference: ref,
-        payer_email: me.email,
+        payer_email: payerEmail,
         auto_recurring: { frequency: 1, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' },
         back_url: `${APP_URL}/?pago=exito#/app/packages`,
         notification_url: notifyUrl(),
@@ -150,7 +154,7 @@ Deno.serve(async (req) => {
       const { ok, data } = await mpFetch('/preapproval', PLATFORM_TOKEN, {
         reason: `Move yA · Plan ${plan}${billing === 'annual' ? ' (anual)' : ''}`,
         external_reference: ref,
-        payer_email: me.email,
+        payer_email: payerEmail,
         auto_recurring: recurring,
         back_url: `${APP_URL}/?suscripcion=exito#/admin`,
         notification_url: notifyUrl(),
