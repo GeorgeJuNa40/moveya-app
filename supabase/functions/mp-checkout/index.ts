@@ -130,12 +130,12 @@ Deno.serve(async (req) => {
         ? { frequency: 12, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' }
         : { frequency: 1, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' };
       const ref = JSON.stringify({ kind: 'subscription', studio_id: me.studio_id, plan, billing });
-      // NO mandamos payer_email: el suscriptor se identifica/paga directamente en
-      // la página de Mercado Pago. Evita el lío del comprador de prueba (sandbox)
-      // y funciona igual en producción (el estudio pone su correo ahí).
+      // MP EXIGE payer_email en /preapproval. En sandbox usamos el correo del
+      // comprador de prueba (MP_TEST_PAYER_EMAIL); en producción, el del estudio.
       const { ok, data } = await mpFetch('/preapproval', PLATFORM_TOKEN, {
         reason: `Move yA - Plan ${plan}${billing === 'annual' ? ' (anual)' : ''}`,
         external_reference: ref,
+        payer_email: payerEmail,
         auto_recurring: recurring,
         back_url: `${APP_URL}/?suscripcion=exito`,
         notification_url: notifyUrl(),
