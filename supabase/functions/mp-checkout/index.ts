@@ -82,6 +82,8 @@ Deno.serve(async (req) => {
     // "payer and collector must be real or test users"). MP_TEST_PAYER_EMAIL
     // fuerza ese correo de prueba; en producción NO se define y usa el real.
     const payerEmail = Deno.env.get('MP_TEST_PAYER_EMAIL') || me.email;
+    // Log temporal (sandbox) para depurar el correo del comprador. Quitar en prod.
+    console.log('mp-checkout kind=', kind, 'payerEmail=', payerEmail, 'hasTestEmail=', !!Deno.env.get('MP_TEST_PAYER_EMAIL'));
 
     // Token MP del estudio (marketplace). Necesario para cobros de alumnos.
     const studioToken = async (studioId: string): Promise<string | null> => {
@@ -151,6 +153,7 @@ Deno.serve(async (req) => {
         ? { frequency: 12, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' }
         : { frequency: 1, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' };
       const ref = JSON.stringify({ kind: 'subscription', studio_id: me.studio_id, plan, billing });
+      console.log('mp subscription payer_email=', payerEmail, 'plan=', plan, 'amount=', amount);
       const { ok, data } = await mpFetch('/preapproval', PLATFORM_TOKEN, {
         reason: `Move yA · Plan ${plan}${billing === 'annual' ? ' (anual)' : ''}`,
         external_reference: ref,
