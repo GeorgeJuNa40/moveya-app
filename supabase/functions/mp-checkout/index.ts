@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
       const ref = JSON.stringify({ kind: 'subscription', studio_id: me.studio_id, plan, billing });
       // MP EXIGE payer_email en /preapproval. En sandbox usamos el correo del
       // comprador de prueba (MP_TEST_PAYER_EMAIL); en producción, el del estudio.
-      const { ok, data } = await mpFetch('/preapproval', PLATFORM_TOKEN, {
+      const subBody = {
         reason: `Move yA - Plan ${plan}${billing === 'annual' ? ' (anual)' : ''}`,
         external_reference: ref,
         payer_email: payerEmail,
@@ -140,7 +140,16 @@ Deno.serve(async (req) => {
         back_url: `${APP_URL}/?suscripcion=exito`,
         notification_url: notifyUrl(),
         status: 'pending',
-      });
+      };
+      // --- DIAGNÓSTICO TEMPORAL: qué mandamos exactamente a MP ---
+      console.log('mp-sub request:', JSON.stringify({
+        payer_email: payerEmail,
+        amount: recurring.transaction_amount,
+        currency: recurring.currency_id,
+        back_url: subBody.back_url,
+        tokenPrefix: PLATFORM_TOKEN.slice(0, 8),
+      }));
+      const { ok, data } = await mpFetch('/preapproval', PLATFORM_TOKEN, subBody);
       if (!ok) { console.error('mp-sub rejected:', JSON.stringify(data)); return json({ error: `MP: ${mpWhy(data)}`, detail: data }, 400); }
       return json({ url: data.init_point });
     }
