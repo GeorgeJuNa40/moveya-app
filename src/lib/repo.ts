@@ -59,6 +59,7 @@ function mapStudio(r: Row): Studio {
     subscription: { ...DEFAULT_SUBSCRIPTION, ...(r.subscription ?? {}) },
     stripeAccountId: r.stripe_account_id ?? undefined,
     stripeChargesEnabled: r.stripe_charges_enabled ?? false,
+    mpConnected: r.mp_connected ?? false,
   };
 }
 

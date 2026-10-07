@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
 import { usd, daysUntil } from '../../lib/format';
-import { startStripeCheckout, cancelMembership } from '../../lib/payments';
+import { startCheckout, cancelMembership, type PayProvider } from '../../lib/payments';
 import { accessCheckIn } from '../../lib/access';
 import { notifySuccess, notifyError, triggerResync } from '../../lib/notify';
 import QrScanner, { parseCheckinQr } from '../checkin/QrScanner';
@@ -26,6 +26,12 @@ export default function MyPackages() {
     .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
   const catalog = db.packages.filter((p) => p.studioId === currentStudio!.id && p.active);
   const [buying, setBuying] = useState<string | null>(null);
+  // Proveedores de pago que el estudio tiene conectados (el alumno elige). Si no
+  // hay ninguno marcado, dejamos Stripe como opción (comportamiento previo).
+  const providers: PayProvider[] = [];
+  if (currentStudio!.stripeChargesEnabled) providers.push('stripe');
+  if (currentStudio!.mpConnected) providers.push('mercadopago');
+  if (providers.length === 0) providers.push('stripe');
   const studioType = currentStudio!.studioType ?? 'studio';
   const isGym = studioType === 'gym';
   const showAccess = isGym || studioType === 'mixed'; // gimnasio/mixto usan check-in
@@ -71,12 +77,13 @@ export default function MyPackages() {
     void doCheckIn(); // registro propio
   };
 
-  const buy = async (p: Package) => {
+  const buy = async (p: Package, provider: PayProvider) => {
     setBuying(p.id);
     // Membresía con domiciliación → suscripción mensual; si no, compra única.
-    const ok = p.kind === 'access' && p.recurring
-      ? await startStripeCheckout({ kind: 'membership_sub', packageId: p.id })
-      : await startStripeCheckout({ kind: 'package', packageId: p.id });
+    const body = p.kind === 'access' && p.recurring
+      ? ({ kind: 'membership_sub', packageId: p.id } as const)
+      : ({ kind: 'package', packageId: p.id } as const);
+    const ok = await startCheckout(provider, body);
     if (!ok) setBuying(null); // si falla, reactiva el botón (si funciona, ya redirige)
   };
 
@@ -216,15 +223,27 @@ export default function MyPackages() {
                   : `🔓 Acceso libre · vigencia ${p.validityDays} días`
                 : `${p.classCredits} clases · vigencia ${p.validityDays} días`}
             </p>
-            <Button className="mt-4" disabled={!!buying} onClick={() => buy(p)}>
-              {buying === p.id ? 'Redirigiendo…' : p.kind === 'access' && p.recurring ? 'Suscribirme' : 'Comprar'}
-            </Button>
+            {providers.length > 1 ? (
+              // El estudio acepta Stripe y Mercado Pago → el alumno elige.
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button variant="secondary" disabled={!!buying} onClick={() => buy(p, 'stripe')}>
+                  {buying === p.id ? '…' : '💳 Tarjeta'}
+                </Button>
+                <Button disabled={!!buying} onClick={() => buy(p, 'mercadopago')}>
+                  {buying === p.id ? '…' : 'Mercado Pago'}
+                </Button>
+              </div>
+            ) : (
+              <Button className="mt-4" disabled={!!buying} onClick={() => buy(p, providers[0])}>
+                {buying === p.id ? 'Redirigiendo…' : p.kind === 'access' && p.recurring ? 'Suscribirme' : 'Comprar'}
+              </Button>
+            )}
           </Card>
         ))}
       </div>
 
       <p className="mt-4 text-xs text-ink-faint">
-        🔒 El pago se procesa en la página segura de Stripe. No capturamos datos de tu tarjeta.
+        🔒 El pago se procesa en la página segura de Stripe o Mercado Pago. No capturamos datos de tu tarjeta.
       </p>
     </>
   );

@@ -9,6 +9,7 @@ import {
 } from '../../lib/plans';
 import { startStripeCheckout, startCheckout, type PayProvider } from '../../lib/payments';
 import StripeConnectCard from './StripeConnectCard';
+import MpConnectCard from './MpConnectCard';
 import type { PlanId } from '../../lib/types';
 
 // Formato de precio: USD con 2 decimales; MXN en pesos enteros.
@@ -62,8 +63,9 @@ export default function SubscriptionScreen() {
     <>
       <PageHeader title="Suscripción" subtitle="Elige el plan Move yA ideal para tu estudio" />
 
-      {/* Conectar la cuenta de Stripe del estudio (recibir pagos de alumnos) */}
+      {/* Conectar la cuenta del estudio para recibir pagos de alumnos (Stripe y/o MP) */}
       <StripeConnectCard />
+      <MpConnectCard />
 
       {/* Estado actual de la suscripción */}
       <Card className="mb-6 p-6">

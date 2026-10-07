@@ -122,6 +122,7 @@ export interface Studio {
   subscription: Subscription;
   stripeAccountId?: string; // cuenta Connect (Express) del estudio, para recibir pagos
   stripeChargesEnabled?: boolean; // el estudio ya puede recibir cobros en su cuenta
+  mpConnected?: boolean; // el estudio conectó su cuenta de Mercado Pago (marketplace)
 }
 
 export interface CoachProfile {
