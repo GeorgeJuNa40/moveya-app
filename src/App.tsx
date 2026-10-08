@@ -71,6 +71,7 @@ const RoutinesAdmin = lazyWithReload(() => import('./features/admin/RoutinesAdmi
 const Reports = lazyWithReload(() => import('./features/admin/Reports'));
 const Reminders = lazyWithReload(() => import('./features/admin/Reminders'));
 const SubscriptionScreen = lazyWithReload(() => import('./features/admin/SubscriptionScreen'));
+const SuggestionsAdmin = lazyWithReload(() => import('./features/admin/SuggestionsAdmin'));
 const Settings = lazyWithReload(() => import('./features/admin/Settings'));
 
 const CoachDashboard = lazyWithReload(() => import('./features/coach/CoachDashboard'));
@@ -84,6 +85,7 @@ const Rewards = lazyWithReload(() => import('./features/student/Rewards'));
 const OptionalServices = lazyWithReload(() => import('./features/student/OptionalServices'));
 const StudentCoaches = lazyWithReload(() => import('./features/student/StudentCoaches'));
 const MyRoutine = lazyWithReload(() => import('./features/student/MyRoutine'));
+const Suggestions = lazyWithReload(() => import('./features/student/Suggestions'));
 
 // Pantalla de carga mientras se descarga el código de una sección.
 function Splash() {
@@ -296,6 +298,7 @@ export default function App() {
       <Route path="/admin/reminders" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Reminders /></SubscriptionGate></RequireRole>} />
       {/* Suscripción siempre accesible (allow) para poder regularizar el pago. */}
       <Route path="/admin/subscription" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate allow><SubscriptionScreen /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/suggestions" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><SuggestionsAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/settings" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Settings /></SubscriptionGate></RequireRole>} />
 
       {/* ---- COACH — protegido por estado de aprobación ---- */}
@@ -312,6 +315,7 @@ export default function App() {
       <Route path="/app/coaches" element={<RequireRole role="STUDENT"><StudentCoaches /></RequireRole>} />
       <Route path="/app/routine" element={<RequireRole role="STUDENT"><MyRoutine /></RequireRole>} />
       <Route path="/app/services" element={<RequireRole role="STUDENT"><OptionalServices /></RequireRole>} />
+      <Route path="/app/suggestions" element={<RequireRole role="STUDENT"><Suggestions /></RequireRole>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
