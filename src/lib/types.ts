@@ -95,6 +95,8 @@ export interface Subscription {
   isPromo: boolean; // registrado dentro de la ventana de lanzamiento (3 meses)
   founder?: boolean; // parte del programa Fundador (primeros 10): Premium + bot a precio especial de por vida
   billingInterval?: 'monthly' | 'annual'; // periodo de cobro del plan (mensual por defecto)
+  provider?: 'stripe' | 'mercadopago'; // proveedor con el que paga la suscripción
+  mpPreapprovalId?: string; // id de la suscripción en Mercado Pago (si aplica)
   trialEndsAt: string; // fin de la prueba
   currentPeriodEnd: string; // acceso hasta esta fecha
 }
@@ -120,6 +122,7 @@ export interface Studio {
   subscription: Subscription;
   stripeAccountId?: string; // cuenta Connect (Express) del estudio, para recibir pagos
   stripeChargesEnabled?: boolean; // el estudio ya puede recibir cobros en su cuenta
+  mpConnected?: boolean; // el estudio conectó su cuenta de Mercado Pago (marketplace)
 }
 
 export interface CoachProfile {

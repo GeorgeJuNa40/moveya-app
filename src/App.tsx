@@ -2,7 +2,8 @@ import { lazy, Suspense, useEffect, type ComponentType } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useStore } from './lib/store';
 import { isSupabaseConfigured } from './lib/supabase';
-import { notifySuccess, triggerResync } from './lib/notify';
+import { finishMpOnboarding } from './lib/payments';
+import { notifySuccess, notifyError, triggerResync } from './lib/notify';
 import type { Role } from './lib/types';
 import AppShell from './components/layout/AppShell';
 // Los "gates" (verificaciones de pago/estado) son ligeros y se cargan de una vez.
@@ -70,6 +71,7 @@ const RoutinesAdmin = lazyWithReload(() => import('./features/admin/RoutinesAdmi
 const Reports = lazyWithReload(() => import('./features/admin/Reports'));
 const Reminders = lazyWithReload(() => import('./features/admin/Reminders'));
 const SubscriptionScreen = lazyWithReload(() => import('./features/admin/SubscriptionScreen'));
+const SuggestionsAdmin = lazyWithReload(() => import('./features/admin/SuggestionsAdmin'));
 const Settings = lazyWithReload(() => import('./features/admin/Settings'));
 
 const CoachDashboard = lazyWithReload(() => import('./features/coach/CoachDashboard'));
@@ -83,6 +85,7 @@ const Rewards = lazyWithReload(() => import('./features/student/Rewards'));
 const OptionalServices = lazyWithReload(() => import('./features/student/OptionalServices'));
 const StudentCoaches = lazyWithReload(() => import('./features/student/StudentCoaches'));
 const MyRoutine = lazyWithReload(() => import('./features/student/MyRoutine'));
+const Suggestions = lazyWithReload(() => import('./features/student/Suggestions'));
 
 // Pantalla de carga mientras se descarga el código de una sección.
 function Splash() {
@@ -140,6 +143,29 @@ export default function App() {
       if (target) window.location.hash = target;
     }
   }, []);
+
+  // Al volver del OAuth de Mercado Pago (?mp=callback&code=...): canjeamos el
+  // code por el token del estudio (requiere sesión de STUDIO_ADMIN). El code es
+  // de un solo uso, así que lo procesamos una vez y limpiamos el query.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mp') !== 'callback') return;
+    const code = params.get('code');
+    const clean = () => window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+    if (!code) { clean(); return; }
+    // Esperamos a tener sesión para poder canjear el code.
+    if (!currentUser) return;
+    const guard = `mp-cb-${code}`;
+    if (sessionStorage.getItem(guard)) return;
+    sessionStorage.setItem(guard, '1');
+    window.history.replaceState({}, '', window.location.pathname);
+    finishMpOnboarding(code).then((ok) => {
+      if (ok) notifySuccess('¡Mercado Pago conectado! Ya puedes cobrar con MP.');
+      else notifyError('Mercado Pago', 'No se pudo completar la conexión.');
+      window.location.hash = '/admin/subscription';
+      [1500, 4000].forEach((ms) => setTimeout(triggerResync, ms));
+    });
+  }, [currentUser]);
 
   // Auto-refresco: cuando el usuario vuelve a la pestaña/app (o la enfoca),
   // recargamos los datos del servidor para no ver información vieja sin tener
@@ -272,6 +298,7 @@ export default function App() {
       <Route path="/admin/reminders" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Reminders /></SubscriptionGate></RequireRole>} />
       {/* Suscripción siempre accesible (allow) para poder regularizar el pago. */}
       <Route path="/admin/subscription" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate allow><SubscriptionScreen /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/suggestions" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><SuggestionsAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/settings" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Settings /></SubscriptionGate></RequireRole>} />
 
       {/* ---- COACH — protegido por estado de aprobación ---- */}
@@ -288,6 +315,7 @@ export default function App() {
       <Route path="/app/coaches" element={<RequireRole role="STUDENT"><StudentCoaches /></RequireRole>} />
       <Route path="/app/routine" element={<RequireRole role="STUDENT"><MyRoutine /></RequireRole>} />
       <Route path="/app/services" element={<RequireRole role="STUDENT"><OptionalServices /></RequireRole>} />
+      <Route path="/app/suggestions" element={<RequireRole role="STUDENT"><Suggestions /></RequireRole>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

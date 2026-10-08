@@ -103,6 +103,8 @@ Deno.serve(async (req) => {
         token_expires_at: expiresAt,
         updated_at: new Date().toISOString(),
       });
+      // Bandera pública (no sensible) para que el alumno vea el botón de MP.
+      await admin.from('studios').update({ mp_connected: true }).eq('id', me.studio_id);
       return json({ connected: true });
     }
 
@@ -116,6 +118,7 @@ Deno.serve(async (req) => {
     if (action === 'disconnect') {
       await admin.from('mp_accounts').update({ connected: false, access_token: null, refresh_token: null })
         .eq('studio_id', me.studio_id);
+      await admin.from('studios').update({ mp_connected: false }).eq('id', me.studio_id);
       return json({ connected: false });
     }
 

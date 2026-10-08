@@ -3,15 +3,18 @@ import { useStore, isSubscriptionActive } from '../../lib/store';
 import { PageHeader, Card, Button, Badge } from '../../components/ui';
 import { daysUntil } from '../../lib/format';
 import {
-  PLANS, PROMO_PRICE, PROMO_TRIAL_DAYS, getPlan, FOUNDER_CODE, FOUNDER_PRICE_USD,
-  planPrice, annualPerMonth, annualSavings, type BillingInterval,
+  PLANS, PROMO_PRICE, PROMO_PRICE_MXN, PROMO_TRIAL_DAYS, getPlan, FOUNDER_CODE, FOUNDER_PRICE_USD,
+  planPriceCur, annualPerMonthCur, annualSavingsCur, CURRENCY_SUFFIX,
+  type BillingInterval, type Currency,
 } from '../../lib/plans';
-import { startStripeCheckout } from '../../lib/payments';
+import { startStripeCheckout, startCheckout, type PayProvider } from '../../lib/payments';
 import StripeConnectCard from './StripeConnectCard';
+import MpConnectCard from './MpConnectCard';
 import type { PlanId } from '../../lib/types';
 
-// Precio en USD con 2 decimales (los planes terminan en .99).
-const money = (n: number) => `$${n.toFixed(2)}`;
+// Formato de precio: USD con 2 decimales; MXN en pesos enteros.
+const money = (n: number, c: Currency = 'USD') =>
+  c === 'MXN' ? `$${Math.round(n).toLocaleString('es-MX')}` : `$${n.toFixed(2)}`;
 
 // Suscripción SaaS: 3 planes (Inicio $24.99, Pro $44.99, Premium $84.99) con
 // promo de lanzamiento ($1 · 14 días con acceso Premium) y programa Fundador
@@ -21,14 +24,18 @@ export default function SubscriptionScreen() {
   const [busy, setBusy] = useState(false);
   const [founderCode, setFounderCode] = useState('');
   const [billing, setBilling] = useState<BillingInterval>('monthly');
+  // Proveedor de cobro: Stripe (USD) o Mercado Pago (MXN). El estudio elige.
+  const [provider, setProvider] = useState<PayProvider>('stripe');
+  const currency: Currency = provider === 'mercadopago' ? 'MXN' : 'USD';
+  const promo = provider === 'mercadopago' ? PROMO_PRICE_MXN : PROMO_PRICE;
   const sub = currentStudio!.subscription;
   const founderUnlocked = founderCode.trim().toUpperCase() === FOUNDER_CODE;
 
-  // Elegir/cambiar plan → pago recurrente en Stripe (mensual o anual).
+  // Elegir/cambiar plan → pago recurrente con el proveedor elegido (mensual/anual).
   const choosePlan = async (plan: PlanId) => {
     setBusy(true);
-    const ok = await startStripeCheckout({ kind: 'subscription', plan, billing });
-    if (!ok) setBusy(false); // si funciona, redirige a Stripe
+    const ok = await startCheckout(provider, { kind: 'subscription', plan, billing });
+    if (!ok) setBusy(false); // si funciona, redirige a la página de pago
   };
 
   // Programa Fundador: acceso Premium al precio de Pro + bot, un solo cargo.
@@ -46,6 +53,7 @@ export default function SubscriptionScreen() {
   const currentPlanId: PlanId = sub.plan ?? 'pro';
   const currentPlan = getPlan(currentPlanId);
   const currentInterval: BillingInterval = sub.billingInterval ?? 'monthly';
+  const currentCurrency: Currency = sub.provider === 'mercadopago' ? 'MXN' : 'USD';
 
   // Estado del encabezado según la situación de la suscripción.
   const statusBadge = inTrial ? 'En prueba' : active ? 'Activa' : 'Requiere pago';
@@ -55,8 +63,9 @@ export default function SubscriptionScreen() {
     <>
       <PageHeader title="Suscripción" subtitle="Elige el plan Move yA ideal para tu estudio" />
 
-      {/* Conectar la cuenta de Stripe del estudio (recibir pagos de alumnos) */}
+      {/* Conectar la cuenta del estudio para recibir pagos de alumnos (Stripe y/o MP) */}
       <StripeConnectCard />
+      <MpConnectCard />
 
       {/* Estado actual de la suscripción */}
       <Card className="mb-6 p-6">
@@ -81,7 +90,7 @@ export default function SubscriptionScreen() {
         ) : active ? (
           <p className="mt-3 text-sm text-ink-soft">
             Plan <strong>{currentPlan.name}</strong> ·{' '}
-            {money(planPrice(currentPlan, currentInterval))}/{currentInterval === 'annual' ? 'año' : 'mes'}. Próxima
+            {money(planPriceCur(currentPlan, currentCurrency, currentInterval), currentCurrency)}/{currentInterval === 'annual' ? 'año' : 'mes'}. Próxima
             renovación en <strong>{daysLeft} día{daysLeft === 1 ? '' : 's'}</strong>.
           </p>
         ) : (
@@ -101,17 +110,41 @@ export default function SubscriptionScreen() {
           <div>
             <p className="text-xs uppercase tracking-wide opacity-80">Oferta de bienvenida</p>
             <p className="mt-1 text-xl font-bold">
-              Empieza por {money(PROMO_PRICE)} · {PROMO_TRIAL_DAYS} días de prueba
+              Empieza por {money(promo, currency)} · {PROMO_TRIAL_DAYS} días de prueba
             </p>
             <p className="text-sm opacity-90">
               Activas TODO el plan Premium. Al terminar la prueba eliges tu plan.
             </p>
           </div>
           <Button variant="secondary" onClick={activatePromo}>
-            Empezar por {money(PROMO_PRICE)}
+            Empezar por {money(promo, currency)}
           </Button>
         </div>
       )}
+
+      {/* Proveedor de cobro: Stripe (USD) o Mercado Pago (MXN) */}
+      <div className="mb-4 flex justify-center">
+        <div className="inline-flex gap-1 rounded-full border border-cream-dark bg-cream-dark/30 p-1">
+          <button
+            type="button"
+            onClick={() => setProvider('stripe')}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              provider === 'stripe' ? 'bg-white text-brand shadow-zen' : 'text-ink-faint'
+            }`}
+          >
+            Tarjeta internacional · USD
+          </button>
+          <button
+            type="button"
+            onClick={() => setProvider('mercadopago')}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              provider === 'mercadopago' ? 'bg-white text-brand shadow-zen' : 'text-ink-faint'
+            }`}
+          >
+            Mercado Pago · MXN
+          </button>
+        </div>
+      </div>
 
       {/* Periodo de facturación: mensual o anual (2 meses gratis) */}
       <div className="mb-4 flex justify-center">
@@ -161,12 +194,12 @@ export default function SubscriptionScreen() {
               <p className="mt-1 text-sm text-ink-faint">{plan.tagline}</p>
 
               <div className="mt-4 flex items-end gap-1">
-                <span className="text-4xl font-black text-brand">{money(planPrice(plan, billing))}</span>
-                <span className="mb-1 text-ink-faint">USD / {billing === 'annual' ? 'año' : 'mes'}</span>
+                <span className="text-4xl font-black text-brand">{money(planPriceCur(plan, currency, billing), currency)}</span>
+                <span className="mb-1 text-ink-faint">{CURRENCY_SUFFIX[currency]} / {billing === 'annual' ? 'año' : 'mes'}</span>
               </div>
               {billing === 'annual' && (
                 <p className="mt-1 text-xs text-ink-faint">
-                  ≈ {money(annualPerMonth(plan))}/mes · ahorras {money(annualSavings(plan))} al año
+                  ≈ {money(annualPerMonthCur(plan, currency), currency)}/mes · ahorras {money(annualSavingsCur(plan, currency), currency)} al año
                 </p>
               )}
 
@@ -246,7 +279,7 @@ export default function SubscriptionScreen() {
         <h2 className="mb-3 font-semibold text-ink">¿Cómo funciona?</h2>
         <ol className="space-y-3 text-sm text-ink-soft">
           <li>
-            <strong className="text-ink">1. Empieza por {money(PROMO_PRICE)}.</strong> Activas TODO
+            <strong className="text-ink">1. Empieza por {money(promo, currency)}.</strong> Activas TODO
             el plan Premium durante {PROMO_TRIAL_DAYS} días de prueba.
           </li>
           <li>
