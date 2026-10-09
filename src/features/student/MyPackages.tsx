@@ -4,7 +4,7 @@ import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
 import { usd, daysUntil } from '../../lib/format';
 import { startCheckout, cancelMembership, type PayProvider } from '../../lib/payments';
-import { accessCheckIn } from '../../lib/access';
+import { accessCheckIn, fmtDur } from '../../lib/access';
 import { notifySuccess, notifyError, triggerResync } from '../../lib/notify';
 import QrScanner, { parseCheckinQr } from '../checkin/QrScanner';
 import type { Package } from '../../lib/types';
@@ -58,7 +58,14 @@ export default function MyPackages() {
     setChecking(true);
     try {
       const res = await accessCheckIn(targetUser, 'member_scan');
-      notifySuccess(res.duplicate ? '¡Ya estabas dentro!' : res.active ? '✅ ¡Entrada registrada!' : '⚠️ Entrada registrada, pero no tienes membresía activa.');
+      const msg = res.duplicate
+        ? 'Ya estaba registrado hace un momento.'
+        : res.action === 'out'
+          ? `👋 ¡Salida registrada!${res.durationMin != null ? ` Permaneciste ${fmtDur(res.durationMin)}.` : ''}`
+          : res.active
+            ? '✅ ¡Entrada registrada!'
+            : '⚠️ Entrada registrada, pero no tienes membresía activa.';
+      notifySuccess(msg);
     } catch (e) {
       notifyError('acceso', (e as Error)?.message ?? 'No se pudo registrar');
     } finally {

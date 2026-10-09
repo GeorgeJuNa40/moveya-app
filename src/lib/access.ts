@@ -12,14 +12,16 @@ export interface Checkin {
   studioId: string;
   userId: string;
   method: string;
-  createdAt: string;
+  createdAt: string; // entrada
+  exitedAt: string | null; // salida (null = sigue dentro)
 }
 
 export interface CheckinResult {
-  checkedIn: boolean;
-  duplicate: boolean;
+  action: 'in' | 'out'; // 'in' = entrada registrada · 'out' = salida registrada
+  duplicate: boolean; // doble escaneo muy seguido (no cambió nada)
   active: boolean; // el miembro tiene membresía/paquete vigente
   name: string;
+  durationMin?: number; // en una salida: minutos que permaneció
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -29,9 +31,11 @@ const mapCheckin = (r: any): Checkin => ({
   userId: r.user_id,
   method: r.method ?? 'member_qr',
   createdAt: r.created_at,
+  exitedAt: r.exited_at ?? null,
 });
 
-// Registra una entrada. userId vacío = el propio usuario en sesión.
+// Registra acceso con TOGGLE: 1er escaneo del día = entrada, el siguiente =
+// salida. userId vacío = el propio usuario en sesión.
 export async function accessCheckIn(userId?: string, method = 'member_qr'): Promise<CheckinResult> {
   const { data, error } = await supabase.rpc('access_check_in', {
     p_user_id: userId ?? null,
@@ -41,11 +45,20 @@ export async function accessCheckIn(userId?: string, method = 'member_qr'): Prom
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const d = (data ?? {}) as any;
   return {
-    checkedIn: !!d.checked_in,
+    action: d.action === 'out' ? 'out' : 'in',
     duplicate: !!d.duplicate,
     active: !!d.active,
     name: d.name ?? '',
+    durationMin: typeof d.duration_min === 'number' ? d.duration_min : undefined,
   };
+}
+
+// Formatea minutos de permanencia como "Xh Ym" o "Xm".
+export function fmtDur(min: number): string {
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h} h ${m} min` : `${h} h`;
 }
 
 // Entradas de HOY del estudio (más reciente primero).

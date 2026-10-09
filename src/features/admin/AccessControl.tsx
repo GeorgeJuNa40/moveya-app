@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
 import { useStore, isUsablePackage } from '../../lib/store';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
-import { accessCheckIn, fetchTodayCheckins, subscribeCheckins, type Checkin } from '../../lib/access';
+import { accessCheckIn, fetchTodayCheckins, subscribeCheckins, fmtDur, type Checkin } from '../../lib/access';
 import { notifySuccess, notifyError } from '../../lib/notify';
 import QrScanner, { parseCheckinQr } from '../checkin/QrScanner';
 
@@ -45,6 +45,29 @@ export default function AccessControl() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reloj que avanza cada minuto para que el aforo/permanencia se actualicen solos.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Aforo (dentro ahora) = visitas sin salida. Completadas = con salida.
+  const inside = useMemo(() => checkins.filter((c) => !c.exitedAt), [checkins]);
+  const insideIds = useMemo(() => new Set(inside.map((c) => c.userId)), [inside]);
+  const completed = useMemo(() => checkins.filter((c) => c.exitedAt), [checkins]);
+  const avgStayMin = useMemo(() => {
+    if (completed.length === 0) return 0;
+    const total = completed.reduce(
+      (a, c) => a + Math.max(0, (new Date(c.exitedAt!).getTime() - new Date(c.createdAt).getTime()) / 60000),
+      0,
+    );
+    return Math.round(total / completed.length);
+  }, [completed]);
+  const elapsedMin = (iso: string) => Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
+  const durMin = (c: Checkin) =>
+    Math.max(0, Math.floor((new Date(c.exitedAt!).getTime() - new Date(c.createdAt).getTime()) / 60000));
+
   useEffect(() => {
     QRCode.toDataURL(fixedUrl, { width: 320, margin: 1, color: { dark: '#4A5D55', light: '#ffffff' } })
       .then(setQr)
@@ -55,7 +78,12 @@ export default function AccessControl() {
     setBusy(userId);
     try {
       const res = await accessCheckIn(userId, 'manual');
-      notifySuccess(res.duplicate ? `${name} ya tenía entrada hoy.` : `Entrada registrada: ${name}${res.active ? '' : ' (sin membresía activa)'}`);
+      const msg = res.duplicate
+        ? `${name}: registro repetido, sin cambios.`
+        : res.action === 'out'
+          ? `👋 Salida: ${name}${res.durationMin != null ? ` · ${fmtDur(res.durationMin)}` : ''}`
+          : `✅ Entrada: ${name}${res.active ? '' : ' (sin membresía activa)'}`;
+      notifySuccess(msg);
       load();
     } catch (e) {
       notifyError('acceso', (e as Error)?.message ?? 'No se pudo registrar');
@@ -84,7 +112,7 @@ export default function AccessControl() {
 
   return (
     <>
-      <PageHeader title="Accesos" subtitle="Control de entrada de tus miembros (check-in)" />
+      <PageHeader title="Accesos" subtitle="Entrada y salida de tus miembros · aforo en tiempo real" />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Modo de check-in */}
@@ -139,8 +167,8 @@ export default function AccessControl() {
 
         {/* Registro manual / buscar miembro */}
         <Card className="p-6">
-          <h2 className="font-semibold text-ink mb-1">Registrar entrada a mano</h2>
-          <p className="text-sm text-ink-faint mb-3">Busca al miembro y registra su acceso.</p>
+          <h2 className="font-semibold text-ink mb-1">Registrar acceso a mano</h2>
+          <p className="text-sm text-ink-faint mb-3">Busca al miembro y registra su entrada o salida (el botón cambia solo).</p>
           <input
             className="w-full rounded-xl border border-cream-dark bg-white px-4 py-2.5 outline-none focus:ring-2 ring-brand mb-3"
             placeholder="Buscar por nombre…"
@@ -152,10 +180,16 @@ export default function AccessControl() {
               <div key={u.id} className="flex items-center justify-between gap-2 rounded-xl bg-cream-dark/30 px-3 py-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-ink">{u.fullName}</p>
-                  <p className="text-[11px] text-ink-faint">{activeUserIds.has(u.id) ? '🔓 Membresía activa' : '⚠️ Sin membresía'}</p>
+                  <p className="text-[11px] text-ink-faint">
+                    {insideIds.has(u.id) ? '🟢 Dentro ahora' : activeUserIds.has(u.id) ? '🔓 Membresía activa' : '⚠️ Sin membresía'}
+                  </p>
                 </div>
-                <Button variant="secondary" disabled={busy === u.id} onClick={() => markManual(u.id, u.fullName)}>
-                  {busy === u.id ? '…' : 'Entrada'}
+                <Button
+                  variant={insideIds.has(u.id) ? 'primary' : 'secondary'}
+                  disabled={busy === u.id}
+                  onClick={() => markManual(u.id, u.fullName)}
+                >
+                  {busy === u.id ? '…' : insideIds.has(u.id) ? 'Salida' : 'Entrada'}
                 </Button>
               </div>
             ))}
@@ -163,22 +197,67 @@ export default function AccessControl() {
           </div>
         </Card>
 
-        {/* Quién entró hoy */}
+        {/* Aforo en tiempo real */}
         <Card className="p-6 lg:col-span-2">
+          <div className="grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-2xl bg-brand-soft p-4">
+              <p className="text-3xl font-black text-brand">{inside.length}</p>
+              <p className="text-xs font-medium text-ink-soft">Dentro ahora</p>
+            </div>
+            <div className="rounded-2xl bg-cream-dark/30 p-4">
+              <p className="text-3xl font-black text-ink">{checkins.length}</p>
+              <p className="text-xs font-medium text-ink-soft">Visitas hoy</p>
+            </div>
+            <div className="rounded-2xl bg-cream-dark/30 p-4">
+              <p className="text-3xl font-black text-ink">{avgStayMin > 0 ? fmtDur(avgStayMin) : '—'}</p>
+              <p className="text-xs font-medium text-ink-soft">Permanencia prom.</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Dentro ahora */}
+        <Card className="p-6">
+          <h2 className="font-semibold text-ink mb-3">🟢 Dentro ahora <span className="text-ink-faint">({inside.length})</span></h2>
+          {inside.length === 0 ? (
+            <p className="text-sm text-ink-faint">No hay nadie dentro en este momento.</p>
+          ) : (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {inside.map((c) => (
+                <div key={c.id} className="flex items-center justify-between rounded-xl bg-cream-dark/30 px-3 py-2">
+                  <span className="truncate text-sm font-medium text-ink">{nameOf(c.userId)}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-ink-faint">entró {fmtTime(c.createdAt)}</span>
+                    <Badge tone="success">{fmtDur(elapsedMin(c.createdAt))}</Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Movimiento de hoy (entradas y salidas) */}
+        <Card className="p-6">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-ink">Entraron hoy <span className="text-ink-faint">({checkins.length})</span></h2>
+            <h2 className="font-semibold text-ink">Movimiento de hoy</h2>
             <Button variant="ghost" onClick={load}>Actualizar</Button>
           </div>
           {checkins.length === 0 ? (
-            <p className="text-sm text-ink-faint">Aún no hay entradas hoy.</p>
+            <p className="text-sm text-ink-faint">Aún no hay movimiento hoy.</p>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="space-y-2 max-h-80 overflow-y-auto">
               {checkins.map((c) => (
                 <div key={c.id} className="flex items-center justify-between rounded-xl bg-cream-dark/30 px-3 py-2">
-                  <span className="text-sm font-medium text-ink">{nameOf(c.userId)}</span>
-                  <div className="flex items-center gap-2">
-                    <Badge tone={activeUserIds.has(c.userId) ? 'success' : 'warning'}>{activeUserIds.has(c.userId) ? 'Activa' : 'Sin membresía'}</Badge>
-                    <span className="text-xs text-ink-faint">{fmtTime(c.createdAt)}</span>
+                  <span className="truncate text-sm font-medium text-ink">{nameOf(c.userId)}</span>
+                  <div className="flex items-center gap-2 shrink-0 text-xs text-ink-faint">
+                    <span>🟢 {fmtTime(c.createdAt)}</span>
+                    {c.exitedAt ? (
+                      <>
+                        <span>👋 {fmtTime(c.exitedAt)}</span>
+                        <Badge tone="neutral">{fmtDur(durMin(c))}</Badge>
+                      </>
+                    ) : (
+                      <Badge tone="success">Dentro</Badge>
+                    )}
                   </div>
                 </div>
               ))}
