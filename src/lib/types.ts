@@ -167,6 +167,10 @@ export interface ClassGuest {
 //               vigencia; NO descuenta créditos). Para gimnasios/mixtos.
 export type PackageKind = 'credits' | 'access';
 
+// Periodo de cobro de una membresía de acceso. Define su vigencia y cómo se
+// muestra ("Mensual", "Trimestral", etc.). "Por clase" = paquete de créditos.
+export type BillingPeriod = 'day' | 'week' | 'biweekly' | 'month' | 'quarter';
+
 export interface Package {
   id: string;
   studioId: string;
@@ -174,6 +178,7 @@ export interface Package {
   description: string;
   kind: PackageKind; // 'credits' (def.) o 'access'
   recurring?: boolean; // membresía de cobro mensual automático (domiciliación)
+  period?: BillingPeriod; // periodo de cobro (solo membresías de acceso)
   priceUsd: number;
   classCredits: number; // solo relevante en 'credits'
   validityDays: number;
