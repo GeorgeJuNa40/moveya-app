@@ -22,6 +22,7 @@ export interface Routine {
   userId: string;
   title: string;
   items: Exercise[];
+  updatedBy?: string; // quién la asignó/editó (coach o admin) — para mostrar el coach
   updatedAt?: string;
 }
 
@@ -40,6 +41,7 @@ const mapRoutine = (r: any): Routine => ({
   userId: r.user_id,
   title: r.title ?? 'Rutina',
   items: Array.isArray(r.items) ? r.items : [],
+  updatedBy: r.updated_by ?? undefined,
   updatedAt: r.updated_at ?? undefined,
 });
 

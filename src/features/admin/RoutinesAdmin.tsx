@@ -180,8 +180,11 @@ export default function RoutinesAdmin() {
                     {routines.map((r) => (
                       <div key={r.id} className="rounded-xl border border-cream-dark p-3">
                         <div className="flex items-center justify-between">
-                          <p className="font-semibold text-ink">{r.title}</p>
-                          <div className="flex gap-2 text-sm">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-ink">{r.title}</p>
+                            {r.updatedBy && <p className="text-[11px] text-ink-faint">👤 Asignada por {nameOf(r.updatedBy)}</p>}
+                          </div>
+                          <div className="flex gap-2 text-sm shrink-0">
                             <button onClick={() => startEdit(r)} className="text-brand font-medium">Editar</button>
                             <button onClick={() => removeRoutine(r.id)} className="text-red-600">Eliminar</button>
                           </div>

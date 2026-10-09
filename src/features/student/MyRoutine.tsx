@@ -9,9 +9,12 @@ import { notifySuccess } from '../../lib/notify';
 
 // Alumno (gym/mixto): ve su rutina asignada y registra su peso (seguimiento).
 export default function MyRoutine() {
-  const { currentUser, currentStudio } = useStore();
+  const { currentUser, currentStudio, db } = useStore();
   const uid = currentUser!.id;
   const studioId = currentStudio!.id;
+  // Nombre del coach que asignó la rutina (si lo conocemos en el estudio).
+  const coachName = (id?: string) =>
+    id ? db.users.find((u) => u.id === id)?.fullName ?? null : null;
 
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -83,6 +86,9 @@ export default function MyRoutine() {
             return (
             <Card key={r.id} className="p-5">
               <h3 className="font-semibold text-ink">{r.title}</h3>
+              {coachName(r.updatedBy) && (
+                <p className="mt-0.5 text-xs text-ink-faint">👤 Tu coach: <span className="font-medium text-brand">{coachName(r.updatedBy)}</span></p>
+              )}
               <ul className="mt-3 space-y-2">
                 {r.items.map((it, i) => (
                   <li key={i} className="rounded-xl bg-cream-dark/30 px-3 py-2">
