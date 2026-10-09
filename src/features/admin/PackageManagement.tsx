@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button, Modal } from '../../components/ui';
 import { usd } from '../../lib/format';
-import type { Package } from '../../lib/types';
+import { PERIOD_DAYS, PERIOD_LABEL, PERIOD_ORDER, periodOf } from '../../lib/periods';
+import type { Package, BillingPeriod } from '../../lib/types';
 
 const emptyDraft = (studioId: string, kind: Package['kind'] = 'credits'): Package => ({
   id: 'new',
@@ -11,6 +12,7 @@ const emptyDraft = (studioId: string, kind: Package['kind'] = 'credits'): Packag
   description: '',
   kind,
   recurring: false,
+  period: 'month',
   priceUsd: 0,
   classCredits: 1,
   validityDays: 30,
@@ -43,14 +45,17 @@ export default function PackageManagement() {
   const save = () => {
     if (!draft || !draft.name.trim()) return;
     const access = draft.kind === 'access';
+    const period: BillingPeriod = draft.period ?? 'month';
     const clean: Package = {
       ...draft,
       priceUsd: Math.max(0, draft.priceUsd || 0),
       // La membresía de acceso no usa créditos por clase.
       classCredits: access ? 0 : Math.max(1, Math.floor(draft.classCredits || 1)),
-      // Domiciliación: solo en membresías de acceso; si está activa, ciclo mensual.
-      recurring: access ? !!draft.recurring : false,
-      validityDays: access && draft.recurring ? 30 : Math.max(1, Math.floor(draft.validityDays || 1)),
+      // El periodo define la vigencia de una membresía de acceso.
+      period: access ? period : undefined,
+      validityDays: access ? PERIOD_DAYS[period] : Math.max(1, Math.floor(draft.validityDays || 1)),
+      // Domiciliación (cobro automático): hoy solo soportada en periodo mensual.
+      recurring: access && period === 'month' ? !!draft.recurring : false,
       // El acceso libre vale para todas las clases: no restringe por tipo.
       eligibleClassIds: access ? [] : draft.eligibleClassIds,
     };
@@ -97,13 +102,13 @@ export default function PackageManagement() {
               <div className="mt-4 grid grid-cols-3 gap-2 text-center">
                 <Metric label="Precio" value={usd(p.priceUsd)} />
                 {p.kind === 'access'
-                  ? <Metric label="Tipo" value="Acceso" />
+                  ? <Metric label="Periodo" value={PERIOD_LABEL[periodOf(p)]} />
                   : <Metric label="Clases" value={`${p.classCredits}`} />}
                 <Metric label="Vigencia" value={`${p.validityDays}d`} />
               </div>
               {p.kind === 'access' && (
                 <p className="mt-2 text-center text-xs font-medium text-brand">
-                  🔓 Acceso libre {p.recurring ? '· 🔁 cobro mensual automático' : 'durante la vigencia'}
+                  🔓 Acceso libre · {PERIOD_LABEL[periodOf(p)]}{p.recurring ? ' · 🔁 cobro automático' : ''}
                 </p>
               )}
 
@@ -183,7 +188,7 @@ export default function PackageManagement() {
                 </div>
               )}
 
-              <div className={`grid gap-3 ${isAccess ? 'grid-cols-2' : 'grid-cols-3'}`}>
+              <div className={`grid gap-3 ${isAccess ? 'grid-cols-1' : 'grid-cols-3'}`}>
                 <Field label={`Precio (${currency})`}>
                   <input
                     type="number"
@@ -205,66 +210,69 @@ export default function PackageManagement() {
                     />
                   </Field>
                 )}
-                <Field label="Vigencia (días)">
-                  <input
-                    type="number"
-                    min="1"
-                    className="input"
-                    value={draft.validityDays}
-                    onChange={(e) => setDraft({ ...draft, validityDays: +e.target.value })}
-                  />
-                </Field>
+                {!isAccess && (
+                  <Field label="Vigencia (días)">
+                    <input
+                      type="number"
+                      min="1"
+                      className="input"
+                      value={draft.validityDays}
+                      onChange={(e) => setDraft({ ...draft, validityDays: +e.target.value })}
+                    />
+                  </Field>
+                )}
               </div>
 
               {isAccess ? (
                 <div className="space-y-3">
-                  {/* Domiciliación: cobro mensual automático */}
-                  <button
-                    type="button"
-                    onClick={() => setDraft({ ...draft, recurring: !draft.recurring })}
-                    className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${
-                      draft.recurring ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'
-                    }`}
-                  >
-                    <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${draft.recurring ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
-                      {draft.recurring ? '✓' : ''}
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold text-ink">Cobro mensual automático (domiciliación)</span>
-                      <span className="block text-xs text-ink-faint">Se le cobra al miembro cada mes con su tarjeta, sin que tenga que volver a pagar. Requiere tu cuenta de Stripe conectada.</span>
-                    </span>
-                  </button>
-
-                  {!draft.recurring && (
-                    <div>
-                      <span className="mb-1 block text-sm font-medium text-ink-soft">Vigencia rápida</span>
-                      <div className="flex flex-wrap gap-2">
-                        {([
-                          { d: 30, t: 'Mensual' },
-                          { d: 15, t: 'Quincenal' },
-                          { d: 7, t: 'Semanal' },
-                          { d: 1, t: 'Visita' },
-                        ] as const).map((opt) => (
+                  {/* Periodo de cobro: define la vigencia y cómo se cobra. */}
+                  <div>
+                    <span className="mb-1 block text-sm font-medium text-ink-soft">Periodo de cobro</span>
+                    <div className="flex flex-wrap gap-2">
+                      {PERIOD_ORDER.map((pr) => {
+                        const on = (draft.period ?? 'month') === pr;
+                        return (
                           <button
-                            key={opt.d}
+                            key={pr}
                             type="button"
-                            onClick={() => setDraft({ ...draft, validityDays: opt.d })}
+                            onClick={() => setDraft({ ...draft, period: pr, recurring: pr === 'month' ? draft.recurring : false })}
                             className={`rounded-full px-3 py-1.5 text-sm border transition ${
-                              draft.validityDays === opt.d
-                                ? 'bg-brand text-cream border-brand'
-                                : 'bg-white text-ink-soft border-cream-dark'
+                              on ? 'bg-brand text-cream border-brand' : 'bg-white text-ink-soft border-cream-dark'
                             }`}
                           >
-                            {opt.t}
+                            {PERIOD_LABEL[pr]}
                           </button>
-                        ))}
-                      </div>
+                        );
+                      })}
                     </div>
+                    <p className="mt-1 text-xs text-ink-faint">
+                      🔓 Acceso libre durante {PERIOD_DAYS[draft.period ?? 'month']} día(s) · no descuenta clases.
+                    </p>
+                  </div>
+
+                  {/* Domiciliación (cobro automático): hoy solo en periodo mensual. */}
+                  {(draft.period ?? 'month') === 'month' && (
+                    <button
+                      type="button"
+                      onClick={() => setDraft({ ...draft, recurring: !draft.recurring })}
+                      className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${
+                        draft.recurring ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'
+                      }`}
+                    >
+                      <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${draft.recurring ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
+                        {draft.recurring ? '✓' : ''}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-semibold text-ink">Cobro mensual automático (domiciliación)</span>
+                        <span className="block text-xs text-ink-faint">Se le cobra al miembro cada mes con su tarjeta, sin que tenga que volver a pagar. Requiere tu cuenta de pagos conectada.</span>
+                      </span>
+                    </button>
                   )}
+
                   <p className="text-xs text-ink-faint">
-                    {draft.recurring
+                    {(draft.period ?? 'month') === 'month' && draft.recurring
                       ? '🔁 Se renueva y cobra cada mes automáticamente hasta que el miembro (o tú) la cancele.'
-                      : 'El miembro tendrá acceso libre durante la vigencia (no se descuentan clases). Ideal para gimnasio.'}
+                      : 'El miembro paga su pase por el periodo elegido. Para renovar, vuelve a pagar o tú registras el pago. La domiciliación automática está disponible en el periodo Mensual.'}
                   </p>
                 </div>
               ) : (

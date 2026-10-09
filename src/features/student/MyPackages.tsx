@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
 import { usd, daysUntil } from '../../lib/format';
+import { PERIOD_LABEL, PERIOD_SUFFIX, periodOf } from '../../lib/periods';
 import { startCheckout, cancelMembership, type PayProvider } from '../../lib/payments';
 import { accessCheckIn, fmtDur } from '../../lib/access';
 import { notifySuccess, notifyError, triggerResync } from '../../lib/notify';
@@ -221,13 +222,11 @@ export default function MyPackages() {
             <p className="text-sm text-ink-faint mt-1 flex-1">{p.description}</p>
             <div className="mt-4 flex items-end gap-1">
               <span className="text-2xl font-black text-brand">{usd(p.priceUsd)}</span>
-              {p.kind === 'access' && p.recurring && <span className="pb-0.5 text-sm text-ink-faint">/mes</span>}
+              {p.kind === 'access' && <span className="pb-0.5 text-sm text-ink-faint">{PERIOD_SUFFIX[periodOf(p)]}</span>}
             </div>
             <p className="text-sm text-ink-faint">
               {p.kind === 'access'
-                ? p.recurring
-                  ? '🔓 Acceso libre · 🔁 se cobra cada mes'
-                  : `🔓 Acceso libre · vigencia ${p.validityDays} días`
+                ? `🔓 Acceso libre · ${PERIOD_LABEL[periodOf(p)]}${p.recurring ? ' · 🔁 se renueva solo' : ''}`
                 : `${p.classCredits} clases · vigencia ${p.validityDays} días`}
             </p>
             {providers.length > 1 ? (
