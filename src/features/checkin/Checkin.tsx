@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../lib/store';
-import { accessCheckIn } from '../../lib/access';
+import { accessCheckIn, fmtDur } from '../../lib/access';
 
 // Pantalla de registro de entrada (check-in). Se abre al escanear un QR:
 //   • QR fijo de recepción → el miembro (en sesión) registra SU entrada.
@@ -16,6 +16,8 @@ export default function Checkin() {
   const [state, setState] = useState<State>('loading');
   const [name, setName] = useState('');
   const [active, setActive] = useState(false);
+  const [action, setAction] = useState<'in' | 'out'>('in');
+  const [durationMin, setDurationMin] = useState<number | undefined>(undefined);
   const [errMsg, setErrMsg] = useState('');
   const done = useRef(false);
 
@@ -31,6 +33,8 @@ export default function Checkin() {
         const res = await accessCheckIn(targetUser || undefined, targetUser ? 'staff_qr' : 'member_qr');
         setName(res.name);
         setActive(res.active);
+        setAction(res.action);
+        setDurationMin(res.durationMin);
         setState(res.duplicate ? 'dup' : 'ok');
       } catch (e) {
         setErrMsg(translate((e as Error)?.message ?? ''));
@@ -43,7 +47,7 @@ export default function Checkin() {
     <div className="min-h-screen grid place-items-center bg-cream p-6 text-center">
       <div className="w-full max-w-sm">
         {(state === 'loading' || authLoading) && (
-          <p className="text-lg font-semibold text-brand animate-pulse">Registrando tu entrada…</p>
+          <p className="text-lg font-semibold text-brand animate-pulse">Registrando tu acceso…</p>
         )}
 
         {state === 'need-login' && (
@@ -62,14 +66,22 @@ export default function Checkin() {
 
         {(state === 'ok' || state === 'dup') && (
           <div className="rounded-3xl bg-white p-8 shadow-zen">
-            <div className="text-6xl">{active ? '✅' : '⚠️'}</div>
+            <div className="text-6xl">{state === 'dup' ? 'ℹ️' : action === 'out' ? '👋' : '✅'}</div>
             <h1 className="mt-3 text-2xl font-bold text-ink">
-              {state === 'dup' ? '¡Ya estabas dentro!' : '¡Entrada registrada!'}
+              {state === 'dup'
+                ? '¡Ya estaba registrado!'
+                : action === 'out'
+                  ? '¡Salida registrada!'
+                  : '¡Entrada registrada!'}
             </h1>
             {name && <p className="mt-1 text-lg font-semibold text-brand">{name}</p>}
-            <p className={`mt-3 text-sm font-medium ${active ? 'text-green-700' : 'text-amber-700'}`}>
-              {active ? '🔓 Membresía activa · acceso permitido' : '⚠️ Sin membresía activa · pásalo a recepción'}
-            </p>
+            {action === 'out' && durationMin != null ? (
+              <p className="mt-3 text-sm font-medium text-ink-soft">⏱️ Permaneciste {fmtDur(durationMin)}</p>
+            ) : (
+              <p className={`mt-3 text-sm font-medium ${active ? 'text-green-700' : 'text-amber-700'}`}>
+                {active ? '🔓 Membresía activa · acceso permitido' : '⚠️ Sin membresía activa · pásalo a recepción'}
+              </p>
+            )}
             <p className="mt-4 text-xs text-ink-faint">
               {new Date().toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}
             </p>
@@ -95,7 +107,7 @@ export default function Checkin() {
 }
 
 function translate(msg: string): string {
-  if (/NOT_ALLOWED/.test(msg)) return 'No tienes permiso para registrar esta entrada.';
+  if (/NOT_ALLOWED/.test(msg)) return 'No tienes permiso para registrar este acceso.';
   if (/NOT_FOUND/.test(msg)) return 'No encontramos a ese miembro.';
   return 'Ocurrió un error. Inténtalo de nuevo.';
 }
