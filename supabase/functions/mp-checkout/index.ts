@@ -75,16 +75,26 @@ Deno.serve(async (req) => {
       return data?.connected && data?.access_token ? data.access_token : null;
     };
 
+    // Modo prueba (sandbox): si el estudio aún no conecta su MP, usamos el token
+    // de prueba de la plataforma como cobrador para poder validar el flujo. Se
+    // activa solo cuando MP_TEST_PAYER_EMAIL está presente (nunca en producción).
+    const TEST_MODE = !!Deno.env.get('MP_TEST_PAYER_EMAIL');
+
     if (kind === 'package') {
       const { data: pkg } = await supabase.from('packages').select('*').eq('id', body.packageId).single();
       if (!pkg) return json({ error: 'Paquete no encontrado' }, 404);
-      const token = await studioToken(me.studio_id);
+      const studioTok = await studioToken(me.studio_id);
+      const token = studioTok ?? (TEST_MODE && PLATFORM_TOKEN ? PLATFORM_TOKEN : null);
       if (!token) return json({ error: 'El estudio aun no conecto su cuenta de Mercado Pago.' }, 400);
       const amount = Number(pkg.price_usd);
+      // Sin comisión cuando el cobrador es el token de plataforma (prueba): no se
+      // puede cobrar marketplace_fee a uno mismo.
+      const feeAmt = studioTok ? fee(amount) : 0;
       const ref = JSON.stringify({ kind: 'package', user_id: me.id, studio_id: me.studio_id, package_id: pkg.id });
       const { ok, data } = await mpFetch('/checkout/preferences', token, {
         items: [{ title: pkg.name, quantity: 1, unit_price: amount, currency_id: 'MXN' }],
-        marketplace_fee: fee(amount),
+        marketplace_fee: feeAmt,
+        payer: { email: payerEmail },
         external_reference: ref,
         notification_url: notifyUrl(),
         back_urls: {
@@ -103,13 +113,15 @@ Deno.serve(async (req) => {
       const { data: pkg } = await supabase.from('packages').select('*').eq('id', body.packageId).single();
       if (!pkg) return json({ error: 'Membresia no encontrada' }, 404);
       if (pkg.kind !== 'access' || !pkg.recurring) return json({ error: 'Esta membresia no es de cobro automatico.' }, 400);
-      const token = await studioToken(me.studio_id);
+      const studioTok = await studioToken(me.studio_id);
+      const token = studioTok ?? (TEST_MODE && PLATFORM_TOKEN ? PLATFORM_TOKEN : null);
       if (!token) return json({ error: 'El estudio aun no conecto su cuenta de Mercado Pago.' }, 400);
       const amount = Number(pkg.price_usd);
       const ref = JSON.stringify({ kind: 'membership_sub', user_id: me.id, studio_id: me.studio_id, package_id: pkg.id });
       const { ok, data } = await mpFetch('/preapproval', token, {
         reason: pkg.name,
         external_reference: ref,
+        payer_email: payerEmail,
         auto_recurring: { frequency: 1, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' },
         back_url: `${APP_URL}/?pago=exito`,
         notification_url: notifyUrl(),
