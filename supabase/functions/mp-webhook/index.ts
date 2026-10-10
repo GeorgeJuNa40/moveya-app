@@ -1,18 +1,9 @@
 // ============================================================================
 // Move yA — Edge Function: mp-webhook  (Mercado Pago · notificaciones)
 // ----------------------------------------------------------------------------
-// Espejo de `stripe-webhook`. MP avisa aquí cuando un pago/suscripción cambia de
-// estado. En el servidor creamos el registro real (user_package + payment) o
-// activamos la suscripción del estudio. Idempotente.
-//
-// Secrets: MP_ACCESS_TOKEN (plataforma), SUPABASE_SERVICE_ROLE_KEY,
-//          (opcional) MP_WEBHOOK_SECRET para validar la firma x-signature.
-//
-// IMPORTANTE: desplegar con "Verify JWT" DESACTIVADO (MP no manda JWT de usuario).
-//
-// TODO (al probar con credenciales): confirmar con qué token se consulta cada
-// pago de marketplace (plataforma vs. token del estudio) y la validación de la
-// firma x-signature según la doc vigente de MP.
+// MP avisa aquí cuando un pago/suscripción cambia de estado. Activamos el plan
+// del estudio o creamos el paquete del alumno. Idempotente.
+// Desplegar con "Verify JWT" DESACTIVADO (MP no manda JWT de usuario).
 // ============================================================================
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -22,8 +13,6 @@ const DAY = 86400000;
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-// Lee un recurso de MP. Para pagos de marketplace puede requerir el token del
-// estudio; si el de la plataforma no sirve, se reintenta con el del estudio.
 async function mpGet(path: string, token: string) {
   const res = await fetch(`${MP_API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
   return { ok: res.ok, data: await res.json().catch(() => ({})) };
@@ -42,23 +31,35 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const body = await req.json().catch(() => ({}));
-    // MP manda el tipo por query (?type=payment&data.id=) o en el cuerpo.
     const type = url.searchParams.get('type') || url.searchParams.get('topic') || body?.type || body?.topic || '';
     const id = url.searchParams.get('data.id') || url.searchParams.get('id') || body?.data?.id || body?.id || '';
     if (!id) return new Response('ok', { status: 200 });
 
     if (type === 'payment') {
-      // Primero intenta con el token de la plataforma; si no, buscará el del estudio.
       let { ok, data: pay } = await mpGet(`/v1/payments/${id}`, PLATFORM_TOKEN);
-      const ref = parseRef(pay?.external_reference);
+      let ref = parseRef(pay?.external_reference);
       if ((!ok || !pay?.status) && ref.studio_id) {
         const t = await studioToken(ref.studio_id);
         if (t) ({ ok, data: pay } = await mpGet(`/v1/payments/${id}`, t));
       }
+      const preId = pay?.metadata?.preapproval_id ?? pay?.preapproval_id ?? null;
+      console.log('mp-wh payment:', JSON.stringify({ id, status: pay?.status, kind: ref.kind, studio: ref.studio_id, preId }));
       if (!ok || pay?.status !== 'approved') return new Response('ok', { status: 200 });
-      if (ref.kind === 'package') await applyPackage(ref, String(id), Number(pay.transaction_amount) || 0);
-      // Las renovaciones de membresía llegan como 'payment' ligadas a un preapproval:
-      if (pay?.metadata?.preapproval_id || pay?.point_of_interaction) {/* TODO renovación membresía */}
+
+      if (ref.kind === 'package') {
+        await applyPackage(ref, String(id), Number(pay.transaction_amount) || 0);
+      } else if (ref.kind === 'subscription' && ref.studio_id) {
+        // Pago de la suscripción SaaS aprobado → activa el plan del estudio.
+        await applySaaS(ref, String(preId ?? id), true);
+      } else if (preId) {
+        // El pago viene ligado a un preapproval: lo consultamos para su referencia.
+        const { ok: pok, data: pre } = await mpGet(`/preapproval/${preId}`, PLATFORM_TOKEN);
+        if (pok) {
+          const pref = parseRef(pre?.external_reference);
+          if (pref.kind === 'subscription' && pref.studio_id) await applySaaS(pref, String(preId), pre?.status === 'authorized' || pay?.status === 'approved');
+          if (pref.kind === 'membership_sub' && (pre?.status === 'authorized' || pay?.status === 'approved')) await applyMembership(pref, String(preId));
+        }
+      }
       return new Response('ok', { status: 200 });
     }
 
@@ -67,6 +68,7 @@ Deno.serve(async (req) => {
       if (!ok) return new Response('ok', { status: 200 });
       const ref = parseRef(pre?.external_reference);
       const active = pre?.status === 'authorized';
+      console.log('mp-wh preapproval:', JSON.stringify({ id, status: pre?.status, kind: ref.kind, studio: ref.studio_id }));
       if (ref.kind === 'subscription' && ref.studio_id) await applySaaS(ref, String(id), active);
       if (ref.kind === 'membership_sub' && active) await applyMembership(ref, String(id));
       return new Response('ok', { status: 200 });
