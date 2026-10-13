@@ -4,7 +4,7 @@ import { PageHeader, Card, Badge, Button, EmptyState, Modal } from '../../compon
 import Avatar from '../../components/Avatar';
 import ImageUpload from '../../components/ImageUpload';
 import InviteCard from './InviteCard';
-import type { CoachStatus, User } from '../../lib/types';
+import type { CoachStatus, CoachType, User } from '../../lib/types';
 
 const STATUS_META: Record<CoachStatus, { label: string; tone: 'success' | 'warning' | 'danger' }> = {
   APPROVED: { label: 'Aprobado', tone: 'success' },
@@ -18,10 +18,12 @@ const initials = (name: string) =>
 type Draft = {
   id: string; fullName: string; email: string; phone: string;
   bio: string; specialties: string; yearsExp: number; avatarUrl?: string;
+  coachType: CoachType; externalFeeNote: string;
 };
 
 export default function CoachesAdmin() {
-  const { currentStudio, studioUsers, setCoachStatus, upsertCoach } = useStore();
+  const { currentStudio, studioUsers, setCoachStatus, setCoachType, upsertCoach } = useStore();
+  const isGymish = currentStudio!.studioType === 'gym' || currentStudio!.studioType === 'mixed';
   const coaches = studioUsers('COACH');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [showInvite, setShowInvite] = useState(false);
@@ -33,6 +35,7 @@ export default function CoachesAdmin() {
       id: c.id, fullName: c.fullName, email: c.email, phone: c.phone,
       bio: c.coachProfile?.bio ?? '', specialties: (c.coachProfile?.specialties ?? []).join(', '),
       yearsExp: c.coachProfile?.yearsExp ?? 1, avatarUrl: c.avatarUrl,
+      coachType: c.coachType ?? 'fijo', externalFeeNote: c.externalFeeNote ?? '',
     });
   };
 
@@ -54,6 +57,8 @@ export default function CoachesAdmin() {
       avatarUrl: draft.avatarUrl,
       createdAt: existing?.createdAt ?? new Date().toISOString(),
       coachStatus: existing?.coachStatus ?? 'APPROVED',
+      coachType: isGymish ? draft.coachType : existing?.coachType,
+      externalFeeNote: isGymish && draft.coachType === 'externo' ? draft.externalFeeNote.trim() : existing?.externalFeeNote,
       coachProfile: {
         bio: draft.bio,
         specialties: draft.specialties.split(',').map((s) => s.trim()).filter(Boolean),
@@ -95,6 +100,7 @@ export default function CoachesAdmin() {
       <div className="grid gap-4 md:grid-cols-2">
         {coaches.map((c) => {
           const meta = STATUS_META[c.coachStatus ?? 'APPROVED'];
+          const isExterno = (c.coachType ?? 'fijo') === 'externo';
           return (
             <Card key={c.id} className="p-5">
               <div className="flex items-center justify-between">
@@ -105,14 +111,28 @@ export default function CoachesAdmin() {
                     <p className="text-xs text-ink-faint">{c.phone} · {c.email}</p>
                   </div>
                 </div>
-                <Badge tone={meta.tone}>{meta.label}</Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge tone={meta.tone}>{meta.label}</Badge>
+                  {isGymish && <Badge tone={isExterno ? 'warning' : 'neutral'}>{isExterno ? 'Externo' : 'Fijo'}</Badge>}
+                </div>
               </div>
               <p className="mt-3 text-sm text-ink-soft">{c.coachProfile?.bio}</p>
               <div className="mt-2 flex flex-wrap gap-1">
                 {c.coachProfile?.specialties.map((s) => <Badge key={s} tone="neutral">{s}</Badge>)}
               </div>
+              {isGymish && isExterno && (
+                <div className="mt-3 rounded-xl bg-cream-dark/60 px-3 py-2">
+                  <p className="text-xs font-medium text-ink-soft">💳 Cómo le cobras</p>
+                  <p className="text-sm text-ink">{c.externalFeeNote?.trim() || 'Sin definir — edítalo para registrar el acuerdo.'}</p>
+                </div>
+              )}
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button variant="secondary" onClick={() => editDraft(c)}>Editar</Button>
+                {isGymish && (
+                  <Button variant="ghost" onClick={() => setCoachType(c.id, isExterno ? 'fijo' : 'externo')}>
+                    {isExterno ? 'Marcar como fijo' : 'Marcar como externo'}
+                  </Button>
+                )}
                 {c.coachStatus !== 'APPROVED' && <Button onClick={() => setCoachStatus(c.id, 'APPROVED')}>Aprobar</Button>}
                 {c.coachStatus !== 'DENIED' && <Button variant="danger" onClick={() => setCoachStatus(c.id, 'DENIED')}>Denegar</Button>}
               </div>
@@ -139,6 +159,40 @@ export default function CoachesAdmin() {
               <Field label="Correo"><input className="input" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} /></Field>
               <Field label="Especialidades (separadas por coma)"><input className="input" value={draft.specialties} onChange={(e) => setDraft({ ...draft, specialties: e.target.value })} /></Field>
               <Field label="Biografía"><textarea rows={3} className="input" value={draft.bio} onChange={(e) => setDraft({ ...draft, bio: e.target.value })} /></Field>
+              {isGymish && (
+                <Field label="Tipo de coach">
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['fijo', 'externo'] as CoachType[]).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setDraft({ ...draft, coachType: t })}
+                        className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                          draft.coachType === t
+                            ? 'border-mint-dark bg-mint-soft/40 text-ink'
+                            : 'border-cream-dark bg-white text-ink-faint'
+                        }`}
+                      >
+                        {t === 'fijo' ? 'Fijo (de planta)' : 'Externo (renta espacio)'}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              )}
+              {isGymish && draft.coachType === 'externo' && (
+                <Field label="¿Cómo le cobras? (tú defines el acuerdo)">
+                  <textarea
+                    rows={2}
+                    className="input"
+                    placeholder="Ej: Renta $2,000/mes · o $100 por visita · o 20% de cada alumno"
+                    value={draft.externalFeeNote}
+                    onChange={(e) => setDraft({ ...draft, externalFeeNote: e.target.value })}
+                  />
+                  <span className="mt-1 block text-xs text-ink-faint">
+                    Texto libre: mensualidad, renta, por visita, por alumno… lo que acuerdes con el coach.
+                  </span>
+                </Field>
+              )}
             </div>
             {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
             <div className="mt-6 flex justify-end gap-2">

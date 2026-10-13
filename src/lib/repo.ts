@@ -77,6 +77,9 @@ function mapUser(r: Row): User {
     avatarUrl: r.avatar_url ?? undefined,
     createdAt: r.created_at,
     coachStatus: r.coach_status ?? undefined,
+    coachType: r.coach_type ?? undefined,
+    externalFeeNote: r.external_fee_note ?? undefined,
+    externalCoachId: r.external_coach_id ?? undefined,
     coachProfile: hasCoach
       ? { bio: r.coach_bio ?? '', specialties: r.coach_specialties ?? [], yearsExp: r.coach_years_exp ?? 0 }
       : undefined,
@@ -423,4 +426,7 @@ export const rowUser = (u: User): Row => ({
   coach_specialties: u.coachProfile?.specialties ?? [],
   coach_years_exp: u.coachProfile?.yearsExp ?? null,
   coach_status: u.coachStatus ?? null,
+  coach_type: u.coachType ?? null,
+  external_fee_note: u.externalFeeNote ?? null,
+  external_coach_id: u.externalCoachId ?? null,
 });

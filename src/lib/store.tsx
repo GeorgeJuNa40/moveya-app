@@ -133,6 +133,7 @@ interface StoreValue {
   removeGuest: (id: string) => void;
   // Estudio — coaches
   setCoachStatus: (userId: string, status: User['coachStatus']) => void;
+  setCoachType: (userId: string, coachType: NonNullable<User['coachType']>, feeNote?: string) => void;
   upsertCoach: (coach: User) => void;
   // Perfil — foto de cualquier usuario (admin, coach, alumno)
   updateUserAvatar: (userId: string, avatarUrl: string) => void;
@@ -888,6 +889,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         users: prev.users.map((u) => (u.id === userId ? { ...u, coachStatus: status } : u)),
       }));
       void dbUpdate('users', userId, { coach_status: status ?? null });
+    },
+    setCoachType(userId, coachType, feeNote) {
+      setDb((prev) => ({
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === userId
+            ? { ...u, coachType, externalFeeNote: feeNote !== undefined ? feeNote : u.externalFeeNote }
+            : u,
+        ),
+      }));
+      const patch: Record<string, unknown> = { coach_type: coachType };
+      if (feeNote !== undefined) patch.external_fee_note = feeNote;
+      void dbUpdate('users', userId, patch);
     },
     upsertCoach(coach) {
       const studioId = currentUser?.studioId;
