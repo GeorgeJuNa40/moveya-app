@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../lib/store';
+import { fetchCheckinsSince, type Checkin } from '../../lib/access';
 import { PageHeader, Card, Badge, Button, EmptyState, Modal } from '../../components/ui';
 import Avatar from '../../components/Avatar';
 import ImageUpload from '../../components/ImageUpload';
@@ -25,9 +26,32 @@ export default function CoachesAdmin() {
   const { currentStudio, studioUsers, setCoachStatus, setCoachType, upsertCoach } = useStore();
   const isGymish = currentStudio!.studioType === 'gym' || currentStudio!.studioType === 'mixed';
   const coaches = studioUsers('COACH');
+  const students = studioUsers('STUDENT');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [err, setErr] = useState('');
+
+  // Visitas de los últimos 30 días para el resumen de coaches externos.
+  const hasExternos = coaches.some((c) => c.coachType === 'externo');
+  const [checkins, setCheckins] = useState<Checkin[]>([]);
+  useEffect(() => {
+    if (!isGymish || !hasExternos) return;
+    const since = new Date(Date.now() - 30 * 86400000).toISOString();
+    void fetchCheckinsSince(since).then(setCheckins);
+  }, [isGymish, hasExternos]);
+
+  // Resumen por coach externo: alumnos ligados y visitas (coach + sus alumnos) en 30 días.
+  const externSummary = useMemo(() => {
+    const m: Record<string, { students: number; visits: number }> = {};
+    for (const c of coaches) {
+      if (c.coachType !== 'externo') continue;
+      const linked = students.filter((s) => s.externalCoachId === c.id);
+      const ids = new Set<string>([c.id, ...linked.map((s) => s.id)]);
+      const visits = checkins.filter((ck) => ids.has(ck.userId)).length;
+      m[c.id] = { students: linked.length, visits };
+    }
+    return m;
+  }, [coaches, students, checkins]);
 
   const editDraft = (c: User) => {
     setErr('');
@@ -121,9 +145,21 @@ export default function CoachesAdmin() {
                 {c.coachProfile?.specialties.map((s) => <Badge key={s} tone="neutral">{s}</Badge>)}
               </div>
               {isGymish && isExterno && (
-                <div className="mt-3 rounded-xl bg-cream-dark/60 px-3 py-2">
-                  <p className="text-xs font-medium text-ink-soft">💳 Cómo le cobras</p>
-                  <p className="text-sm text-ink">{c.externalFeeNote?.trim() || 'Sin definir — edítalo para registrar el acuerdo.'}</p>
+                <div className="mt-3 rounded-xl bg-cream-dark/60 px-3 py-2 space-y-2">
+                  <div className="flex gap-4">
+                    <div>
+                      <p className="text-lg font-black text-ink">{externSummary[c.id]?.students ?? 0}</p>
+                      <p className="text-[11px] text-ink-faint">alumnos ligados</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-black text-ink">{externSummary[c.id]?.visits ?? 0}</p>
+                      <p className="text-[11px] text-ink-faint">visitas (30 días)</p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-ink-soft">💳 Cómo le cobras</p>
+                    <p className="text-sm text-ink">{c.externalFeeNote?.trim() || 'Sin definir — edítalo para registrar el acuerdo.'}</p>
+                  </div>
                 </div>
               )}
               <div className="mt-4 flex flex-wrap gap-2">
