@@ -134,6 +134,7 @@ interface StoreValue {
   // Estudio — coaches
   setCoachStatus: (userId: string, status: User['coachStatus']) => void;
   setCoachType: (userId: string, coachType: NonNullable<User['coachType']>, feeNote?: string) => void;
+  setStudentExternalCoach: (userId: string, coachId: string | null) => void;
   upsertCoach: (coach: User) => void;
   // Perfil — foto de cualquier usuario (admin, coach, alumno)
   updateUserAvatar: (userId: string, avatarUrl: string) => void;
@@ -902,6 +903,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const patch: Record<string, unknown> = { coach_type: coachType };
       if (feeNote !== undefined) patch.external_fee_note = feeNote;
       void dbUpdate('users', userId, patch);
+    },
+    setStudentExternalCoach(userId, coachId) {
+      setDb((prev) => ({
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === userId ? { ...u, externalCoachId: coachId ?? undefined } : u,
+        ),
+      }));
+      void dbUpdate('users', userId, { external_coach_id: coachId ?? null });
     },
     upsertCoach(coach) {
       const studioId = currentUser?.studioId;

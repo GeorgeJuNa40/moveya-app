@@ -42,9 +42,15 @@ function fmtBirthday(iso?: string): string | null {
 
 // CRM de alumnos: contacto, clases agendadas, membresía y registro de pagos.
 export default function MembersCRM() {
-  const { db, currentStudio, studioUsers, membership, registerManualPlan, isNewStudent, pendingPenalty, settlePenalty, waivePenalty } = useStore();
+  const { db, currentStudio, studioUsers, membership, registerManualPlan, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach } = useStore();
   const students = studioUsers('STUDENT');
   const packages = db.packages.filter((p) => p.studioId === currentStudio!.id && p.active);
+  const isGymish = currentStudio!.studioType === 'gym' || currentStudio!.studioType === 'mixed';
+  const externalCoaches = useMemo(
+    () => studioUsers('COACH').filter((c) => c.coachType === 'externo'),
+    [studioUsers],
+  );
+  const coachName = (id?: string) => externalCoaches.find((c) => c.id === id)?.fullName;
 
   const [query, setQuery] = useState('');
   const [detail, setDetail] = useState<User | null>(null);
@@ -150,6 +156,9 @@ export default function MembersCRM() {
                           {fmtBirthday(s.birthDate) && (
                             <p className="text-xs text-ink-faint">🎂 {fmtBirthday(s.birthDate)}</p>
                           )}
+                          {coachName(s.externalCoachId) && (
+                            <p className="text-xs text-ink-faint">🧑‍🏫 Externo: {coachName(s.externalCoachId)}</p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -207,6 +216,9 @@ export default function MembersCRM() {
                     )}
                   </div>
                   <p className="text-xs text-ink-faint">{s.phone} · {s.email}</p>
+                  {coachName(s.externalCoachId) && (
+                    <p className="text-xs text-ink-faint">🧑‍🏫 Externo: {coachName(s.externalCoachId)}</p>
+                  )}
                 </div>
                 <Badge tone={meta.tone}>{meta.label}</Badge>
               </div>
@@ -251,6 +263,28 @@ export default function MembersCRM() {
                   <span className="text-sm text-ink-soft">{m.planName ?? 'Sin plan'}</span>
                   {m.state !== 'none' && <span className="text-sm text-ink-faint">· {m.creditsLeft} clases · vence en {m.daysLeft}d</span>}
                 </div>
+
+                {isGymish && externalCoaches.length > 0 && (
+                  <div className="mb-4 rounded-xl bg-cream-dark/40 px-3 py-3">
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-ink-soft">Coach externo (alumno que trae un externo)</span>
+                      <select
+                        className="w-full rounded-xl border border-cream-dark bg-white px-3 py-2 text-sm outline-none focus:ring-2 ring-brand"
+                        value={detail.externalCoachId ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value || null;
+                          setStudentExternalCoach(detail.id, val);
+                          setDetail({ ...detail, externalCoachId: val ?? undefined });
+                        }}
+                      >
+                        <option value="">— Alumno del gimnasio —</option>
+                        {externalCoaches.map((c) => (
+                          <option key={c.id} value={c.id}>{c.fullName}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
 
                 <h3 className="font-semibold text-ink text-sm mb-2">Clases agendadas ({classes.length})</h3>
                 <div className="space-y-1.5 mb-4 max-h-40 overflow-y-auto">

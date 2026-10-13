@@ -74,6 +74,17 @@ export async function fetchTodayCheckins(): Promise<Checkin[]> {
   return (data ?? []).map(mapCheckin);
 }
 
+// Entradas desde una fecha dada (para resúmenes, p. ej. últimos 30 días).
+export async function fetchCheckinsSince(startISO: string): Promise<Checkin[]> {
+  const { data, error } = await supabase
+    .from('access_checkins')
+    .select('*')
+    .gte('created_at', startISO)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return (data ?? []).map(mapCheckin);
+}
+
 // Se suscribe en vivo a nuevas entradas del estudio.
 export function subscribeCheckins(onChange: () => void): () => void {
   const channel = supabase
