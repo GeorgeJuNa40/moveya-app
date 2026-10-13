@@ -6,6 +6,7 @@ import StudioLogo from '../../components/StudioLogo';
 import InviteCard from './InviteCard';
 import InfoPageEditor from './InfoPageEditor';
 import { CURRENCIES } from '../../lib/countries';
+import { BRANCH_EXTRA_MXN, BRANCH_EXTRA_USD, branchAddonMxn, branchAddonUsd, branchExtraCount } from '../../lib/plans';
 import type { Branding, StudioInfoPage } from '../../lib/types';
 
 // Configuración: datos del negocio, fotos y White-label (branding).
@@ -307,6 +308,35 @@ export default function Settings() {
           </div>
         </Card>
 
+        {/* Reglas y políticas del negocio (las ve el alumno en su panel) */}
+        <Card className="p-6 lg:col-span-2 space-y-3">
+          <div>
+            <h2 className="font-semibold text-ink">Reglas y políticas del negocio</h2>
+            <p className="mt-1 text-sm text-ink-faint">
+              Escribe aquí las reglas de tu estudio/gym (uso de equipo, higiene, horarios, invitados,
+              código de vestimenta, etc.). Tus alumnos las verán en su panel.
+            </p>
+          </div>
+          <textarea
+            className="input"
+            rows={6}
+            value={b.studioPolicies ?? ''}
+            onChange={(e) => setBrand({ studioPolicies: e.target.value })}
+            placeholder={'Ej:\n• Llega 10 min antes de tu clase.\n• Trae tu propia toalla y botella de agua.\n• Limpia el equipo después de usarlo.\n• Cancela con al menos 4 h de anticipación.'}
+          />
+        </Card>
+
+        {/* Multi-sucursal — plan Premium */}
+        {can('multiBranch') ? (
+          <BranchesCard currency={b.currencyCode ?? 'USD'} />
+        ) : (
+          <LockedFeature
+            title="Multi-sucursal"
+            plan="Premium"
+            desc="Administra varias sedes bajo una sola cuenta. 1ª sede incluida; cada sede extra suma al plan."
+          />
+        )}
+
         {/* Página informativa pública (opcional — la llena el estudio) — plan Pro */}
         {can('publicInfo') ? (
           <InfoPageEditor
@@ -342,6 +372,98 @@ export default function Settings() {
 
       <style>{`.input{width:100%;border:1px solid #E8E3D6;border-radius:.75rem;padding:.6rem .8rem;background:#fff;outline:none}.input:focus{box-shadow:0 0 0 2px var(--brand-primary)}`}</style>
     </>
+  );
+}
+
+// Administración de sucursales (multi-sucursal, plan Premium). Las altas/bajas
+// se guardan al instante; el cobro mensual refleja las sedes dadas de alta.
+function BranchesCard({ currency }: { currency: string }) {
+  const { currentStudio, addBranch, updateBranch, removeBranch } = useStore();
+  const branches = currentStudio!.branches ?? [];
+  const total = Math.max(1, branches.length); // la sede principal cuenta como 1
+  const extra = branchExtraCount(total);
+  const isMxn = currency === 'MXN';
+  const addonLabel = isMxn
+    ? `$${branchAddonMxn(total).toLocaleString('es-MX')} MXN`
+    : `$${branchAddonUsd(total)} USD`;
+  const perExtra = isMxn ? `$${BRANCH_EXTRA_MXN} MXN` : `$${BRANCH_EXTRA_USD} USD`;
+
+  const [name, setName] = useState('');
+  const [address, setAddress] = useState('');
+
+  const add = () => {
+    if (!name.trim()) return;
+    addBranch(name.trim(), address.trim() || undefined);
+    setName('');
+    setAddress('');
+  };
+
+  return (
+    <Card className="p-6 lg:col-span-2 space-y-4">
+      <div>
+        <h2 className="font-semibold text-ink">Sucursales (multi-sucursal)</h2>
+        <p className="mt-1 text-sm text-ink-faint">
+          Administra todas tus sedes desde una cuenta. La <strong>1ª sede va incluida</strong> en tu plan;
+          cada sede adicional suma <strong>{perExtra}</strong> al mes.
+        </p>
+      </div>
+
+      <div className="rounded-xl bg-mint-soft/30 px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-ink-soft">
+            Sedes dadas de alta: <strong className="text-ink">{total}</strong>
+            {extra > 0 && <> · {extra} adicional{extra > 1 ? 'es' : ''}</>}
+          </span>
+          <span className="font-semibold text-ink">
+            {extra > 0 ? <>Extra mensual: {addonLabel}</> : 'Sin costo adicional'}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {branches.length === 0 && (
+          <p className="text-sm text-ink-faint">
+            Aún no agregas sucursales. Tu sede principal ya está incluida; agrega otra solo si operas en más de un lugar.
+          </p>
+        )}
+        {branches.map((br) => (
+          <div key={br.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-cream-dark px-3 py-2">
+            <input
+              className="input flex-1 min-w-[8rem]"
+              value={br.name}
+              onChange={(e) => updateBranch(br.id, { name: e.target.value })}
+              placeholder="Nombre de la sucursal"
+            />
+            <input
+              className="input flex-1 min-w-[8rem]"
+              value={br.address ?? ''}
+              onChange={(e) => updateBranch(br.id, { address: e.target.value })}
+              placeholder="Dirección (opcional)"
+            />
+            <button
+              type="button"
+              onClick={() => updateBranch(br.id, { active: !br.active })}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${br.active ? 'bg-green-100 text-green-700' : 'bg-cream-dark/60 text-ink-faint'}`}
+            >
+              {br.active ? 'Activa' : 'Inactiva'}
+            </button>
+            <button type="button" onClick={() => removeBranch(br.id)} className="text-sm font-medium text-red-600">Eliminar</button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2 border-t border-cream-dark pt-4">
+        <label className="flex-1 min-w-[8rem]">
+          <span className="mb-1 block text-sm font-medium text-ink-soft">Nueva sucursal</span>
+          <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Sucursal Centro" />
+        </label>
+        <label className="flex-1 min-w-[8rem]">
+          <span className="mb-1 block text-sm font-medium text-ink-soft">Dirección (opcional)</span>
+          <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Calle, número, colonia" />
+        </label>
+        <Button onClick={add} disabled={!name.trim()}>+ Agregar sede</Button>
+      </div>
+    </Card>
   );
 }
 

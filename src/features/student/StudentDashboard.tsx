@@ -194,6 +194,21 @@ export default function StudentDashboard() {
         </Link>
       )}
 
+      {/* Reglas y políticas del negocio */}
+      {currentStudio!.branding.studioPolicies?.trim() && (
+        <Card className="p-5">
+          <details>
+            <summary className="flex cursor-pointer items-center justify-between font-semibold text-ink">
+              <span>📋 Reglas del {studioType === 'gym' ? 'gimnasio' : 'estudio'}</span>
+              <span className="text-brand">▾</span>
+            </summary>
+            <p className="mt-3 whitespace-pre-line text-sm text-ink-soft">
+              {currentStudio!.branding.studioPolicies}
+            </p>
+          </details>
+        </Card>
+      )}
+
       {/* Conoce el estudio */}
       {photos.length > 0 && (
         <div>

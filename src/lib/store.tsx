@@ -156,6 +156,11 @@ interface StoreValue {
   // Estudio — negocio / branding / whatsapp
   updateStudio: (patch: Partial<Studio>) => void;
   updateBranding: (patch: Partial<Branding>) => void;
+  // Multi-sucursal (plan Premium)
+  addBranch: (name: string, address?: string, phone?: string) => void;
+  updateBranch: (id: string, patch: Partial<{ name: string; address: string; phone: string; active: boolean }>) => void;
+  removeBranch: (id: string) => void;
+  setUserBranch: (userId: string, branchId: string | null) => void;
   updateWhatsapp: (patch: Partial<WhatsappConfig>) => void;
   upsertWhatsappTemplate: (t: WhatsappTemplate) => void;
   deleteWhatsappTemplate: (id: string) => void;
@@ -1000,6 +1005,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     updateBranding(patch) {
       patchStudio((s) => ({ ...s, branding: { ...s.branding, ...patch } }));
+    },
+    addBranch(name, address, phone) {
+      patchStudio((s) => ({
+        ...s,
+        branches: [
+          ...(s.branches ?? []),
+          { id: newId(), name, address: address ?? '', phone: phone ?? '', active: true, createdAt: new Date().toISOString() },
+        ],
+      }));
+    },
+    updateBranch(id, patch) {
+      patchStudio((s) => ({
+        ...s,
+        branches: (s.branches ?? []).map((b) => (b.id === id ? { ...b, ...patch } : b)),
+      }));
+    },
+    removeBranch(id) {
+      patchStudio((s) => ({ ...s, branches: (s.branches ?? []).filter((b) => b.id !== id) }));
+      // Desliga a los usuarios que estaban en esa sucursal.
+      setDb((prev) => ({
+        ...prev,
+        users: prev.users.map((u) => (u.branchId === id ? { ...u, branchId: undefined } : u)),
+      }));
+    },
+    setUserBranch(userId, branchId) {
+      setDb((prev) => ({
+        ...prev,
+        users: prev.users.map((u) => (u.id === userId ? { ...u, branchId: branchId ?? undefined } : u)),
+      }));
+      void dbUpdate('users', userId, { branch_id: branchId ?? null });
     },
     updateWhatsapp(patch) {
       patchStudio((s) => ({ ...s, whatsapp: { ...s.whatsapp, ...patch } }));

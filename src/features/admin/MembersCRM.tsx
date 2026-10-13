@@ -42,10 +42,12 @@ function fmtBirthday(iso?: string): string | null {
 
 // CRM de alumnos: contacto, clases agendadas, membresía y registro de pagos.
 export default function MembersCRM() {
-  const { db, currentStudio, studioUsers, membership, registerManualPlan, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach } = useStore();
+  const { db, currentStudio, studioUsers, membership, registerManualPlan, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch } = useStore();
   const students = studioUsers('STUDENT');
   const packages = db.packages.filter((p) => p.studioId === currentStudio!.id && p.active);
   const isGymish = currentStudio!.studioType === 'gym' || currentStudio!.studioType === 'mixed';
+  const branches = currentStudio!.branches ?? [];
+  const branchName = (id?: string) => branches.find((b) => b.id === id)?.name;
   const externalCoaches = useMemo(
     () => studioUsers('COACH').filter((c) => c.coachType === 'externo'),
     [studioUsers],
@@ -159,6 +161,9 @@ export default function MembersCRM() {
                           {coachName(s.externalCoachId) && (
                             <p className="text-xs text-ink-faint">🧑‍🏫 Externo: {coachName(s.externalCoachId)}</p>
                           )}
+                          {branchName(s.branchId) && (
+                            <p className="text-xs text-ink-faint">📍 {branchName(s.branchId)}</p>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -219,6 +224,9 @@ export default function MembersCRM() {
                   {coachName(s.externalCoachId) && (
                     <p className="text-xs text-ink-faint">🧑‍🏫 Externo: {coachName(s.externalCoachId)}</p>
                   )}
+                  {branchName(s.branchId) && (
+                    <p className="text-xs text-ink-faint">📍 {branchName(s.branchId)}</p>
+                  )}
                 </div>
                 <Badge tone={meta.tone}>{meta.label}</Badge>
               </div>
@@ -263,6 +271,28 @@ export default function MembersCRM() {
                   <span className="text-sm text-ink-soft">{m.planName ?? 'Sin plan'}</span>
                   {m.state !== 'none' && <span className="text-sm text-ink-faint">· {m.creditsLeft} clases · vence en {m.daysLeft}d</span>}
                 </div>
+
+                {branches.length > 0 && (
+                  <div className="mb-4 rounded-xl bg-cream-dark/40 px-3 py-3">
+                    <label className="block">
+                      <span className="mb-1 block text-sm font-medium text-ink-soft">Sucursal</span>
+                      <select
+                        className="w-full rounded-xl border border-cream-dark bg-white px-3 py-2 text-sm outline-none focus:ring-2 ring-brand"
+                        value={detail.branchId ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value || null;
+                          setUserBranch(detail.id, val);
+                          setDetail({ ...detail, branchId: val ?? undefined });
+                        }}
+                      >
+                        <option value="">— Sede principal —</option>
+                        {branches.map((br) => (
+                          <option key={br.id} value={br.id}>{br.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
 
                 {isGymish && externalCoaches.length > 0 && (
                   <div className="mb-4 rounded-xl bg-cream-dark/40 px-3 py-3">

@@ -49,6 +49,7 @@ function mapStudio(r: Row): Studio {
     name: r.name,
     ceuCode: r.ceu_code,
     studioType: (r.studio_type ?? 'studio') as Studio['studioType'],
+    branches: r.branches ?? [],
     phone: r.phone ?? '',
     email: r.email ?? '',
     address: r.address ?? '',
@@ -80,6 +81,7 @@ function mapUser(r: Row): User {
     coachType: r.coach_type ?? undefined,
     externalFeeNote: r.external_fee_note ?? undefined,
     externalCoachId: r.external_coach_id ?? undefined,
+    branchId: r.branch_id ?? undefined,
     coachProfile: hasCoach
       ? { bio: r.coach_bio ?? '', specialties: r.coach_specialties ?? [], yearsExp: r.coach_years_exp ?? 0 }
       : undefined,
@@ -309,6 +311,7 @@ export async function persistStudio(s: Studio) {
     .update({
       name: s.name,
       studio_type: s.studioType,
+      branches: s.branches ?? [],
       phone: s.phone,
       email: s.email,
       address: s.address,
@@ -429,4 +432,5 @@ export const rowUser = (u: User): Row => ({
   coach_type: u.coachType ?? null,
   external_fee_note: u.externalFeeNote ?? null,
   external_coach_id: u.externalCoachId ?? null,
+  branch_id: u.branchId ?? null,
 });

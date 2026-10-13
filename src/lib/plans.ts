@@ -69,6 +69,7 @@ export type PlanCapability =
   | 'reports' // reportes de ingresos y asistencia
   | 'reportsAdvanced' // reportes avanzados
   | 'whatsapp' // agente de WhatsApp con IA
+  | 'multiBranch' // multi-sucursal (varias sedes bajo una cuenta)
   | 'publicInfo'; // página informativa pública (QR/link)
 
 export const PLAN_CAPABILITIES: Record<PlanId, PlanCapability[]> = {
@@ -76,9 +77,20 @@ export const PLAN_CAPABILITIES: Record<PlanId, PlanCapability[]> = {
   inicio: [],
   // Pro: marca propia, recompensas, servicios, reportes y página pública.
   pro: ['whitelabel', 'rewards', 'services', 'reports', 'publicInfo'],
-  // Premium: todo lo de Pro + WhatsApp IA, reportes avanzados, etc.
-  premium: ['whitelabel', 'rewards', 'services', 'reports', 'reportsAdvanced', 'whatsapp', 'publicInfo'],
+  // Premium: todo lo de Pro + WhatsApp IA, reportes avanzados, multi-sucursal.
+  premium: ['whitelabel', 'rewards', 'services', 'reports', 'reportsAdvanced', 'whatsapp', 'multiBranch', 'publicInfo'],
 };
+
+// Multi-sucursal (plan Premium): la 1ª sucursal va incluida en el precio del
+// plan; cada sucursal ADICIONAL creada suma un monto fijo al cobro mensual.
+// Precio "piso" fijo (sin descuento por volumen) porque el costo del bot de
+// WhatsApp escala por sede. En Fundador: base Fundador + mismo costo por extra.
+export const BRANCH_EXTRA_MXN = 990; // por sucursal adicional (MXN / mes)
+export const BRANCH_EXTRA_USD = 49; // equivalente aproximado en USD (Stripe)
+// Cobro mensual total según número de sucursales dadas de alta (n >= 1).
+export const branchExtraCount = (branches: number): number => Math.max(0, (branches || 1) - 1);
+export const branchAddonMxn = (branches: number): number => branchExtraCount(branches) * BRANCH_EXTRA_MXN;
+export const branchAddonUsd = (branches: number): number => branchExtraCount(branches) * BRANCH_EXTRA_USD;
 
 // ¿El plan incluye la capacidad? (por defecto asume el plan más limitado)
 export function planHas(plan: PlanId | undefined | null, cap: PlanCapability): boolean {
@@ -138,7 +150,7 @@ export const PLANS: Plan[] = [
       'Agente de WhatsApp con IA',
       'Reportes avanzados',
       'Soporte prioritario',
-      'Multi-sucursal (próximamente)',
+      'Multi-sucursal (1ª sede incluida · +$990 MXN por sede extra)',
     ],
   },
 ];

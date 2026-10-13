@@ -19,7 +19,7 @@ const initials = (name: string) =>
 type Draft = {
   id: string; fullName: string; email: string; phone: string;
   bio: string; specialties: string; yearsExp: number; avatarUrl?: string;
-  coachType: CoachType; externalFeeNote: string;
+  coachType: CoachType; externalFeeNote: string; branchId: string;
 };
 
 export default function CoachesAdmin() {
@@ -27,6 +27,7 @@ export default function CoachesAdmin() {
   const isGymish = currentStudio!.studioType === 'gym' || currentStudio!.studioType === 'mixed';
   const coaches = studioUsers('COACH');
   const students = studioUsers('STUDENT');
+  const branches = currentStudio!.branches ?? [];
   const [draft, setDraft] = useState<Draft | null>(null);
   const [showInvite, setShowInvite] = useState(false);
   const [err, setErr] = useState('');
@@ -60,6 +61,7 @@ export default function CoachesAdmin() {
       bio: c.coachProfile?.bio ?? '', specialties: (c.coachProfile?.specialties ?? []).join(', '),
       yearsExp: c.coachProfile?.yearsExp ?? 1, avatarUrl: c.avatarUrl,
       coachType: c.coachType ?? 'fijo', externalFeeNote: c.externalFeeNote ?? '',
+      branchId: c.branchId ?? '',
     });
   };
 
@@ -83,6 +85,7 @@ export default function CoachesAdmin() {
       coachStatus: existing?.coachStatus ?? 'APPROVED',
       coachType: isGymish ? draft.coachType : existing?.coachType,
       externalFeeNote: isGymish && draft.coachType === 'externo' ? draft.externalFeeNote.trim() : existing?.externalFeeNote,
+      branchId: branches.length ? (draft.branchId || undefined) : existing?.branchId,
       coachProfile: {
         bio: draft.bio,
         specialties: draft.specialties.split(',').map((s) => s.trim()).filter(Boolean),
@@ -213,6 +216,20 @@ export default function CoachesAdmin() {
                       </button>
                     ))}
                   </div>
+                </Field>
+              )}
+              {branches.length > 0 && (
+                <Field label="Sucursal">
+                  <select
+                    className="input"
+                    value={draft.branchId}
+                    onChange={(e) => setDraft({ ...draft, branchId: e.target.value })}
+                  >
+                    <option value="">— Sede principal —</option>
+                    {branches.map((br) => (
+                      <option key={br.id} value={br.id}>{br.name}</option>
+                    ))}
+                  </select>
                 </Field>
               )}
               {isGymish && draft.coachType === 'externo' && (
