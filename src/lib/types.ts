@@ -145,6 +145,35 @@ export interface CoachProfile {
   yearsExp: number;
 }
 
+// Producto físico del punto de venta (POS/tienda). Fase 1: catálogo + stock.
+export interface Product {
+  id: string;
+  studioId: string;
+  name: string;
+  description?: string;
+  priceUsd: number;
+  stock: number;
+  lowStock: number; // umbral de alerta de stock bajo
+  photoUrl?: string;
+  active: boolean;
+  createdAt: string;
+}
+
+// Venta de producto (descuenta inventario y suma a ingresos de tienda).
+export interface ProductSale {
+  id: string;
+  studioId: string;
+  productId?: string;
+  productName: string;
+  userId?: string; // alumno (opcional); vacío = venta de mostrador
+  qty: number;
+  unitPrice: number;
+  total: number;
+  method: string;
+  soldBy?: string;
+  soldAt: string;
+}
+
 // Tipo de coach en gimnasios/mixtos:
 //  - 'fijo':    instructor de planta del estudio (como siempre).
 //  - 'externo': entrenador que renta el espacio y trae a sus propios alumnos.
