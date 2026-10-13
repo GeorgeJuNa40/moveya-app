@@ -70,15 +70,16 @@ export type PlanCapability =
   | 'reportsAdvanced' // reportes avanzados
   | 'whatsapp' // agente de WhatsApp con IA
   | 'multiBranch' // multi-sucursal (varias sedes bajo una cuenta)
+  | 'store' // punto de venta e inventario de productos
   | 'publicInfo'; // página informativa pública (QR/link)
 
 export const PLAN_CAPABILITIES: Record<PlanId, PlanCapability[]> = {
   // Inicio: lo esencial para operar (calendario, CRM, recordatorios, cobros).
   inicio: [],
-  // Pro: marca propia, recompensas, servicios, reportes y página pública.
-  pro: ['whitelabel', 'rewards', 'services', 'reports', 'publicInfo'],
+  // Pro: marca propia, recompensas, servicios, reportes, tienda y página pública.
+  pro: ['whitelabel', 'rewards', 'services', 'reports', 'store', 'publicInfo'],
   // Premium: todo lo de Pro + WhatsApp IA, reportes avanzados, multi-sucursal.
-  premium: ['whitelabel', 'rewards', 'services', 'reports', 'reportsAdvanced', 'whatsapp', 'multiBranch', 'publicInfo'],
+  premium: ['whitelabel', 'rewards', 'services', 'reports', 'reportsAdvanced', 'whatsapp', 'multiBranch', 'store', 'publicInfo'],
 };
 
 // Multi-sucursal (plan Premium): la 1ª sucursal va incluida en el precio del
@@ -130,6 +131,7 @@ export const PLANS: Plan[] = [
       'White label (tu propia marca y colores)',
       'Gamificación y recompensas',
       'Servicios opcionales',
+      'Punto de venta e inventario de productos',
       'Reportes de ingresos y asistencia',
       'Página pública informativa (QR)',
     ],
