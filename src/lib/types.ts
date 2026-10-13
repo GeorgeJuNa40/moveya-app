@@ -131,6 +131,12 @@ export interface CoachProfile {
   yearsExp: number;
 }
 
+// Tipo de coach en gimnasios/mixtos:
+//  - 'fijo':    instructor de planta del estudio (como siempre).
+//  - 'externo': entrenador que renta el espacio y trae a sus propios alumnos.
+//               El gym define libremente cómo le cobra (ver externalFeeNote).
+export type CoachType = 'fijo' | 'externo';
+
 export interface User {
   id: string;
   studioId: string;
@@ -144,6 +150,9 @@ export interface User {
   createdAt: string;
   coachProfile?: CoachProfile;
   coachStatus?: CoachStatus; // solo coaches
+  coachType?: CoachType; // solo coaches (gym/mixto): de planta o externo. Def. 'fijo'
+  externalFeeNote?: string; // coach externo: cómo le cobra el gym (texto libre)
+  externalCoachId?: string; // alumno: coach externo al que pertenece (sus clientes)
   source?: 'trial' | 'companion'; // de dónde llegó: clase de prueba / invitado 2x1
 }
 
