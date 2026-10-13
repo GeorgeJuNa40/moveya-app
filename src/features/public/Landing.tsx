@@ -75,11 +75,13 @@ function Shot({ src, alt, className }: { src: string; alt: string; className?: s
 
 const FEATURES = [
   { ic: '▦', t: 'Reservas en línea', d: 'Tus alumnos agendan y cancelan solos; tú ves el cupo en tiempo real.' },
-  { ic: '◈', t: 'Cobros con tarjeta', d: 'Vende paquetes y recibe el dinero directo en tu cuenta. Sin apps aparte.' },
-  { ic: '✆', t: 'Recordatorios WhatsApp', d: 'Menos ausencias: la app recuerda la clase y avisa paquetes por vencer.' },
-  { ic: '❏', t: 'Paquetes y créditos', d: 'Clases restantes y vigencias bajo control, sin cuentas a mano.' },
-  { ic: '★', t: 'Recompensas y metas', d: 'Estrellas por asistir y metas que la app califica sola. Regresan más.' },
-  { ic: '▤', t: 'Reportes claros', d: 'Ingresos y asistencia mes con mes. Sabes cómo va tu estudio de un vistazo.' },
+  { ic: '⊞', t: 'Control de acceso y aforo', d: 'Entrada y salida por QR para gimnasios: sabes quién está dentro y cuántos, en vivo.' },
+  { ic: '◈', t: 'Cobros con tarjeta', d: 'Vende paquetes y membresías con Stripe o Mercado Pago. El dinero llega directo a tu cuenta.' },
+  { ic: '✆', t: 'WhatsApp con IA', d: 'Recordatorios automáticos y un bot que responde dudas y agenda por ti.' },
+  { ic: '❏', t: 'Paquetes y membresías', d: 'Créditos, vigencias y cobros flexibles (clase, semana, mes o trimestre) bajo control.' },
+  { ic: '⚑', t: 'Coaches fijos y externos', d: 'Administra tu equipo y a los entrenadores externos que rentan tu espacio, con todo su registro.' },
+  { ic: '⌂', t: 'Multi-sucursal', d: 'Varias sedes bajo una sola cuenta. Crece sin perder el control de tu operación.' },
+  { ic: '▤', t: 'Reportes claros', d: 'Ingresos y asistencia mes con mes. Sabes cómo va tu negocio de un vistazo.' },
 ];
 
 const STEPS = [
@@ -213,9 +215,9 @@ export default function Landing() {
 
       <header className="wrap hero">
         <div className="hero-copy reveal">
-          <span className="eyebrow"><span className="pulse" /> Para estudios y espacios de bienestar</span>
-          <h1>Tu estudio,<br /><span className="ital">en su mejor forma.</span></h1>
-          <p className="sub">Reservas, pagos con tarjeta, paquetes y recordatorios por WhatsApp — en una sola app con la cara de tu marca. Menos caos, más clases llenas.</p>
+          <span className="eyebrow"><span className="pulse" /> Para estudios, gimnasios y espacios de bienestar</span>
+          <h1>Tu estudio o gym,<br /><span className="ital">en su mejor forma.</span></h1>
+          <p className="sub">Reservas, control de acceso, pagos con tarjeta, membresías y WhatsApp con IA — en una sola app con la cara de tu marca. Para estudios, gimnasios y centros mixtos. Menos caos, más clientes.</p>
           <div className="cta">
             <Link className="btn btn-primary" to={REGISTRO}>Empieza por ${promo} · {PROMO_TRIAL_DAYS} días</Link>
             <a className="btn btn-ghost" href="#como">Ver cómo funciona</a>

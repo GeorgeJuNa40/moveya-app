@@ -17,6 +17,7 @@ const CAP_LABEL: Record<PlanCapability, string> = {
   reports: 'Reportes de ingresos y asistencia',
   reportsAdvanced: 'Reportes avanzados',
   whatsapp: 'Agente de WhatsApp con IA',
+  multiBranch: 'Multi-sucursal',
   publicInfo: 'Página pública informativa',
 };
 

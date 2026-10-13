@@ -40,6 +40,7 @@ export interface Branding {
   country?: string; // ISO del país del estudio (ej. MX), derivado del registro
   currencyCode?: string; // moneda local del estudio (ej. MXN); default USD
   cancellationPolicy?: string; // política de cancelación (la ve el alumno)
+  studioPolicies?: string; // reglas y políticas del negocio (las ve el alumno en su panel)
   cancellationHours?: number; // horas mínimas de anticipación para cancelar (candado)
   noShowPenaltyUsd?: number; // cargo (adeudo) por no asistir sin cancelar (0/omitido = sin penalización)
   bookingCutoffMinutes?: number; // minutos antes de la clase en que se cierran las reservas
@@ -107,11 +108,24 @@ export interface Subscription {
 //  - 'mixed':  gimnasio boutique con clases Y acceso libre.
 export type StudioType = 'studio' | 'gym' | 'mixed';
 
+// Sucursal de un negocio multi-sucursal (plan Premium). La 1ª va incluida; cada
+// sucursal adicional creada suma al cobro mensual (anti-fraude: se factura por
+// las sucursales dadas de alta en el sistema).
+export interface Branch {
+  id: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  active: boolean;
+  createdAt: string;
+}
+
 export interface Studio {
   id: string;
   name: string;
   ceuCode: string;
   studioType: StudioType; // tipo de negocio (default 'studio')
+  branches?: Branch[]; // sucursales (multi-sucursal, plan Premium). Vacío/1 = negocio de una sede
   phone: string;
   email: string;
   address: string;
@@ -153,6 +167,7 @@ export interface User {
   coachType?: CoachType; // solo coaches (gym/mixto): de planta o externo. Def. 'fijo'
   externalFeeNote?: string; // coach externo: cómo le cobra el gym (texto libre)
   externalCoachId?: string; // alumno: coach externo al que pertenece (sus clientes)
+  branchId?: string; // sucursal a la que pertenece (multi-sucursal); vacío = sede principal
   source?: 'trial' | 'companion'; // de dónde llegó: clase de prueba / invitado 2x1
 }
 
