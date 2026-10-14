@@ -23,7 +23,7 @@ async function studioToken(studioId: string): Promise<string | null> {
   return data?.access_token ?? null;
 }
 
-type Ref = { kind?: string; user_id?: string; studio_id?: string; package_id?: string; plan?: string };
+type Ref = { kind?: string; user_id?: string; studio_id?: string; package_id?: string; plan?: string; founder?: boolean };
 const parseRef = (s: unknown): Ref => { try { return JSON.parse(String(s)); } catch { return {}; } };
 
 Deno.serve(async (req) => {
@@ -128,9 +128,10 @@ async function applySaaS(ref: Ref, preapprovalId: string, active: boolean) {
   const next = {
     ...(studio?.subscription ?? {}),
     status: active ? 'ACTIVE' : 'PAST_DUE',
-    plan: ref.plan, isPromo: false, provider: 'mercadopago', mpPreapprovalId: preapprovalId,
+    plan: ref.plan, founder: !!ref.founder, isPromo: false, provider: 'mercadopago', mpPreapprovalId: preapprovalId,
     currentPeriodEnd: end.toISOString(),
   };
+  // Premium (y Fundador, que ES premium) incluye el bot con IA.
   const whatsapp = { ...(studio?.whatsapp ?? {}), aiActive: ref.plan === 'premium' && active };
   await admin.from('studios').update({ subscription: next, whatsapp }).eq('id', ref.studio_id);
 }
