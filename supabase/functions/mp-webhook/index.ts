@@ -48,6 +48,9 @@ Deno.serve(async (req) => {
 
       if (ref.kind === 'package') {
         await applyPackage(ref, String(id), Number(pay.transaction_amount) || 0);
+      } else if (ref.kind === 'promo' && ref.studio_id) {
+        // Promo de bienvenida pagada → abre 14 días de acceso Premium.
+        await applyPromo(ref, String(id));
       } else if (ref.kind === 'subscription' && ref.studio_id) {
         // Pago de la suscripción SaaS aprobado → activa el plan del estudio.
         await applySaaS(ref, String(preId ?? id), true);
@@ -99,6 +102,23 @@ async function applyPackage(ref: Ref, mpPaymentId: string, amount: number) {
     package_id: pkg.id, concept: pkg.name, paid_at: now.toISOString(), registered_by: 'online',
     provider: 'mercadopago', mp_payment_id: mpPaymentId,
   });
+}
+
+// -------- Promo de bienvenida: abre 14 días de acceso Premium (idempotente) --------
+async function applyPromo(ref: Ref, mpPaymentId: string) {
+  const { data: studio } = await admin.from('studios').select('subscription, whatsapp').eq('id', ref.studio_id).single();
+  const sub = studio?.subscription ?? {};
+  if (sub.promoPaymentId === mpPaymentId) return; // ya aplicada
+  const end = new Date(Date.now() + 14 * DAY);
+  const next = {
+    ...sub,
+    status: 'TRIALING', plan: 'premium', isPromo: true, provider: 'mercadopago',
+    trialDays: 14, trialEndsAt: end.toISOString(), currentPeriodEnd: end.toISOString(),
+    promoPaymentId: mpPaymentId,
+  };
+  // El bot con IA (costo) NO se enciende en la promo; se activa al pagar Premium.
+  const whatsapp = { ...(studio?.whatsapp ?? {}), aiActive: false };
+  await admin.from('studios').update({ subscription: next, whatsapp }).eq('id', ref.studio_id);
 }
 
 // -------- Suscripción SaaS del estudio (activar/cancelar) --------

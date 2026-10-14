@@ -77,13 +77,15 @@ begin
         'number', '', 'botEnabled', false, 'aiActive', false,
         'templates', '[]'::jsonb, 'knowledge', '[]'::jsonb
       ),
-      -- Prueba de lanzamiento: $1 · 14 días con ACCESO PREMIUM (para explorar
-      -- todo). El bot queda en modo básico (aiActive=false) hasta que contraten.
+      -- Pagar-primero: el estudio nace BLOQUEADO (sin acceso) hasta que pague.
+      -- La promo de bienvenida ($1 / $20 · 14 días Premium) se cobra en la
+      -- pasarela; al confirmarse el pago, el webhook abre los 14 días.
+      -- currentPeriodEnd = now() => isSubscriptionActive() es false (bloqueado).
       jsonb_build_object(
         'status', 'TRIALING', 'plan', 'premium', 'priceUsd', 84.99, 'promoPriceUsd', 1,
         'trialDays', 14, 'isPromo', true,
-        'trialEndsAt', (now() + interval '14 days'),
-        'currentPeriodEnd', (now() + interval '14 days')
+        'trialEndsAt', now(),
+        'currentPeriodEnd', now()
       )
     );
 

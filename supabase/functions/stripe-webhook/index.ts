@@ -66,6 +66,7 @@ Deno.serve(async (req) => {
       if (m.kind === 'package') await applyPackage(m, s);
       else if (m.kind === 'membership_sub') await applyMembershipSub(m, s);
       else if (m.kind === 'subscription') await applySubscription(m, s);
+      else if (m.kind === 'promo') await applyPromo(m, s);
     }
     // Renovación mensual: Stripe cobró el siguiente periodo -> extiende el acceso.
     else if (event.type === 'invoice.payment_succeeded' || event.type === 'invoice.paid') {
@@ -186,6 +187,32 @@ async function applySubscription(m: Record<string, string>, s: Stripe.Checkout.S
   // Al pagar Premium se enciende; en Inicio/Pro se apaga (no lo pagan).
   const whatsapp = { ...(studio?.whatsapp ?? {}), aiActive: plan === 'premium' };
 
+  await admin.from('studios').update({ subscription: next, whatsapp }).eq('id', m.studio_id);
+}
+
+// Promo de bienvenida pagada → abre 14 días de acceso Premium (idempotente).
+async function applyPromo(m: Record<string, string>, s: Stripe.Checkout.Session) {
+  const { data: studio } = await admin
+    .from('studios')
+    .select('subscription, whatsapp')
+    .eq('id', m.studio_id)
+    .single();
+  const sub = (studio?.subscription ?? {}) as Record<string, unknown>;
+  if (sub.promoSessionId === s.id) return; // ya aplicada
+  const end = new Date(Date.now() + 14 * DAY);
+  const next = {
+    ...sub,
+    status: 'TRIALING',
+    plan: 'premium',
+    isPromo: true,
+    provider: 'stripe',
+    trialDays: 14,
+    trialEndsAt: end.toISOString(),
+    currentPeriodEnd: end.toISOString(),
+    promoSessionId: s.id,
+  };
+  // El bot con IA (costo) no se enciende en la promo; se activa al pagar Premium.
+  const whatsapp = { ...(studio?.whatsapp ?? {}), aiActive: false };
   await admin.from('studios').update({ subscription: next, whatsapp }).eq('id', m.studio_id);
 }
 

@@ -237,6 +237,30 @@ Deno.serve(async (req) => {
       return json({ url: session.url });
     }
 
+    if (kind === 'promo') {
+      // Promo de bienvenida: cobro ÚNICO al estudio (en la cuenta de la
+      // plataforma). Al confirmarse, el webhook abre 14 días de acceso Premium.
+      if (me.role !== 'STUDIO_ADMIN') return json({ error: 'Solo el estudio' }, 403);
+      const promoCents = Number(Deno.env.get('PROMO_PRICE_USD_CENTS') ?? '100') || 100;
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: 'usd',
+              unit_amount: promoCents,
+              product_data: { name: 'Move yA · Prueba de bienvenida (14 días Premium)' },
+            },
+          },
+        ],
+        success_url: `${base}/?suscripcion=exito#/admin`,
+        cancel_url: `${base}/?suscripcion=cancelado#/admin/subscription`,
+        metadata: { kind: 'promo', studio_id: me.studio_id },
+      });
+      return json({ url: session.url });
+    }
+
     if (kind === 'subscription') {
       if (me.role !== 'STUDIO_ADMIN') return json({ error: 'Solo el estudio' }, 403);
       const plan = String(body.plan);
@@ -308,7 +332,7 @@ Deno.serve(async (req) => {
       return json({ url: session.url });
     }
 
-    return json({ error: 'kind inválido (usa "package", "membership_sub" o "subscription")' }, 400);
+    return json({ error: 'kind inválido (usa "package", "membership_sub", "subscription" o "promo")' }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

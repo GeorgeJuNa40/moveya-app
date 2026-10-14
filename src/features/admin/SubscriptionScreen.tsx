@@ -20,7 +20,7 @@ const money = (n: number, c: Currency = 'USD') =>
 // promo de lanzamiento ($1 · 14 días con acceso Premium) y programa Fundador
 // (primeros 10). El cobro del plan se hace en la página segura de Stripe.
 export default function SubscriptionScreen() {
-  const { currentStudio, activatePromo, markSubscriptionPaid, setSubscriptionPastDue } = useStore();
+  const { currentStudio } = useStore();
   const [busy, setBusy] = useState(false);
   const [founderCode, setFounderCode] = useState('');
   const [billing, setBilling] = useState<BillingInterval>('monthly');
@@ -35,6 +35,14 @@ export default function SubscriptionScreen() {
   const choosePlan = async (plan: PlanId) => {
     setBusy(true);
     const ok = await startCheckout(provider, { kind: 'subscription', plan, billing });
+    if (!ok) setBusy(false); // si funciona, redirige a la página de pago
+  };
+
+  // Promo de bienvenida: cobro ÚNICO ($1/$20) en la pasarela. Al confirmarse el
+  // pago, el webhook abre 14 días de acceso Premium. No activa nada localmente.
+  const startPromo = async () => {
+    setBusy(true);
+    const ok = await startCheckout(provider, { kind: 'promo' });
     if (!ok) setBusy(false); // si funciona, redirige a la página de pago
   };
 
@@ -116,8 +124,8 @@ export default function SubscriptionScreen() {
               Activas TODO el plan Premium. Al terminar la prueba eliges tu plan.
             </p>
           </div>
-          <Button variant="secondary" onClick={activatePromo}>
-            Empezar por {money(promo, currency)}
+          <Button variant="secondary" disabled={busy} onClick={startPromo}>
+            {busy ? 'Redirigiendo…' : `Empezar por ${money(promo, currency)}`}
           </Button>
         </div>
       )}
@@ -260,18 +268,6 @@ export default function SubscriptionScreen() {
             )}
           </div>
         </Card>
-      )}
-
-      {/* Acciones de renovación / demo */}
-      {active && (
-        <div className="mt-6 flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={markSubscriptionPaid}>
-            Renovar {currentPlan.name} ({money(currentPlan.priceUsd)})
-          </Button>
-          <Button variant="ghost" onClick={setSubscriptionPastDue}>
-            Simular impago (demo)
-          </Button>
-        </div>
       )}
 
       {/* Cómo funciona */}
