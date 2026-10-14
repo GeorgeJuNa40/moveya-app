@@ -26,6 +26,8 @@ export default function OnboardingScreen() {
   const isCoachInvite = (searchParams.get('role') ?? '').toLowerCase() === 'coach';
   // Desde la landing, "Registra tu estudio" llega con ?nuevo=1 → abre modo crear.
   const wantsCreate = searchParams.get('nuevo') === '1';
+  // Link privado de fundador (?fundador=1): marca el estudio como invitado.
+  const isFounderInvite = searchParams.get('fundador') === '1';
 
   const [mode, setMode] = useState<Mode>(invitedCeu ? 'join' : wantsCreate ? 'create' : 'login');
 
@@ -116,7 +118,7 @@ export default function OnboardingScreen() {
         const contact = { phone: fullPhone, country: country.iso, currency: country.currency };
         if (mode === 'create') {
           if (!studioName.trim()) throw new Error('Escribe el nombre de tu estudio.');
-          await signUp({ fullName, email, password, studioName, studioType: businessType, ...contact });
+          await signUp({ fullName, email, password, studioName, studioType: businessType, founderInvited: isFounderInvite, ...contact });
         } else {
           if (!ceu.trim()) throw new Error('Escribe el Código de Estudio (CEU).');
           if (!birthDate) throw new Error('Indica tu fecha de nacimiento.');

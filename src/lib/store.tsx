@@ -68,6 +68,7 @@ export interface SignUpInput {
   birthDate?: string; // fecha de nacimiento (YYYY-MM-DD)
   country?: string; // ISO del país (ej. MX)
   currency?: string; // moneda local derivada del país (ej. MXN)
+  founderInvited?: boolean; // llegó por el link privado de fundador (?fundador=1)
 }
 
 function daysUntil(iso: string): number {
@@ -442,6 +443,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...(input.birthDate ? { birth_date: input.birthDate } : {}),
             ...(input.country ? { country: input.country } : {}),
             ...(input.currency ? { currency: input.currency } : {}),
+            ...(input.founderInvited ? { founder_invited: '1' } : {}),
           },
         },
       });

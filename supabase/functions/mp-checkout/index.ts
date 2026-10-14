@@ -161,6 +161,30 @@ Deno.serve(async (req) => {
       const plan = String(body.plan ?? '');
       const billing = body.billing === 'annual' ? 'annual' : 'monthly';
       const trial = !!body.trial; // 14 días gratis y luego cobra el plan
+
+      // Programa Fundador: Premium + bot a precio especial de por vida. Solo para
+      // estudios invitados por el link privado y mientras queden lugares (tope 10).
+      if (plan === 'founder') {
+        const { data: st } = await admin.from('studios').select('subscription').eq('id', me.studio_id).single();
+        if (!st?.subscription?.founderInvited) return json({ error: 'El programa Fundador es solo por invitacion.' }, 403);
+        const { count } = await admin.from('studios').select('id', { count: 'exact', head: true }).eq('subscription->>founder', 'true');
+        const limit = Number(Deno.env.get('FOUNDER_LIMIT') ?? '10') || 10;
+        if ((count ?? 0) >= limit) return json({ error: 'El programa Fundador ya esta completo.' }, 400);
+        const famount = Number(Deno.env.get('MP_FOUNDER_MXN') ?? '1099') || 1099;
+        const fref = JSON.stringify({ kind: 'subscription', studio_id: me.studio_id, plan: 'premium', founder: true });
+        const { ok, data } = await mpFetch('/preapproval', PLATFORM_TOKEN, {
+          reason: 'Move yA - Fundador (Premium + Bot)',
+          external_reference: fref,
+          payer_email: payerEmail,
+          auto_recurring: { frequency: 1, frequency_type: 'months', transaction_amount: famount, currency_id: 'MXN' },
+          back_url: `${APP_URL}/?suscripcion=exito`,
+          notification_url: notifyUrl(),
+          status: 'pending',
+        });
+        if (!ok) return json({ error: `MP: ${mpWhy(data)}`, detail: data }, 400);
+        return json({ url: data.init_point });
+      }
+
       const amount = billing === 'annual' ? SAAS_MXN_YEAR[plan] : SAAS_MXN[plan];
       if (!amount) return json({ error: 'Plan invalido' }, 400);
       const freq = billing === 'annual' ? { frequency: 12, frequency_type: 'months' } : { frequency: 1, frequency_type: 'months' };

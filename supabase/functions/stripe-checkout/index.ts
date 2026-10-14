@@ -279,11 +279,16 @@ Deno.serve(async (req) => {
       let productName: string;
 
       if (isFounder) {
-        // Tope duro en el servidor: cuenta cuántos fundadores ya existen.
         const admin = createClient(
           Deno.env.get('SUPABASE_URL')!,
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
         );
+        // Solo estudios invitados por el link privado pueden ser Fundadores.
+        const { data: st } = await admin.from('studios').select('subscription').eq('id', me.studio_id).single();
+        if (!(st?.subscription as Record<string, unknown>)?.founderInvited) {
+          return json({ error: 'El programa Fundador es solo por invitación.' }, 403);
+        }
+        // Tope duro en el servidor: cuenta cuántos fundadores ya existen.
         const { count } = await admin
           .from('studios')
           .select('id', { count: 'exact', head: true })

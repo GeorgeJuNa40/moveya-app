@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore, isSubscriptionActive } from '../../lib/store';
+import { supabase } from '../../lib/supabase';
 import { PageHeader, Card, Button, Badge } from '../../components/ui';
 import { daysUntil } from '../../lib/format';
 import {
   PLANS, PROMO_PRICE, PROMO_PRICE_MXN, PROMO_TRIAL_DAYS, getPlan,
+  FOUNDER_PRICE_USD, FOUNDER_PRICE_MXN,
   planPriceCur, annualPerMonthCur, annualSavingsCur, CURRENCY_SUFFIX,
   type BillingInterval, type Currency,
 } from '../../lib/plans';
@@ -27,14 +29,32 @@ export default function SubscriptionScreen() {
   const promo = provider === 'mercadopago' ? PROMO_PRICE_MXN : PROMO_PRICE;
   const sub = currentStudio!.subscription;
   // ¿Ya usó la promo de bienvenida? (el webhook guarda promoPaymentId/promoSessionId)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const usedPromo = !!((sub as any).promoPaymentId || (sub as any).promoSessionId);
+  const usedPromo = !!(sub.promoPaymentId || sub.promoSessionId);
+  const founderPrice = provider === 'mercadopago' ? FOUNDER_PRICE_MXN : FOUNDER_PRICE_USD;
+
+  // Programa Fundador: solo visible para estudios invitados por el link privado,
+  // mientras no esté activo y queden lugares (tope de 10 en el servidor).
+  const [founders, setFounders] = useState<{ taken: number; limit: number } | null>(null);
+  useEffect(() => {
+    supabase.rpc('founders_status').then(
+      ({ data }) => { if (data) setFounders({ taken: Number(data.taken) || 0, limit: Number(data.limit) || 10 }); },
+      () => { /* opcional */ },
+    );
+  }, []);
+  const founderOpen = founders ? founders.taken < founders.limit : true;
 
   // Elegir/cambiar plan → pago recurrente con el proveedor elegido (mensual/anual).
   const choosePlan = async (plan: PlanId) => {
     setBusy(true);
     const ok = await startCheckout(provider, { kind: 'subscription', plan, billing });
     if (!ok) setBusy(false); // si funciona, redirige a la página de pago
+  };
+
+  // Programa Fundador: Premium + bot a precio especial de por vida (un cargo).
+  const chooseFounder = async () => {
+    setBusy(true);
+    const ok = await startCheckout(provider, { kind: 'subscription', plan: 'founder' });
+    if (!ok) setBusy(false);
   };
 
   // Promo de bienvenida: cobro ÚNICO ($1/$20) en la pasarela. Al confirmarse el
@@ -48,6 +68,8 @@ export default function SubscriptionScreen() {
   const trialEndsAt = sub.trialEndsAt ?? sub.currentPeriodEnd;
   const active = isSubscriptionActive(currentStudio);
   const inTrial = sub.status === 'TRIALING' && daysUntil(trialEndsAt) > 0;
+  // Oferta Fundador: solo invitados, sin suscripción activa y con lugares libres.
+  const showFounder = !!sub.founderInvited && !active && founderOpen;
   const trialDaysLeft = Math.max(0, daysUntil(trialEndsAt));
   const daysLeft = Math.max(0, daysUntil(sub.currentPeriodEnd));
   const currentPlanId: PlanId = sub.plan ?? 'pro';
@@ -117,6 +139,30 @@ export default function SubscriptionScreen() {
             {busy ? 'Redirigiendo…' : `Probar por ${money(promo, currency)}`}
           </Button>
         </div>
+      )}
+
+      {/* Programa Fundador (solo para invitados por el link privado) */}
+      {showFounder && (
+        <Card className="mb-6 overflow-hidden p-0">
+          <div className="p-6" style={{ background: 'linear-gradient(135deg, #88B8B7, #5F9695)' }}>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/90">✦ Programa Fundador · por invitación</p>
+            <p className="mt-1 text-2xl font-black text-white">
+              Premium completo + Bot de WhatsApp · {money(founderPrice, currency)}/mes
+            </p>
+            <p className="mt-1 text-sm text-white/90">
+              Precio especial <strong>de por vida</strong> para nuestros primeros estudios.
+              {founders && <> Quedan <strong>{Math.max(0, founders.limit - founders.taken)}</strong> lugares.</>}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+            <p className="text-sm text-ink-soft">
+              Puedes <strong>probar por {money(promo, currency)}</strong> primero (14 días) o unirte directo como Fundador.
+            </p>
+            <Button disabled={busy} onClick={chooseFounder}>
+              {busy ? 'Redirigiendo…' : `Unirme como Fundador · ${money(founderPrice, currency)}/mes`}
+            </Button>
+          </div>
+        </Card>
       )}
 
       {/* Proveedor de cobro: Stripe (USD) o Mercado Pago (MXN) */}

@@ -84,6 +84,7 @@ begin
       jsonb_build_object(
         'status', 'TRIALING', 'plan', 'premium', 'priceUsd', 84.99, 'promoPriceUsd', 1,
         'trialDays', 14, 'isPromo', true,
+        'founderInvited', (coalesce(meta->>'founder_invited', '') = '1'),
         'trialEndsAt', now(),
         'currentPeriodEnd', now()
       )
