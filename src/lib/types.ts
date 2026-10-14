@@ -1,6 +1,8 @@
 // Tipos del dominio Move yA (espejo del esquema Prisma, versión front del MVP).
 
-export type Role = 'STUDIO_ADMIN' | 'COACH' | 'STUDENT';
+// STUDIO_ADMIN = dueño/super-admin (ve todas las sucursales, factura, crea sedes).
+// BRANCH_ADMIN = gerente de una sucursal (ve/administra solo su sede).
+export type Role = 'STUDIO_ADMIN' | 'BRANCH_ADMIN' | 'COACH' | 'STUDENT';
 
 export type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'TRIALING';
 

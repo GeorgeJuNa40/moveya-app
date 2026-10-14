@@ -63,7 +63,8 @@ export interface SignUpInput {
   ceuCode?: string; // para unirse a un estudio existente
   studioName?: string; // para crear un estudio nuevo (ADMIN)
   studioType?: 'studio' | 'gym' | 'mixed'; // tipo de negocio al crear (def. 'studio')
-  role?: 'COACH' | 'STUDENT'; // rol al unirse por CEU (por defecto STUDENT)
+  role?: 'COACH' | 'STUDENT' | 'BRANCH_ADMIN'; // rol al unirse por CEU (por defecto STUDENT)
+  branchId?: string; // sucursal a la que se liga (gerente/coach/alumno por link)
   phone?: string; // teléfono con lada (ej. +52 55 1234 5678)
   birthDate?: string; // fecha de nacimiento (YYYY-MM-DD)
   country?: string; // ISO del país (ej. MX)
@@ -439,6 +440,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...(input.studioName ? { studio_name: input.studioName.trim() } : {}),
             ...(input.studioType ? { studio_type: input.studioType } : {}),
             ...(input.role ? { signup_role: input.role } : {}),
+            ...(input.branchId ? { branch_id: input.branchId } : {}),
             ...(input.phone ? { phone: input.phone.trim() } : {}),
             ...(input.birthDate ? { birth_date: input.birthDate } : {}),
             ...(input.country ? { country: input.country } : {}),
@@ -490,7 +492,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return Math.max(0, s.capacity - taken - guests);
     },
     studioUsers(role) {
-      return db.users.filter((u) => u.studioId === currentUser?.studioId && u.role === role);
+      // El gerente de sucursal (BRANCH_ADMIN) solo ve a la gente de SU sucursal.
+      const branch = currentUser?.role === 'BRANCH_ADMIN' ? currentUser.branchId : null;
+      return db.users.filter(
+        (u) => u.studioId === currentUser?.studioId && u.role === role && (!branch || u.branchId === branch),
+      );
     },
     starBalance(userId) {
       return db.stars.filter((s) => s.userId === userId).reduce((a, s) => a + s.delta, 0);

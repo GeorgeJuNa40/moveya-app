@@ -5,10 +5,13 @@ import { PageHeader, StatCard, Card, Badge, Button } from '../../components/ui';
 import { fmtTime, fmtDay, daysUntil, usd } from '../../lib/format';
 
 export default function AdminDashboard() {
-  const { db, currentStudio, seatsLeft } = useStore();
+  const { db, currentStudio, currentUser, seatsLeft } = useStore();
+  // Gerente de sucursal: ve el resumen de SU sede, sin facturación ni ingresos globales.
+  const isBranch = currentUser?.role === 'BRANCH_ADMIN';
+  const myBranch = isBranch ? currentUser?.branchId : null;
 
   const stats = useMemo(() => {
-    const students = db.users.filter((u) => u.role === 'STUDENT').length;
+    const students = db.users.filter((u) => u.role === 'STUDENT' && (!myBranch || u.branchId === myBranch)).length;
     const activeBookings = db.bookings.filter((b) => b.status !== 'CANCELED').length;
     const revenue = db.payments.reduce((acc, p) => acc + p.amountUsd, 0);
     const upcoming = db.classSessions
@@ -16,7 +19,7 @@ export default function AdminDashboard() {
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
       .slice(0, 5);
     return { students, activeBookings, revenue, upcoming };
-  }, [db]);
+  }, [db, myBranch]);
 
   const sub = currentStudio!.subscription;
   const daysLeft = daysUntil(sub.currentPeriodEnd);
@@ -28,10 +31,10 @@ export default function AdminDashboard() {
     <>
       <PageHeader
         title={`Hola, ${currentStudio!.branding.logoText}`}
-        subtitle="Resumen general de tu estudio"
+        subtitle={isBranch ? 'Resumen de tu sucursal' : 'Resumen general de tu estudio'}
       />
 
-      {!subActive && (
+      {!isBranch && !subActive && (
         <Card className="mb-6 p-4 border-red-200 bg-red-50">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <p className="text-sm text-red-800">
@@ -45,7 +48,7 @@ export default function AdminDashboard() {
         </Card>
       )}
 
-      {subActive && daysLeft <= 7 && (
+      {!isBranch && subActive && daysLeft <= 7 && (
         <Card className="mb-6 p-4 border-amber-200 bg-amber-50">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <p className="text-sm text-amber-800">
@@ -60,15 +63,17 @@ export default function AdminDashboard() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-8">
-        <StatCard label="Alumnos activos" value={stats.students} icon="⚇" />
+        <StatCard label={isBranch ? 'Alumnos de tu sucursal' : 'Alumnos activos'} value={stats.students} icon="⚇" />
         <StatCard label="Reservas vigentes" value={stats.activeBookings} icon="▦" />
-        <StatCard label="Ingresos (paquetes)" value={usd(stats.revenue)} hint="acumulado" icon="◈" />
-        <StatCard
-          label="Suscripción"
-          value={<Badge tone={subActive ? 'success' : 'danger'}>{subLabel}</Badge>}
-          hint={`${daysLeft} días restantes`}
-          icon="✦"
-        />
+        {!isBranch && <StatCard label="Ingresos (paquetes)" value={usd(stats.revenue)} hint="acumulado" icon="◈" />}
+        {!isBranch && (
+          <StatCard
+            label="Suscripción"
+            value={<Badge tone={subActive ? 'success' : 'danger'}>{subLabel}</Badge>}
+            hint={`${daysLeft} días restantes`}
+            icon="✦"
+          />
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -105,10 +110,19 @@ export default function AdminDashboard() {
           <h2 className="font-semibold text-ink mb-4">Accesos rápidos</h2>
           <div className="space-y-2">
             <QuickLink to="/admin/members" label="Miembros (CRM)" icon="⚇" />
-            <QuickLink to="/admin/packages" label="Gestionar paquetes" icon="❏" />
-            <QuickLink to="/admin/whatsapp" label="WhatsApp IA" icon="✆" />
-            <QuickLink to="/admin/rewards" label="Recompensas" icon="★" />
-            <QuickLink to="/admin/settings" label="Configuración" icon="⚙" />
+            <QuickLink to="/admin/coaches" label="Coaches" icon="⚑" />
+            {isBranch ? (
+              <>
+                <QuickLink to="/admin/access" label="Accesos (check-in)" icon="⊞" />
+                <QuickLink to="/admin/suggestions" label="Sugerencias" icon="✉" />
+              </>
+            ) : (
+              <>
+                <QuickLink to="/admin/packages" label="Gestionar paquetes" icon="❏" />
+                <QuickLink to="/admin/whatsapp" label="WhatsApp IA" icon="✆" />
+                <QuickLink to="/admin/settings" label="Configuración" icon="⚙" />
+              </>
+            )}
           </div>
         </Card>
       </div>

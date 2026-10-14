@@ -30,6 +30,7 @@ declare
   v_country     text  := coalesce(nullif(trim(meta->>'country'), ''), '');
   v_currency    text  := coalesce(nullif(trim(meta->>'currency'), ''), 'USD');
   v_birth       date  := nullif(trim(meta->>'birth_date'), '')::date;
+  v_branch      text  := nullif(trim(meta->>'branch_id'), '');  -- sucursal (gerente/coach/alumno por link)
   v_studio_id   text;
   v_initials    text;
 begin
@@ -46,11 +47,15 @@ begin
     end if;
 
     if v_signup_role = 'COACH' then
-      insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, coach_status)
-      values (new.id::text, v_studio_id, 'COACH', v_full_name, new.email, v_phone, v_birth, v_initials, 'PENDING');
+      insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, coach_status, branch_id)
+      values (new.id::text, v_studio_id, 'COACH', v_full_name, new.email, v_phone, v_birth, v_initials, 'PENDING', v_branch);
+    elsif v_signup_role = 'BRANCH_ADMIN' then
+      -- Gerente de sucursal: administra solo su sede.
+      insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, branch_id)
+      values (new.id::text, v_studio_id, 'BRANCH_ADMIN', v_full_name, new.email, v_phone, v_birth, v_initials, v_branch);
     else
-      insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials)
-      values (new.id::text, v_studio_id, 'STUDENT', v_full_name, new.email, v_phone, v_birth, v_initials);
+      insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, branch_id)
+      values (new.id::text, v_studio_id, 'STUDENT', v_full_name, new.email, v_phone, v_birth, v_initials, v_branch);
     end if;
 
   elsif v_studio_name is not null then

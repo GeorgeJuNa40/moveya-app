@@ -14,8 +14,10 @@ import QrScanner, { parseCheckinQr } from '../checkin/QrScanner';
 type Mode = 'member_qr' | 'staff_qr' | 'manual';
 
 export default function AccessControl() {
-  const { db, currentStudio, updateBranding } = useStore();
+  const { db, currentStudio, currentUser, updateBranding } = useStore();
   const studio = currentStudio!;
+  // Gerente de sucursal: solo ve a los miembros/accesos de SU sede.
+  const myBranch = currentUser?.role === 'BRANCH_ADMIN' ? currentUser.branchId : null;
   const mode: Mode = (studio.branding.checkinMode ?? 'member_qr') as Mode;
 
   const origin = window.location.origin;
@@ -26,10 +28,15 @@ export default function AccessControl() {
   const [busy, setBusy] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
-  // Miembros (alumnos) del estudio, para el registro manual.
+  // Miembros (alumnos) del estudio, para el registro manual. El gerente solo ve su sede.
   const students = useMemo(
-    () => db.users.filter((u) => u.studioId === studio.id && u.role === 'STUDENT'),
-    [db.users, studio.id],
+    () => db.users.filter((u) => u.studioId === studio.id && u.role === 'STUDENT' && (!myBranch || u.branchId === myBranch)),
+    [db.users, studio.id, myBranch],
+  );
+  // Ids de miembros de la sucursal del gerente (para filtrar los accesos del día).
+  const branchMemberIds = useMemo(
+    () => (myBranch ? new Set(db.users.filter((u) => u.studioId === studio.id && u.branchId === myBranch).map((u) => u.id)) : null),
+    [db.users, studio.id, myBranch],
   );
   const activeUserIds = useMemo(() => {
     const set = new Set<string>();
@@ -37,13 +44,22 @@ export default function AccessControl() {
     return set;
   }, [db.userPackages]);
 
-  const load = () => { void fetchTodayCheckins().then(setCheckins); };
+  const load = () => {
+    void fetchTodayCheckins().then((all) =>
+      setCheckins(branchMemberIds ? all.filter((c) => branchMemberIds.has(c.userId)) : all),
+    );
+  };
   useEffect(() => {
     load();
     const unsub = subscribeCheckins(load);
     return unsub;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Recarga cuando ya se conoce la sucursal del gerente (para aplicar el filtro).
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchMemberIds]);
 
   // Reloj que avanza cada minuto para que el aforo/permanencia se actualicen solos.
   const [now, setNow] = useState(() => Date.now());

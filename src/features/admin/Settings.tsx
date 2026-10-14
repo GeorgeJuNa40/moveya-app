@@ -393,8 +393,18 @@ export default function Settings() {
 function BranchesCard({ currency }: { currency: string }) {
   const { currentStudio, addBranch, updateBranch, removeBranch } = useStore();
   const branches = currentStudio!.branches ?? [];
+  const ceu = currentStudio!.ceuCode;
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const total = Math.max(1, branches.length); // la sede principal cuenta como 1
   const extra = branchExtraCount(total);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  // Link para invitar al gerente de una sucursal (se registra ligado a esa sede).
+  const managerLink = (branchId: string) => `${origin}/#/entrar?ceu=${encodeURIComponent(ceu)}&branch=${encodeURIComponent(branchId)}&role=branchadmin`;
+  const copyManager = async (branchId: string) => {
+    try { await navigator.clipboard.writeText(managerLink(branchId)); setCopied(branchId); setTimeout(() => setCopied(null), 2000); }
+    catch { /* el navegador puede bloquear; el link igual se muestra */ }
+  };
   const isMxn = currency === 'MXN';
   const addonLabel = isMxn
     ? `$${branchAddonMxn(total).toLocaleString('es-MX')} MXN`
@@ -406,6 +416,14 @@ function BranchesCard({ currency }: { currency: string }) {
 
   const add = () => {
     if (!name.trim()) return;
+    // Verificación: confirma el costo cuando la sede suma al cobro mensual.
+    const willCost = branches.length >= 1; // la 1ª sede va incluida; de la 2ª en adelante suma
+    if (willCost) {
+      const ok = window.confirm(
+        `Agregar “${name.trim()}” suma ${perExtra}/mes a tu plan (quedarás en ${branches.length + 1} sedes). ¿Confirmas?`,
+      );
+      if (!ok) return;
+    }
     addBranch(name.trim(), address.trim() || undefined);
     setName('');
     setAddress('');
@@ -440,27 +458,36 @@ function BranchesCard({ currency }: { currency: string }) {
           </p>
         )}
         {branches.map((br) => (
-          <div key={br.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-cream-dark px-3 py-2">
-            <input
-              className="input flex-1 min-w-[8rem]"
-              value={br.name}
-              onChange={(e) => updateBranch(br.id, { name: e.target.value })}
-              placeholder="Nombre de la sucursal"
-            />
-            <input
-              className="input flex-1 min-w-[8rem]"
-              value={br.address ?? ''}
-              onChange={(e) => updateBranch(br.id, { address: e.target.value })}
-              placeholder="Dirección (opcional)"
-            />
-            <button
-              type="button"
-              onClick={() => updateBranch(br.id, { active: !br.active })}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${br.active ? 'bg-green-100 text-green-700' : 'bg-cream-dark/60 text-ink-faint'}`}
-            >
-              {br.active ? 'Activa' : 'Inactiva'}
-            </button>
-            <button type="button" onClick={() => removeBranch(br.id)} className="text-sm font-medium text-red-600">Eliminar</button>
+          <div key={br.id} className="rounded-xl border border-cream-dark px-3 py-2 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                className="input flex-1 min-w-[8rem]"
+                value={br.name}
+                onChange={(e) => updateBranch(br.id, { name: e.target.value })}
+                placeholder="Nombre de la sucursal"
+              />
+              <input
+                className="input flex-1 min-w-[8rem]"
+                value={br.address ?? ''}
+                onChange={(e) => updateBranch(br.id, { address: e.target.value })}
+                placeholder="Dirección (opcional)"
+              />
+              <button
+                type="button"
+                onClick={() => updateBranch(br.id, { active: !br.active })}
+                className={`rounded-full px-3 py-1.5 text-xs font-semibold ${br.active ? 'bg-green-100 text-green-700' : 'bg-cream-dark/60 text-ink-faint'}`}
+              >
+                {br.active ? 'Activa' : 'Inactiva'}
+              </button>
+              <button type="button" onClick={() => removeBranch(br.id)} className="text-sm font-medium text-red-600">Eliminar</button>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-ink-faint">👤 Gerente:</span>
+              <button type="button" onClick={() => copyManager(br.id)} className="font-semibold text-brand">
+                {copied === br.id ? '¡Link copiado!' : 'Copiar link de invitación'}
+              </button>
+              <span className="truncate text-ink-faint">· el gerente solo verá esta sucursal</span>
+            </div>
           </div>
         ))}
       </div>

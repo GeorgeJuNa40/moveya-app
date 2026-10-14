@@ -38,6 +38,14 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/admin/subscription', label: 'Suscripción' },
     { to: '/admin/settings', label: 'Configuración' },
   ],
+  // Gerente de sucursal: administra su sede (gente + operación), sin facturación
+  // ni configuración del negocio (eso es del dueño).
+  BRANCH_ADMIN: [
+    { to: '/admin', label: 'Dashboard', short: 'Inicio' },
+    { to: '/admin/members', label: 'Miembros (CRM)', short: 'Miembros' },
+    { to: '/admin/coaches', label: 'Coaches' },
+    { to: '/admin/suggestions', label: 'Sugerencias' },
+  ],
   COACH: [
     { to: '/coach', label: 'Inicio' },
     { to: '/coach/calendar', label: 'Mi Calendario', short: 'Agenda' },
@@ -56,6 +64,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
 
 const ROLE_LABEL: Record<Role, string> = {
   STUDIO_ADMIN: 'Estudio',
+  BRANCH_ADMIN: 'Gerente',
   COACH: 'Coach',
   STUDENT: 'Alumno',
 };
@@ -233,8 +242,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
     nav = nav.filter((n) => n.to !== '/admin/classes' && n.to !== '/admin/calendar' && n.to !== '/app/book');
   }
   // Gimnasio/mixto: agrega "Accesos" (check-in) y "Rutinas" al menú del estudio.
-  if (currentUser.role === 'STUDIO_ADMIN' && isGymish) {
-    const i = nav.findIndex((n) => n.to === '/admin/packages');
+  if ((currentUser.role === 'STUDIO_ADMIN' || currentUser.role === 'BRANCH_ADMIN') && isGymish) {
+    const i = nav.findIndex((n) => n.to === '/admin/packages' || n.to === '/admin/coaches');
     const extras = [
       { to: '/admin/access', label: 'Accesos' },
       { to: '/admin/routines', label: 'Rutinas' },

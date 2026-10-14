@@ -100,17 +100,20 @@ function Splash() {
 }
 
 // Guarda de rol: redirige al onboarding si no hay sesión o el rol no coincide.
-function RequireRole({ role, children }: { role: Role; children: React.ReactNode }) {
+// Panel inicial según el rol. El gerente de sucursal (BRANCH_ADMIN) usa el panel
+// de administración (filtrado a su sucursal), igual que el dueño.
+function homeFor(role: Role): string {
+  if (role === 'STUDIO_ADMIN' || role === 'BRANCH_ADMIN') return '/admin';
+  if (role === 'COACH') return '/coach';
+  return '/app';
+}
+
+function RequireRole({ role, children }: { role: Role | Role[]; children: React.ReactNode }) {
   const { currentUser } = useStore();
   if (!currentUser) return <Navigate to="/" replace />;
-  if (currentUser.role !== role) {
-    const home =
-      currentUser.role === 'STUDIO_ADMIN'
-        ? '/admin'
-        : currentUser.role === 'COACH'
-          ? '/coach'
-          : '/app';
-    return <Navigate to={home} replace />;
+  const allowed = Array.isArray(role) ? role : [role];
+  if (!allowed.includes(currentUser.role)) {
+    return <Navigate to={homeFor(currentUser.role)} replace />;
   }
   return <AppShell>{children}</AppShell>;
 }
@@ -247,16 +250,7 @@ export default function App() {
         path="/"
         element={
           currentUser ? (
-            <Navigate
-              to={
-                currentUser.role === 'STUDIO_ADMIN'
-                  ? '/admin'
-                  : currentUser.role === 'COACH'
-                    ? '/coach'
-                    : '/app'
-              }
-              replace
-            />
+            <Navigate to={homeFor(currentUser.role)} replace />
           ) : new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('ceu') ? (
             <OnboardingScreen />
           ) : (
@@ -270,16 +264,7 @@ export default function App() {
         path="/entrar"
         element={
           currentUser ? (
-            <Navigate
-              to={
-                currentUser.role === 'STUDIO_ADMIN'
-                  ? '/admin'
-                  : currentUser.role === 'COACH'
-                    ? '/coach'
-                    : '/app'
-              }
-              replace
-            />
+            <Navigate to={homeFor(currentUser.role)} replace />
           ) : (
             <OnboardingScreen />
           )
@@ -288,24 +273,24 @@ export default function App() {
 
       {/* ---- ESTUDIO (Admin) — protegido por verificación de pago ---- */}
       {/* Dashboard siempre visible: aunque no haya pago, el estudio puede entrar a su panel principal. */}
-      <Route path="/admin" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><AdminDashboard /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/members" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><MembersCRM /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><AdminDashboard /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/members" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><MembersCRM /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/calendar" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><CalendarAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/classes" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><ClassesManagement /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/packages" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PackageManagement /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/coaches" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><CoachesAdmin /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/coaches" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><CoachesAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/rewards" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="rewards"><RewardsAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/services" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="services"><ServicesConfig /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/whatsapp" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappAgent /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/inbox" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><Inbox /></PlanGate></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/access" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><AccessControl /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/access" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><AccessControl /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/store" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="store"><StoreAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/routines" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><RoutinesAdmin /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/routines" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><RoutinesAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reports" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="reports"><Reports /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reminders" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Reminders /></SubscriptionGate></RequireRole>} />
       {/* Suscripción siempre accesible (allow) para poder regularizar el pago. */}
       <Route path="/admin/subscription" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate allow><SubscriptionScreen /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/suggestions" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><SuggestionsAdmin /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/suggestions" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><SuggestionsAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/settings" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Settings /></SubscriptionGate></RequireRole>} />
 
       {/* ---- COACH — protegido por estado de aprobación ---- */}
