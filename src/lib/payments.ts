@@ -5,7 +5,7 @@ import { notifyError } from './notify';
 type CheckoutBody =
   | { kind: 'package'; packageId: string }
   | { kind: 'membership_sub'; packageId: string } // membresía con cobro mensual (domiciliación)
-  | { kind: 'subscription'; plan: string; billing?: 'monthly' | 'annual' }
+  | { kind: 'subscription'; plan: string; billing?: 'monthly' | 'annual'; trial?: boolean } // trial=true: 14 días gratis y luego cobra el plan
   | { kind: 'promo' }; // promo de bienvenida: cobro único ($1/$20) que abre 14 días Premium
 
 // Pide a Stripe una sesión de pago y redirige a su página segura.

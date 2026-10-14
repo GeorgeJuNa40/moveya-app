@@ -160,11 +160,14 @@ Deno.serve(async (req) => {
       if (!PLATFORM_TOKEN) return json({ error: 'Falta MP_ACCESS_TOKEN de la plataforma' }, 500);
       const plan = String(body.plan ?? '');
       const billing = body.billing === 'annual' ? 'annual' : 'monthly';
+      const trial = !!body.trial; // 14 días gratis y luego cobra el plan
       const amount = billing === 'annual' ? SAAS_MXN_YEAR[plan] : SAAS_MXN[plan];
       if (!amount) return json({ error: 'Plan invalido' }, 400);
-      const recurring = billing === 'annual'
-        ? { frequency: 12, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' }
-        : { frequency: 1, frequency_type: 'months', transaction_amount: amount, currency_id: 'MXN' };
+      const freq = billing === 'annual' ? { frequency: 12, frequency_type: 'months' } : { frequency: 1, frequency_type: 'months' };
+      const recurring = {
+        ...freq, transaction_amount: amount, currency_id: 'MXN',
+        ...(trial ? { free_trial: { frequency: 14, frequency_type: 'days' } } : {}),
+      };
       const ref = JSON.stringify({ kind: 'subscription', studio_id: me.studio_id, plan, billing });
       // MP EXIGE payer_email en /preapproval. En sandbox usamos el correo del
       // comprador de prueba (MP_TEST_PAYER_EMAIL); en producción, el del estudio.
