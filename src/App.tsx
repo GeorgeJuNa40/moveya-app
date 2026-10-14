@@ -47,6 +47,8 @@ const OnboardingScreen = lazyWithReload(() => import('./features/onboarding/Onbo
 const ResetPassword = lazyWithReload(() => import('./features/onboarding/ResetPassword'));
 // Landing pública (cara comercial) que se muestra en el dominio sin sesión.
 const Landing = lazyWithReload(() => import('./features/public/Landing'));
+// Landing exclusiva del Programa Fundador (por invitación, link privado).
+const FounderLanding = lazyWithReload(() => import('./features/public/FounderLanding'));
 // Página pública informativa del estudio (sin login).
 const StudioInfoPage = lazyWithReload(() => import('./features/public/StudioInfoPage'));
 // Registro de entrada (check-in) — se abre al escanear el QR de acceso.
@@ -234,6 +236,9 @@ export default function App() {
       {/* Registro de entrada (check-in). Requiere sesión; la propia pantalla
           maneja el caso "sin sesión" pidiendo iniciar sesión. */}
       <Route path="/checkin" element={<Checkin />} />
+
+      {/* Landing exclusiva del Programa Fundador (link privado por invitación). */}
+      <Route path="/fundador" element={<FounderLanding />} />
 
       {/* Raíz del dominio. Con sesión → panel según rol. Sin sesión: si viene
           por link de invitación (?ceu=) va directo al registro; si no, muestra
