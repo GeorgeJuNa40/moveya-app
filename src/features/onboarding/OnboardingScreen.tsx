@@ -23,7 +23,11 @@ export default function OnboardingScreen() {
   // código y abrimos directamente el modo "unirse".
   const [searchParams] = useSearchParams();
   const invitedCeu = (searchParams.get('ceu') ?? '').toUpperCase();
-  const isCoachInvite = (searchParams.get('role') ?? '').toLowerCase() === 'coach';
+  const inviteRole = (searchParams.get('role') ?? '').toLowerCase();
+  const isCoachInvite = inviteRole === 'coach';
+  // Link de gerente de sucursal: ?ceu=XXXX&branch=<id>&role=branchadmin
+  const isBranchAdminInvite = inviteRole === 'branchadmin';
+  const invitedBranch = searchParams.get('branch') ?? '';
   // Desde la landing, "Registra tu estudio" llega con ?nuevo=1 → abre modo crear.
   const wantsCreate = searchParams.get('nuevo') === '1';
   // Link privado de fundador (?fundador=1): marca el estudio como invitado.
@@ -127,7 +131,8 @@ export default function OnboardingScreen() {
             email,
             password,
             ceuCode: ceu,
-            role: isCoachInvite ? 'COACH' : 'STUDENT',
+            role: isBranchAdminInvite ? 'BRANCH_ADMIN' : isCoachInvite ? 'COACH' : 'STUDENT',
+            branchId: invitedBranch || undefined,
             birthDate,
             ...contact,
           });
@@ -202,11 +207,13 @@ export default function OnboardingScreen() {
                 ? 'Recupera tu contraseña'
                 : mode === 'create'
                   ? 'Crea tu estudio'
-                  : isCoachInvite
-                    ? 'Únete como coach'
-                    : invStudio
-                      ? 'Crea tu cuenta'
-                      : 'Únete a tu estudio'}
+                  : isBranchAdminInvite
+                    ? 'Únete como gerente'
+                    : isCoachInvite
+                      ? 'Únete como coach'
+                      : invStudio
+                        ? 'Crea tu cuenta'
+                        : 'Únete a tu estudio'}
           </h1>
           <p className="text-ink-faint mt-1 mb-6 text-center">
             {mode === 'login'
@@ -217,7 +224,9 @@ export default function OnboardingScreen() {
                   ? (isFounderInvite
                       ? 'Registra tu estudio para apartar tu lugar de Fundador.'
                       : 'Registra tu estudio y empieza tu prueba.')
-                  : isCoachInvite
+                  : isBranchAdminInvite
+                    ? 'Regístrate para administrar tu sucursal.'
+                    : isCoachInvite
                     ? 'Regístrate como coach. El estudio deberá aprobarte para que empieces.'
                     : invStudio
                       ? `Completa tus datos para unirte a ${invStudio.name} y reservar tus clases.`
