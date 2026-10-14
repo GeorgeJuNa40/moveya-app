@@ -270,6 +270,7 @@ Deno.serve(async (req) => {
       // a FOUNDER_LIMIT estudios; al llenarse, todo vuelve a los precios normales.
       const isFounder = plan === 'founder';
       const metaPlan = isFounder ? 'premium' : plan; // por debajo, el fundador ES premium
+      const trial = !isFounder && !!body.trial; // 14 días gratis y luego cobra el plan (el fundador no lleva prueba)
       // Periodo de cobro: mensual (por defecto) o anual (2 meses gratis). El
       // programa Fundador es SIEMPRE mensual (precio especial de por vida).
       const billing = !isFounder && body.billing === 'annual' ? 'annual' : 'monthly';
@@ -316,9 +317,11 @@ Deno.serve(async (req) => {
             },
           },
         ],
-        // Al volver de Stripe, regresa DIRECTO a la pantalla de Suscripción del
-        // estudio (con hash de la ruta) en vez de la raíz (que mandaba al login).
-        // Tras pagar la membresía, el estudio entra DIRECTO a su dashboard.
+        // 14 días gratis (prueba) antes del primer cobro, si se pidió.
+        subscription_data: {
+          ...(trial ? { trial_period_days: 14 } : {}),
+          metadata: { kind: 'subscription', studio_id: me.studio_id, plan: metaPlan, founder: isFounder ? '1' : '0', billing },
+        },
         success_url: `${base}/?suscripcion=exito#/admin`,
         cancel_url: `${base}/?suscripcion=cancelado#/admin/subscription`,
         metadata: {

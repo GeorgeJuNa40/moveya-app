@@ -32,9 +32,10 @@ export default function SubscriptionScreen() {
   const founderUnlocked = founderCode.trim().toUpperCase() === FOUNDER_CODE;
 
   // Elegir/cambiar plan → pago recurrente con el proveedor elegido (mensual/anual).
-  const choosePlan = async (plan: PlanId) => {
+  // trial=true: 14 días gratis (MP/Stripe validan tarjeta) y luego cobra el plan.
+  const choosePlan = async (plan: PlanId, trial = false) => {
     setBusy(true);
-    const ok = await startCheckout(provider, { kind: 'subscription', plan, billing });
+    const ok = await startCheckout(provider, { kind: 'subscription', plan, billing, trial });
     if (!ok) setBusy(false); // si funciona, redirige a la página de pago
   };
 
@@ -116,12 +117,13 @@ export default function SubscriptionScreen() {
           style={{ background: 'linear-gradient(135deg, #4A5D55, #3A4A43)' }}
         >
           <div>
-            <p className="text-xs uppercase tracking-wide opacity-80">Oferta de bienvenida</p>
+            <p className="text-xs uppercase tracking-wide opacity-80">Opción 1 · Oferta de bienvenida</p>
             <p className="mt-1 text-xl font-bold">
-              Empieza por {money(promo, currency)} · {PROMO_TRIAL_DAYS} días de prueba
+              Prueba por {money(promo, currency)} · {PROMO_TRIAL_DAYS} días Premium completo
             </p>
             <p className="text-sm opacity-90">
-              Activas TODO el plan Premium. Al terminar la prueba eliges tu plan.
+              Pagas una sola vez y usas TODO Premium {PROMO_TRIAL_DAYS} días. Al terminar eliges tu plan.
+              <br />¿Prefieres elegir tu plan de una vez? Abajo puedes <strong>probarlo 14 días gratis</strong>.
             </p>
           </div>
           <Button variant="secondary" disabled={busy} onClick={startPromo}>
@@ -230,10 +232,15 @@ export default function SubscriptionScreen() {
                     className="w-full"
                     variant={plan.highlight ? 'primary' : 'secondary'}
                     disabled={busy}
-                    onClick={() => choosePlan(plan.id)}
+                    onClick={() => choosePlan(plan.id, !active)}
                   >
-                    {busy ? 'Redirigiendo…' : active ? 'Cambiar a este plan' : `Elegir ${plan.name}`}
+                    {busy ? 'Redirigiendo…' : active ? 'Cambiar a este plan' : 'Probar 14 días gratis'}
                   </Button>
+                )}
+                {!active && !isCurrent && (
+                  <p className="mt-2 text-center text-xs text-ink-faint">
+                    Gratis 14 días · luego {money(planPriceCur(plan, currency, billing), currency)}/{billing === 'annual' ? 'año' : 'mes'}. Cancela cuando quieras.
+                  </p>
                 )}
               </div>
             </Card>
@@ -272,24 +279,26 @@ export default function SubscriptionScreen() {
 
       {/* Cómo funciona */}
       <Card className="mt-6 p-6">
-        <h2 className="mb-3 font-semibold text-ink">¿Cómo funciona?</h2>
-        <ol className="space-y-3 text-sm text-ink-soft">
-          <li>
-            <strong className="text-ink">1. Empieza por {money(promo, currency)}.</strong> Activas TODO
-            el plan Premium durante {PROMO_TRIAL_DAYS} días de prueba.
-          </li>
-          <li>
-            <strong className="text-ink">2. Explora sin límites.</strong> Prueba todas las funciones
-            del panel del Estudio durante tu periodo de prueba.
-          </li>
-          <li>
-            <strong className="text-ink">3. Elige tu plan.</strong> Al terminar la prueba seleccionas
-            Inicio, Pro o Premium. Puedes cambiar de plan o cancelar cuando quieras.
-          </li>
-        </ol>
+        <h2 className="mb-3 font-semibold text-ink">Tienes dos formas de empezar</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-xl bg-cream-dark/30 p-4">
+            <p className="font-semibold text-ink">Opción 1 · Prueba por {money(promo, currency)}</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              Pagas una sola vez y usas <strong>TODO Premium</strong> durante {PROMO_TRIAL_DAYS} días.
+              Al terminar, eliges el plan que quieras conservar.
+            </p>
+          </div>
+          <div className="rounded-xl bg-cream-dark/30 p-4">
+            <p className="font-semibold text-ink">Opción 2 · Elige tu plan y pruébalo gratis</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              Eliges tu plan ahora y lo pruebas <strong>14 días gratis</strong>. Al día 15 se cobra
+              solo el plan que escogiste. Puedes cancelar antes sin costo.
+            </p>
+          </div>
+        </div>
         <p className="mt-4 text-sm text-ink-faint">
-          🔒 El cobro del plan se procesa en la página segura de Stripe; tu suscripción se activa
-          automáticamente al confirmarse el pago.
+          🔒 El cobro se procesa en la página segura de Stripe o Mercado Pago; tu suscripción se
+          activa automáticamente al confirmarse el pago.
         </p>
       </Card>
     </>
