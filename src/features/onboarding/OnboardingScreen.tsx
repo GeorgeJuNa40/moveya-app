@@ -187,6 +187,14 @@ export default function OnboardingScreen() {
             </div>
           )}
 
+          {mode === 'create' && isFounderInvite && (
+            <div className="mb-3 text-center">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-mint-soft/40 px-3 py-1 text-xs font-bold text-brand">
+                ✦ Registro Fundador · por invitación
+              </span>
+            </div>
+          )}
+
           <h1 className="text-2xl font-bold text-ink text-center">
             {mode === 'login'
               ? 'Bienvenido de nuevo'
@@ -206,7 +214,9 @@ export default function OnboardingScreen() {
               : mode === 'forgot'
                 ? 'Te enviamos un enlace a tu correo para crear una nueva contraseña.'
                 : mode === 'create'
-                  ? 'Registra tu estudio y empieza tu prueba.'
+                  ? (isFounderInvite
+                      ? 'Registra tu estudio para apartar tu lugar de Fundador.'
+                      : 'Registra tu estudio y empieza tu prueba.')
                   : isCoachInvite
                     ? 'Regístrate como coach. El estudio deberá aprobarte para que empieces.'
                     : invStudio
