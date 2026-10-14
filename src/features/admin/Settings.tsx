@@ -5,6 +5,8 @@ import ImageUpload from '../../components/ImageUpload';
 import StudioLogo from '../../components/StudioLogo';
 import InviteCard from './InviteCard';
 import InfoPageEditor from './InfoPageEditor';
+import StripeConnectCard from './StripeConnectCard';
+import MpConnectCard from './MpConnectCard';
 import { CURRENCIES } from '../../lib/countries';
 import { BRANCH_EXTRA_MXN, BRANCH_EXTRA_USD, branchAddonMxn, branchAddonUsd, branchExtraCount } from '../../lib/plans';
 import type { Branding, StudioInfoPage } from '../../lib/types';
@@ -84,6 +86,17 @@ export default function Settings() {
       <PageHeader title="Configuración" subtitle="Datos de tu negocio, fotos y personalización White-label" />
 
       <InviteCard ceuCode={s.ceuCode} />
+
+      {/* Cobros a tus alumnos: conecta tu propia cuenta de Stripe y/o Mercado Pago
+          para recibir los pagos de paquetes/membresías directo en tu banco. */}
+      <div className="mb-6">
+        <h2 className="mb-2 font-semibold text-ink">Cobros a tus alumnos (pasarela de pago)</h2>
+        <p className="mb-3 text-sm text-ink-faint">
+          Conecta tu cuenta para recibir los pagos de tus alumnos directo en tu banco. La app no toca ese dinero.
+        </p>
+        <StripeConnectCard />
+        <MpConnectCard />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Datos del negocio */}
