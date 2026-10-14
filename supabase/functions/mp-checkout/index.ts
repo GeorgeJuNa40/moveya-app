@@ -11,6 +11,8 @@ const MP_API = 'https://api.mercadopago.com';
 const PLATFORM_TOKEN = Deno.env.get('MP_ACCESS_TOKEN') ?? '';
 const APP_URL = (Deno.env.get('APP_URL') ?? '').replace(/\/$/, '');
 const FEE_PERCENT = Number(Deno.env.get('PLATFORM_FEE_PERCENT') ?? '0') || 0;
+// Promo de bienvenida (cobro único que abre 14 días Premium). En MXN.
+const PROMO_MXN = Number(Deno.env.get('MP_PROMO_MXN') ?? '20') || 20;
 
 const SAAS_MXN: Record<string, number> = {
   inicio: Number(Deno.env.get('MP_PLAN_INICIO_MXN') ?? '499') || 499,
@@ -68,7 +70,6 @@ Deno.serve(async (req) => {
     const kind = String(body.kind ?? '');
     // En sandbox el comprador debe ser usuario de prueba; MP_TEST_PAYER_EMAIL lo fuerza.
     const payerEmail = Deno.env.get('MP_TEST_PAYER_EMAIL') || me.email;
-    console.log('mp-checkout kind=', kind, 'payerEmail=', payerEmail, 'hasTestEmail=', !!Deno.env.get('MP_TEST_PAYER_EMAIL'));
 
     const studioToken = async (studioId: string): Promise<string | null> => {
       const { data } = await admin.from('mp_accounts').select('access_token, connected').eq('studio_id', studioId).maybeSingle();
@@ -131,6 +132,29 @@ Deno.serve(async (req) => {
       return json({ url: data.init_point });
     }
 
+    if (kind === 'promo') {
+      // Promo de bienvenida: cobro ÚNICO al estudio (lo cobra la plataforma).
+      // Al aprobarse, el webhook abre 14 días de acceso Premium.
+      if (me.role !== 'STUDIO_ADMIN') return json({ error: 'Solo el estudio' }, 403);
+      if (!PLATFORM_TOKEN) return json({ error: 'Falta MP_ACCESS_TOKEN de la plataforma' }, 500);
+      const ref = JSON.stringify({ kind: 'promo', studio_id: me.studio_id });
+      const { ok, data } = await mpFetch('/checkout/preferences', PLATFORM_TOKEN, {
+        items: [{ title: 'Move yA · Prueba de bienvenida (14 días Premium)', quantity: 1, unit_price: PROMO_MXN, currency_id: 'MXN' }],
+        payer: { email: payerEmail },
+        external_reference: ref,
+        notification_url: notifyUrl(),
+        back_urls: {
+          success: `${APP_URL}/?suscripcion=exito`,
+          failure: `${APP_URL}/?pago=cancelado`,
+          pending: `${APP_URL}/?pago=pendiente`,
+        },
+        auto_return: 'approved',
+        metadata: { kind: 'promo', studio_id: me.studio_id },
+      });
+      if (!ok) return json({ error: `MP: ${mpWhy(data)}`, detail: data }, 400);
+      return json({ url: data.init_point });
+    }
+
     if (kind === 'subscription') {
       if (me.role !== 'STUDIO_ADMIN') return json({ error: 'Solo el estudio' }, 403);
       if (!PLATFORM_TOKEN) return json({ error: 'Falta MP_ACCESS_TOKEN de la plataforma' }, 500);
@@ -153,20 +177,12 @@ Deno.serve(async (req) => {
         notification_url: notifyUrl(),
         status: 'pending',
       };
-      // --- DIAGNÓSTICO TEMPORAL: qué mandamos exactamente a MP ---
-      console.log('mp-sub request:', JSON.stringify({
-        payer_email: payerEmail,
-        amount: recurring.transaction_amount,
-        currency: recurring.currency_id,
-        back_url: subBody.back_url,
-        tokenPrefix: PLATFORM_TOKEN.slice(0, 8),
-      }));
       const { ok, data } = await mpFetch('/preapproval', PLATFORM_TOKEN, subBody);
       if (!ok) { console.error('mp-sub rejected:', JSON.stringify(data)); return json({ error: `MP: ${mpWhy(data)}`, detail: data }, 400); }
       return json({ url: data.init_point });
     }
 
-    return json({ error: 'kind invalido (package | membership_sub | subscription)' }, 400);
+    return json({ error: 'kind invalido (package | membership_sub | subscription | promo)' }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

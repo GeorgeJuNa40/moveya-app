@@ -283,7 +283,7 @@ export default function App() {
 
       {/* ---- ESTUDIO (Admin) — protegido por verificación de pago ---- */}
       {/* Dashboard siempre visible: aunque no haya pago, el estudio puede entrar a su panel principal. */}
-      <Route path="/admin" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate allow><AdminDashboard /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><AdminDashboard /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/members" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><MembersCRM /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/calendar" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><CalendarAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/classes" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><ClassesManagement /></SubscriptionGate></RequireRole>} />

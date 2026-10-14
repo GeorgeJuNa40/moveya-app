@@ -28,7 +28,7 @@ import type {
   WhatsappConfig,
   WhatsappTemplate,
 } from './types';
-import { getPlan, planHas, type PlanCapability } from './plans';
+import { planHas, type PlanCapability } from './plans';
 import { setActiveCurrency } from './format';
 import { notifyError, setResyncHandler } from './notify';
 import type { Session } from '@supabase/supabase-js';
@@ -170,11 +170,8 @@ interface StoreValue {
   // Datos que el bot ya conoce SOLO (paquetes, clases, horarios, dirección…) sin
   // que el estudio tenga que reescribirlos: se arman de la info ya cargada.
   studioAutoFacts: string[];
-  // Suscripción SaaS
-  activatePromo: () => void;
-  subscribeToPlan: (plan: PlanId) => void;
-  markSubscriptionPaid: () => void;
-  setSubscriptionPastDue: () => void;
+  // Suscripción SaaS — la activación/renovación la hace SOLO el webhook de pago
+  // (Stripe/MP) en el servidor. No hay activación local (pagar-primero).
   // Plan actual del estudio y control de funciones por plan.
   plan: PlanId;
   can: (cap: PlanCapability) => boolean;
@@ -1074,55 +1071,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }));
     },
 
-    // Promo de lanzamiento: paga $1 y activa 14 días de prueba con el plan Pro.
-    activatePromo() {
-      patchStudio((s) => {
-        const end = new Date();
-        end.setDate(end.getDate() + (s.subscription.trialDays || 14));
-        return {
-          ...s,
-          subscription: {
-            ...s.subscription,
-            status: 'TRIALING',
-            plan: 'pro', // durante la prueba se habilita el plan Pro completo
-            priceUsd: getPlan('pro').priceUsd,
-            isPromo: true,
-            trialEndsAt: end.toISOString(),
-            currentPeriodEnd: end.toISOString(),
-          },
-        };
-      });
-    },
-    // El estudio elige un plan y queda activo por 30 días.
-    subscribeToPlan(plan) {
-      patchStudio((s) => {
-        const end = new Date();
-        end.setDate(end.getDate() + 30);
-        return {
-          ...s,
-          subscription: {
-            ...s.subscription,
-            status: 'ACTIVE',
-            plan,
-            priceUsd: getPlan(plan).priceUsd,
-            currentPeriodEnd: end.toISOString(),
-          },
-        };
-      });
-    },
-    markSubscriptionPaid() {
-      patchStudio((s) => {
-        const end = new Date();
-        end.setDate(end.getDate() + 30);
-        return {
-          ...s,
-          subscription: { ...s.subscription, status: 'ACTIVE', currentPeriodEnd: end.toISOString() },
-        };
-      });
-    },
-    setSubscriptionPastDue() {
-      patchStudio((s) => ({ ...s, subscription: { ...s.subscription, status: 'PAST_DUE' } }));
-    },
+    // La activación de la suscripción (promo, plan, renovación) la hace SOLO el
+    // webhook de pago (Stripe/MP) en el servidor. No hay activación local.
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

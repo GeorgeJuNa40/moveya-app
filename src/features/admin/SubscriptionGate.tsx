@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useStore, isSubscriptionActive } from '../../lib/store';
-import { Card, Button } from '../../components/ui';
 
-// Verificación de pago: bloquea el panel del Estudio si la suscripción no está vigente.
-// La ruta de Suscripción queda siempre accesible para poder regularizar.
+// Verificación de pago (pagar-primero): si la suscripción del estudio NO está
+// vigente, lo mandamos directo a la pantalla de Suscripción para que pague. Así
+// no hay acceso a ninguna función hasta confirmar el pago en la pasarela.
+// La ruta de Suscripción se monta con allow=true (nunca se bloquea a sí misma).
 export default function SubscriptionGate({
   children,
   allow = false,
@@ -17,21 +18,5 @@ export default function SubscriptionGate({
 
   if (active || allow) return <>{children}</>;
 
-  return (
-    <div className="grid min-h-[60vh] place-items-center">
-      <Card className="max-w-md p-8 text-center">
-        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-amber-100 text-2xl">
-          🔒
-        </div>
-        <h2 className="text-xl font-bold text-ink">Sección bloqueada</h2>
-        <p className="mt-2 text-ink-soft">
-          Tu suscripción no está vigente. Puedes ver tu panel principal, pero para acceder a esta
-          sección elige un plan y registra tu pago.
-        </p>
-        <Link to="/admin/subscription" className="mt-6 inline-block">
-          <Button>Ir a Suscripción</Button>
-        </Link>
-      </Card>
-    </div>
-  );
+  return <Navigate to="/admin/subscription" replace />;
 }
