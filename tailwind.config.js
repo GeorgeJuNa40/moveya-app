@@ -4,7 +4,10 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Paleta "Premium Zen Tech" — valores por defecto (white-label configurable en runtime).
+        // Paleta "Premium Zen Tech". Los tokens de superficie, texto y menta se
+        // leen en runtime (white-label profundo): `rgb(var(--token)/<alpha>)`
+        // permite además opacidades (bg-cream-dark/40, text-ink/70, …). Los
+        // valores por defecto viven en src/lib/theme.ts (iguales a los de antes).
         forest: {
           DEFAULT: '#4A5D55', // Verde Salvia Profundo (Primario)
           light: '#6E837A',
@@ -12,19 +15,19 @@ export default {
         },
         // Acento menta/cian — energía y movimiento.
         mint: {
-          DEFAULT: '#88B8B7',
-          soft: '#B9D6D5',
-          dark: '#5F9695',
+          DEFAULT: 'rgb(var(--mint) / <alpha-value>)',
+          soft: 'rgb(var(--mint-soft) / <alpha-value>)',
+          dark: 'rgb(var(--mint-dark) / <alpha-value>)',
         },
         cream: {
-          light: '#FAF8F3', // fondo aún más limpio (zen)
-          DEFAULT: '#F4F1EA', // Crema (Secundario)
-          dark: '#E8E3D6',
+          light: 'rgb(var(--surface-light) / <alpha-value>)',
+          DEFAULT: 'rgb(var(--surface) / <alpha-value>)',
+          dark: 'rgb(var(--surface-dark) / <alpha-value>)',
         },
         ink: {
-          DEFAULT: '#212121', // Carbón oscuro (texto/elementos críticos)
-          soft: '#4A4A4A',
-          faint: '#8A8A8A',
+          DEFAULT: 'rgb(var(--text) / <alpha-value>)',
+          soft: 'rgb(var(--text-soft) / <alpha-value>)',
+          faint: 'rgb(var(--text-faint) / <alpha-value>)',
         },
       },
       fontFamily: {

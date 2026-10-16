@@ -232,6 +232,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   if (!currentUser || !currentStudio) return null;
+  // Con white-label (Pro/Premium) el logo de la marca se muestra en grande.
+  const bigLogo = can('whitelabel');
   // Oculta del menú las funciones que el plan del estudio no incluye.
   // Adapta las etiquetas al tipo de negocio: un gimnasio maneja "Membresías"
   // (acceso), no "Paquetes" (créditos por clase).
@@ -296,8 +298,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <div className="px-5 py-6 border-b border-cream-dark">
         <StudioLogo
           branding={currentStudio.branding}
-          imgClass="h-9 max-w-[120px]"
-          textClass="text-base font-bold text-brand"
+          imgClass={bigLogo ? 'h-16 max-w-[200px]' : 'h-9 max-w-[120px]'}
+          textClass={bigLogo ? 'text-xl font-black text-brand' : 'text-base font-bold text-brand'}
           showName
         />
         <p className="text-xs text-ink-faint mt-1.5">
@@ -365,7 +367,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
       {/* Topbar móvil (delgado): logo + avatar */}
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-cream-dark bg-cream-light/90 px-4 py-3 backdrop-blur lg:hidden">
-        <StudioLogo branding={currentStudio.branding} imgClass="h-8 max-w-[130px]" textClass="font-bold text-brand" />
+        <StudioLogo branding={currentStudio.branding} imgClass={bigLogo ? 'h-11 max-w-[170px]' : 'h-8 max-w-[130px]'} textClass={bigLogo ? 'text-lg font-black text-brand' : 'font-bold text-brand'} />
         <Avatar url={currentUser.avatarUrl} initials={currentUser.avatarInitials} className="h-8 w-8 text-xs" />
       </header>
 

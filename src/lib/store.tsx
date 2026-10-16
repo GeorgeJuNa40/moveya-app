@@ -29,6 +29,7 @@ import type {
   WhatsappTemplate,
 } from './types';
 import { planHas, type PlanCapability } from './plans';
+import { applyTheme } from './theme';
 import { setActiveCurrency } from './format';
 import { notifyError, setResyncHandler } from './notify';
 import type { Session } from '@supabase/supabase-js';
@@ -248,15 +249,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [db.studios, currentUser],
   );
 
-  // White-label: aplica el branding del estudio en vivo. Si aún no hay estudio
-  // (pantalla de registro/login), usa la paleta por defecto de Move yA.
+  // White-label: aplica el branding del estudio en vivo. El tema PROFUNDO (toda
+  // la interfaz) solo se activa si el plan incluye white-label (Pro/Premium);
+  // para los demás se usa la paleta por defecto de Move yA. Sin estudio en
+  // sesión (registro/login) también se usa la paleta por defecto.
   useEffect(() => {
-    const b = currentStudio?.branding;
-    const root = document.documentElement;
-    root.style.setProperty('--brand-primary', b?.primaryColor ?? '#2D5A4C');
-    root.style.setProperty('--brand-secondary', b?.secondaryColor ?? '#F4F1EA');
-    root.style.setProperty('--brand-accent', b?.accentColor ?? '#333333');
-    root.style.setProperty('--brand-font', `'${b?.fontFamily ?? 'Inter'}', system-ui, sans-serif`);
+    const whitelabel = currentStudio ? planHas(currentStudio.subscription.plan, 'whitelabel') : false;
+    applyTheme(currentStudio?.branding, whitelabel);
   }, [currentStudio]);
 
   // Helper: modifica el estudio actual (local) y lo guarda en Supabase.
