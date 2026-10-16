@@ -91,6 +91,8 @@ interface StoreValue {
   currentStudio: Studio | null;
   // Auth
   authLoading: boolean;
+  hasSession: boolean;        // hay sesión de Supabase activa (aunque los datos aún no carguen)
+  reloadData: () => void;     // recarga los datos del estudio desde el servidor (reconexión)
   signUp: (input: SignUpInput) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -212,6 +214,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [recoveryMode, setRecoveryMode] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
 
   // Escucha la sesión de Supabase (inicio/cierre) y la mantiene al recargar.
   useEffect(() => {
@@ -231,26 +234,56 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const currentUserId = session?.user?.id ?? null;
 
-  // Cuando hay sesión, carga los datos del estudio desde Supabase.
+  // Cuando hay sesión, carga los datos del estudio desde Supabase. Es ROBUSTO
+  // ante el token recién emitido al (re)loguear: justo después de iniciar sesión
+  // el token puede tardar un instante en propagarse y la primera carga llega
+  // vacía (el usuario aún "no aparece"). Antes eso dejaba la pantalla en blanco
+  // y había que recargar a mano; ahora reintenta un par de veces y SIEMPRE
+  // libera la pantalla de carga (nunca se queda cargando para siempre).
   useEffect(() => {
     let cancelled = false;
-    if (currentUserId) {
-      setAuthLoading(true);
-      loadDatabase()
-        .then((data) => {
-          if (!cancelled) setDb(data);
-        })
-        .finally(() => {
-          if (!cancelled) setAuthLoading(false);
-        });
-    } else {
+    if (!currentUserId) {
       setDb(emptyDatabase());
       setAuthLoading(false);
+      return;
     }
-    return () => {
-      cancelled = true;
+    setAuthLoading(true);
+    let attempts = 0;
+    const run = () => {
+      loadDatabase()
+        .then((data) => {
+          if (cancelled) return;
+          setDb(data);
+          const hasUser = data.users.some((u) => u.id === currentUserId);
+          if (!hasUser && attempts < 3) {
+            attempts += 1;
+            window.setTimeout(() => { if (!cancelled) run(); }, 500 * attempts);
+            return;
+          }
+          setAuthLoading(false);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          if (attempts < 3) {
+            attempts += 1;
+            window.setTimeout(() => { if (!cancelled) run(); }, 500 * attempts);
+            return;
+          }
+          setAuthLoading(false);
+        });
     };
-  }, [currentUserId]);
+    run();
+    return () => { cancelled = true; };
+  }, [currentUserId, reloadTick]);
+
+  // Red de seguridad: si por lo que sea la carga se atora (red lenta/caída), no
+  // dejamos la pantalla de carga indefinida — a los 12 s la liberamos para que
+  // el usuario vea el login o la pantalla de reconexión y pueda reintentar.
+  useEffect(() => {
+    if (!authLoading) return;
+    const t = window.setTimeout(() => setAuthLoading(false), 12000);
+    return () => window.clearTimeout(t);
+  }, [authLoading]);
 
   const currentUser = useMemo(
     () => db.users.find((u) => u.id === currentUserId) ?? null,
@@ -453,6 +486,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     currentUser,
     currentStudio,
     authLoading,
+    hasSession: !!currentUserId,
+    reloadData: () => setReloadTick((t) => t + 1),
     plan,
     studioAutoFacts,
     can: (cap) => planHas(plan, cap),
