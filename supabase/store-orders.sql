@@ -20,6 +20,12 @@ create table if not exists public.store_orders (
   fulfilled_at timestamptz
 );
 
+-- Fase B (pago en línea): proveedor y referencia del pago (idempotencia).
+alter table public.store_orders add column if not exists provider text;
+alter table public.store_orders add column if not exists paid_ref text;
+-- status: 'pending' (apartado) | 'awaiting_payment' (pago en línea en curso) |
+--         'fulfilled' (entregado/pagado) | 'canceled'.
+
 create index if not exists idx_store_orders_studio on public.store_orders (studio_id, status, created_at desc);
 
 alter table public.store_orders enable row level security;

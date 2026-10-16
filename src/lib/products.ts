@@ -103,25 +103,34 @@ const mapOrder = (r: any): StoreOrder => ({
   fulfilledAt: r.fulfilled_at ?? undefined,
 });
 
-// El miembro "aparta" un pedido (carrito). Lo cobra el estudio en mostrador.
+// El miembro crea un pedido (carrito). status:
+//  - 'pending' (def.): lo "aparta" y lo cobra el estudio en mostrador.
+//  - 'awaiting_payment': va a pagar en línea; el webhook lo marca 'fulfilled'.
+// Devuelve el id del pedido creado (para iniciar el pago en línea).
 export async function createStoreOrder(input: {
   studioId: string;
   userId: string;
   userName?: string;
   items: StoreOrderItem[];
   note?: string;
-}): Promise<{ ok: boolean; error?: string }> {
+  status?: 'pending' | 'awaiting_payment';
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
   const total = input.items.reduce((a, it) => a + it.unitPrice * it.qty, 0);
-  const { error } = await supabase.from('store_orders').insert({
-    studio_id: input.studioId,
-    user_id: input.userId,
-    user_name: input.userName ?? null,
-    items: input.items,
-    total,
-    note: input.note ?? null,
-  });
+  const { data, error } = await supabase
+    .from('store_orders')
+    .insert({
+      studio_id: input.studioId,
+      user_id: input.userId,
+      user_name: input.userName ?? null,
+      items: input.items,
+      total,
+      note: input.note ?? null,
+      status: input.status ?? 'pending',
+    })
+    .select('id')
+    .single();
   if (error) return { ok: false, error: error.message };
-  return { ok: true };
+  return { ok: true, id: data?.id as string | undefined };
 }
 
 export async function fetchStoreOrders(studioId: string, onlyUser?: string): Promise<StoreOrder[]> {

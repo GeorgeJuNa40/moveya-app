@@ -4,6 +4,7 @@ import { PageHeader, Card, Badge, Button } from '../../components/ui';
 import { usd } from '../../lib/format';
 import { fmtDay } from '../../lib/format';
 import { fetchProducts, fetchStoreOrders, createStoreOrder } from '../../lib/products';
+import { startCheckout, type PayProvider } from '../../lib/payments';
 import { notifySuccess, notifyError } from '../../lib/notify';
 import type { Product, StoreOrder } from '../../lib/types';
 
@@ -14,6 +15,15 @@ import type { Product, StoreOrder } from '../../lib/types';
 export default function Store() {
   const { currentStudio, currentUser } = useStore();
   const studioId = currentStudio!.id;
+  // Cómo se compra en esta tienda (lo decide el estudio).
+  const mode = currentStudio!.branding.storeCheckout ?? 'request';
+  const canRequest = mode === 'request' || mode === 'both';
+  const canOnline = mode === 'online' || mode === 'both';
+  // Proveedores de pago en línea conectados por el estudio.
+  const providers: PayProvider[] = [];
+  if (currentStudio!.stripeChargesEnabled) providers.push('stripe');
+  if (currentStudio!.mpConnected) providers.push('mercadopago');
+  const onlineAvailable = canOnline && providers.length > 0;
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,11 +90,35 @@ export default function Store() {
     void load();
   };
 
-  const statusMeta: Record<StoreOrder['status'], { label: string; tone: 'success' | 'warning' | 'neutral' }> = {
+  // Pago en línea: crea el pedido como "pendiente de pago" y redirige a la
+  // pasarela. Al confirmarse el pago, el webhook descuenta stock y lo marca
+  // entregado.
+  const payOnline = async (provider: PayProvider) => {
+    if (!items.length || sending) return;
+    setSending(true);
+    const res = await createStoreOrder({
+      studioId,
+      userId: currentUser!.id,
+      userName: currentUser!.fullName,
+      items,
+      status: 'awaiting_payment',
+    });
+    if (!res.ok || !res.id) {
+      setSending(false);
+      notifyError('pago', res.error ?? 'No se pudo iniciar el pago.');
+      return;
+    }
+    const ok = await startCheckout(provider, { kind: 'store', orderId: res.id });
+    if (!ok) setSending(false); // si falla, reactiva; si funciona, ya redirige
+  };
+
+  const statusMeta: Record<string, { label: string; tone: 'success' | 'warning' | 'neutral' }> = {
     pending: { label: 'Apartado', tone: 'warning' },
+    awaiting_payment: { label: 'Pendiente de pago', tone: 'neutral' },
     fulfilled: { label: 'Entregado', tone: 'success' },
     canceled: { label: 'Cancelado', tone: 'neutral' },
   };
+  const statusOf = (s: StoreOrder['status']) => statusMeta[s] ?? statusMeta.pending;
 
   return (
     <>
@@ -141,7 +175,7 @@ export default function Store() {
                   <p className="text-xs text-ink-faint">{fmtDay(o.createdAt)}</p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <Badge tone={statusMeta[o.status].tone}>{statusMeta[o.status].label}</Badge>
+                  <Badge tone={statusOf(o.status).tone}>{statusOf(o.status).label}</Badge>
                   <p className="mt-1 text-sm font-semibold text-brand">{usd(o.total)}</p>
                 </div>
               </Card>
@@ -153,11 +187,34 @@ export default function Store() {
       {/* Barra de carrito fija */}
       {count > 0 && (
         <div className="fixed inset-x-0 bottom-20 z-30 px-4 sm:bottom-6">
-          <div className="mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl bg-ink px-4 py-3 text-cream shadow-zen">
+          <div className="mx-auto flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-2xl bg-ink px-4 py-3 text-cream shadow-zen">
             <span className="text-sm">{count} artículo(s) · <strong>{usd(total)}</strong></span>
-            <Button variant="secondary" disabled={sending} onClick={apartar}>
-              {sending ? 'Apartando…' : 'Apartar pedido'}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {canRequest && (
+                <Button variant="secondary" disabled={sending} onClick={apartar}>
+                  {sending ? '…' : 'Apartar'}
+                </Button>
+              )}
+              {onlineAvailable && (
+                providers.length > 1 ? (
+                  <>
+                    <Button disabled={sending} onClick={() => payOnline('stripe')}>{sending ? '…' : '💳 Tarjeta'}</Button>
+                    <Button disabled={sending} onClick={() => payOnline('mercadopago')}>{sending ? '…' : 'Mercado Pago'}</Button>
+                  </>
+                ) : (
+                  <Button disabled={sending} onClick={() => payOnline(providers[0])}>
+                    {sending ? 'Redirigiendo…' : 'Pagar en línea'}
+                  </Button>
+                )
+              )}
+              {/* Si el estudio solo acepta en línea pero no ha conectado pasarela,
+                  dejamos apartar como respaldo para no bloquear la compra. */}
+              {!canRequest && !onlineAvailable && (
+                <Button variant="secondary" disabled={sending} onClick={apartar}>
+                  {sending ? '…' : 'Apartar'}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}
