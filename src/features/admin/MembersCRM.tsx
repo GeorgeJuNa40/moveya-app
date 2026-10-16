@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button, StatCard } from '../../components/ui';
 import Avatar from '../../components/Avatar';
-import { fmtDay, fmtTime, usd } from '../../lib/format';
+import { fmtDay, fmtTime, fmtDate, usd } from '../../lib/format';
 import type { MembershipState, Payment, PaymentMethod, User } from '../../lib/types';
 
 const STATE_META: Record<MembershipState, { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral' }> = {
@@ -406,9 +406,10 @@ export default function MembersCRM() {
           initial={payFor}
           students={students}
           packages={packages}
+          membership={membership}
           onClose={() => setPayFor(null)}
-          onSubmit={(userId, packageId, method) => {
-            registerManualPlan(userId, packageId, method);
+          onSubmit={(userId, packageId, method, opts) => {
+            registerManualPlan(userId, packageId, method, opts);
             setPayFor(null);
           }}
         />
@@ -420,9 +421,14 @@ export default function MembersCRM() {
           packages={packages}
           branches={branches}
           onClose={() => setAdding(false)}
-          onSubmit={async ({ fullName, phone, email, birthDate, branchId, packageId, method }) => {
+          onSubmit={async ({ fullName, phone, email, birthDate, branchId, packageId, method, noCharge, expiresAt }) => {
             const id = await addMember({ fullName, phone, email, birthDate, branchId });
-            if (id && packageId) registerManualPlan(id, packageId, method);
+            if (id && packageId) {
+              registerManualPlan(id, packageId, method, {
+                recordPayment: !noCharge,
+                expiresAt: noCharge && expiresAt ? expiresAt : undefined,
+              });
+            }
             setAdding(false);
           }}
         />
@@ -442,25 +448,33 @@ function Modal({ children, onClose }: { children: React.ReactNode; onClose: () =
 }
 
 function RegisterPaymentModal({
-  initial, students, packages, onClose, onSubmit,
+  initial, students, packages, membership, onClose, onSubmit,
 }: {
   initial: User;
   students: User[];
   packages: { id: string; name: string; priceUsd: number }[];
+  membership: (userId: string) => { state: MembershipState; planName: string | null; expiresAt: string | null };
   onClose: () => void;
-  onSubmit: (userId: string, packageId: string, method: PaymentMethod) => void;
+  onSubmit: (userId: string, packageId: string, method: PaymentMethod, opts?: { expiresAt?: string; recordPayment?: boolean }) => void;
 }) {
   const [userId, setUserId] = useState(initial.id);
   const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
   const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [noCharge, setNoCharge] = useState(false); // "ya tiene su plan / pagó aparte"
+  const [expiresAt, setExpiresAt] = useState(''); // vencimiento real (opcional)
   const pkg = packages.find((p) => p.id === packageId);
+
+  // Membresía actual del alumno seleccionado: para avisar que se renueva/reemplaza
+  // (no se duplica).
+  const m = membership(userId);
+  const hasActive = m.state === 'active' || m.state === 'expiring';
 
   return (
     <Modal onClose={onClose}>
-      <h2 className="text-lg font-bold text-ink mb-1">Registrar pago</h2>
+      <h2 className="text-lg font-bold text-ink mb-1">Registrar pago / membresía</h2>
       <p className="text-sm text-ink-faint mb-4">
-        Asigna un plan al alumno y registra cómo pagó (efectivo, tarjeta o transferencia en el estudio).
-        Los pagos con tarjeta en línea se registran solos.
+        Asigna un plan al alumno y registra cómo pagó. Si ya tiene una membresía activa,
+        <strong> se renueva o reemplaza</strong> (nunca se duplica).
       </p>
       <div className="space-y-4">
         <Field label="Alumno">
@@ -468,30 +482,70 @@ function RegisterPaymentModal({
             {students.map((s) => <option key={s.id} value={s.id}>{s.fullName}</option>)}
           </select>
         </Field>
+
+        {hasActive && (
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
+            Ya tiene <strong>{m.planName}</strong> activo
+            {m.expiresAt ? <> hasta el <strong>{fmtDate(m.expiresAt)}</strong></> : ''}. Al registrar,
+            su membresía se <strong>actualiza</strong> (no se agrega otra).
+          </div>
+        )}
+
         <Field label="Plan / paquete">
           <select className="input" value={packageId} onChange={(e) => setPackageId(e.target.value)}>
             {packages.map((p) => <option key={p.id} value={p.id}>{p.name} — {usd(p.priceUsd)}</option>)}
           </select>
         </Field>
-        <Field label="Forma de pago">
-          <div className="flex flex-wrap gap-2">
-            {(['cash', 'card', 'transfer', 'paypal'] as PaymentMethod[]).map((mth) => (
-              <button
-                key={mth}
-                onClick={() => setMethod(mth)}
-                className={`rounded-full px-3 py-1.5 text-sm border transition ${method === mth ? 'bg-brand text-cream border-brand' : 'bg-white text-ink-soft border-cream-dark'}`}
-              >
-                {METHOD_LABEL[mth]}
-              </button>
-            ))}
-          </div>
-        </Field>
+
+        <button
+          type="button"
+          onClick={() => setNoCharge((v) => !v)}
+          className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${noCharge ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'}`}
+        >
+          <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${noCharge ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
+            {noCharge ? '✓' : ''}
+          </span>
+          <span>
+            <span className="block text-sm font-semibold text-ink">Solo registrar su membresía actual (sin cobro)</span>
+            <span className="block text-xs text-ink-faint">Úsalo para dar de alta el plan que el alumno YA tiene (pagó aparte). No registra un pago.</span>
+          </span>
+        </button>
+
+        {noCharge && (
+          <Field label="Vence el (fecha real de su membresía)">
+            <input type="date" className="input" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+          </Field>
+        )}
+
+        {!noCharge && (
+          <Field label="Forma de pago">
+            <div className="flex flex-wrap gap-2">
+              {(['cash', 'card', 'transfer', 'paypal'] as PaymentMethod[]).map((mth) => (
+                <button
+                  key={mth}
+                  onClick={() => setMethod(mth)}
+                  className={`rounded-full px-3 py-1.5 text-sm border transition ${method === mth ? 'bg-brand text-cream border-brand' : 'bg-white text-ink-soft border-cream-dark'}`}
+                >
+                  {METHOD_LABEL[mth]}
+                </button>
+              ))}
+            </div>
+          </Field>
+        )}
       </div>
       <div className="mt-6 flex items-center justify-between">
-        <span className="text-lg font-bold text-brand">{pkg ? usd(pkg.priceUsd) : ''}</span>
+        <span className="text-lg font-bold text-brand">{noCharge ? '' : pkg ? usd(pkg.priceUsd) : ''}</span>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button disabled={!packageId} onClick={() => onSubmit(userId, packageId, method)}>Registrar y asignar plan</Button>
+          <Button
+            disabled={!packageId}
+            onClick={() => onSubmit(userId, packageId, method, {
+              recordPayment: !noCharge,
+              expiresAt: noCharge && expiresAt ? expiresAt : undefined,
+            })}
+          >
+            {noCharge ? 'Registrar membresía' : 'Registrar y asignar plan'}
+          </Button>
         </div>
       </div>
       <style>{`.input{width:100%;border:1px solid #E8E3D6;border-radius:.75rem;padding:.6rem .8rem;background:#fff;outline:none}.input:focus{box-shadow:0 0 0 2px var(--brand-primary)}`}</style>
@@ -507,7 +561,7 @@ function AddMemberModal({
   onClose: () => void;
   onSubmit: (data: {
     fullName: string; phone: string; email: string; birthDate: string; branchId?: string;
-    packageId: string; method: PaymentMethod;
+    packageId: string; method: PaymentMethod; noCharge: boolean; expiresAt: string;
   }) => void;
 }) {
   const [fullName, setFullName] = useState('');
@@ -518,6 +572,8 @@ function AddMemberModal({
   const [assignPlan, setAssignPlan] = useState(false);
   const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
   const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [noCharge, setNoCharge] = useState(false);
+  const [expiresAt, setExpiresAt] = useState('');
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
@@ -527,7 +583,7 @@ function AddMemberModal({
       fullName, phone, email, birthDate,
       branchId: branchId || undefined,
       packageId: assignPlan ? packageId : '',
-      method,
+      method, noCharge, expiresAt,
     });
   };
 
@@ -580,26 +636,47 @@ function AddMemberModal({
                 {packages.map((p) => <option key={p.id} value={p.id}>{p.name} — {usd(p.priceUsd)}</option>)}
               </select>
             </Field>
-            <Field label="Forma de pago">
-              <div className="flex flex-wrap gap-2">
-                {(['cash', 'card', 'transfer', 'paypal'] as PaymentMethod[]).map((mth) => (
-                  <button
-                    key={mth}
-                    onClick={() => setMethod(mth)}
-                    className={`rounded-full px-3 py-1.5 text-sm border transition ${method === mth ? 'bg-brand text-cream border-brand' : 'bg-white text-ink-soft border-cream-dark'}`}
-                  >
-                    {METHOD_LABEL[mth]}
-                  </button>
-                ))}
-              </div>
-            </Field>
+
+            <button
+              type="button"
+              onClick={() => setNoCharge((v) => !v)}
+              className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${noCharge ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'}`}
+            >
+              <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${noCharge ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
+                {noCharge ? '✓' : ''}
+              </span>
+              <span>
+                <span className="block text-sm font-semibold text-ink">Ya tiene este plan (sin cobro)</span>
+                <span className="block text-xs text-ink-faint">Da de alta su membresía actual con su vencimiento real, sin registrar un pago.</span>
+              </span>
+            </button>
+
+            {noCharge ? (
+              <Field label="Vence el (fecha real de su membresía)">
+                <input type="date" className="input" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+              </Field>
+            ) : (
+              <Field label="Forma de pago">
+                <div className="flex flex-wrap gap-2">
+                  {(['cash', 'card', 'transfer', 'paypal'] as PaymentMethod[]).map((mth) => (
+                    <button
+                      key={mth}
+                      onClick={() => setMethod(mth)}
+                      className={`rounded-full px-3 py-1.5 text-sm border transition ${method === mth ? 'bg-brand text-cream border-brand' : 'bg-white text-ink-soft border-cream-dark'}`}
+                    >
+                      {METHOD_LABEL[mth]}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+            )}
           </>
         )}
       </div>
       <div className="mt-6 flex justify-end gap-2">
         <Button variant="ghost" onClick={onClose}>Cancelar</Button>
         <Button disabled={!fullName.trim() || saving || (assignPlan && !packageId)} onClick={submit}>
-          {saving ? 'Guardando…' : assignPlan ? 'Crear y registrar pago' : 'Crear miembro'}
+          {saving ? 'Guardando…' : !assignPlan ? 'Crear miembro' : noCharge ? 'Crear y registrar membresía' : 'Crear y registrar pago'}
         </Button>
       </div>
       <style>{`.input{width:100%;border:1px solid #E8E3D6;border-radius:.75rem;padding:.6rem .8rem;background:#fff;outline:none}.input:focus{box-shadow:0 0 0 2px var(--brand-primary)}`}</style>
