@@ -12,11 +12,11 @@ const METHOD_LABEL: Record<string, string> = {
 };
 
 type Draft = {
-  id?: string; name: string; description: string; priceUsd: number;
-  stock: number; lowStock: number; photoUrl?: string; active: boolean;
+  id?: string; name: string; description: string; kind: 'physical' | 'affiliate'; url: string;
+  priceUsd: number; stock: number; lowStock: number; photoUrl?: string; active: boolean;
 };
 
-const emptyDraft = (): Draft => ({ name: '', description: '', priceUsd: 0, stock: 0, lowStock: 3, active: true });
+const emptyDraft = (): Draft => ({ name: '', description: '', kind: 'physical', url: '', priceUsd: 0, stock: 0, lowStock: 3, active: true });
 
 // Punto de venta (POS) + inventario · Fase 1.
 export default function StoreAdmin() {
@@ -75,7 +75,7 @@ export default function StoreAdmin() {
     load();
   };
 
-  const lowStock = useMemo(() => products.filter((p) => p.active && p.stock <= p.lowStock), [products]);
+  const lowStock = useMemo(() => products.filter((p) => p.kind !== 'affiliate' && p.active && p.stock <= p.lowStock), [products]);
   const todayIncome = useMemo(() => {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     return sales.filter((s) => new Date(s.soldAt) >= start).reduce((a, s) => a + s.total, 0);
@@ -180,14 +180,22 @@ export default function StoreAdmin() {
                     {!p.active && <Badge tone="neutral">Inactivo</Badge>}
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-lg font-black text-ink">{usd(p.priceUsd)}</span>
-                    <Badge tone={low ? 'warning' : 'success'}>{p.stock} en stock</Badge>
+                    <span className="text-lg font-black text-ink">{p.priceUsd > 0 ? usd(p.priceUsd) : '—'}</span>
+                    {p.kind === 'affiliate'
+                      ? <Badge tone="brand">🔗 Afiliado</Badge>
+                      : <Badge tone={low ? 'warning' : 'success'}>{p.stock} en stock</Badge>}
                   </div>
                   <div className="flex gap-2 pt-1">
-                    <Button className="flex-1" disabled={p.stock < 1 || !p.active} onClick={() => setSellFor(p)}>Vender</Button>
+                    {p.kind === 'affiliate' ? (
+                      <a href={p.url || '#'} target="_blank" rel="noreferrer" className="flex-1">
+                        <Button className="w-full" disabled={!p.url}>Abrir enlace</Button>
+                      </a>
+                    ) : (
+                      <Button className="flex-1" disabled={p.stock < 1 || !p.active} onClick={() => setSellFor(p)}>Vender</Button>
+                    )}
                     <Button variant="secondary" onClick={() => setDraft({
-                      id: p.id, name: p.name, description: p.description ?? '', priceUsd: p.priceUsd,
-                      stock: p.stock, lowStock: p.lowStock, photoUrl: p.photoUrl, active: p.active,
+                      id: p.id, name: p.name, description: p.description ?? '', kind: p.kind, url: p.url ?? '',
+                      priceUsd: p.priceUsd, stock: p.stock, lowStock: p.lowStock, photoUrl: p.photoUrl, active: p.active,
                     })}>Editar</Button>
                   </div>
                 </div>
@@ -287,13 +295,44 @@ function ProductModal({
           <ImageUpload label="Subir foto" onSelect={(url) => setDraft({ ...draft, photoUrl: url })} />
           {draft.photoUrl && <button type="button" onClick={() => setDraft({ ...draft, photoUrl: undefined })} className="text-sm text-red-600">Quitar</button>}
         </div>
+        <div>
+          <span className="mb-1 block text-sm font-medium text-ink-soft">Tipo</span>
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { v: 'physical', t: 'Producto físico', d: 'Con stock, se vende/aparta' },
+              { v: 'affiliate', t: 'Enlace de afiliado', d: 'Abre un link externo' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => setDraft({ ...draft, kind: opt.v })}
+                className={`rounded-xl border px-2 py-2.5 text-center transition ${draft.kind === opt.v ? 'border-brand bg-brand-soft text-brand' : 'border-cream-dark bg-white text-ink-soft'}`}
+              >
+                <span className="block text-sm font-semibold">{opt.t}</span>
+                <span className="block text-[11px] leading-tight text-ink-faint">{opt.d}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <Field label="Nombre"><input className="input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
         <Field label="Descripción (opcional)"><input className="input" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></Field>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Precio"><input type="number" min="0" step="0.01" className="input" value={draft.priceUsd} onChange={(e) => setDraft({ ...draft, priceUsd: Math.max(0, Number(e.target.value) || 0) })} /></Field>
-          <Field label="Stock"><input type="number" min="0" step="1" className="input" value={draft.stock} onChange={(e) => setDraft({ ...draft, stock: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></Field>
-          <Field label="Alerta ≤"><input type="number" min="0" step="1" className="input" value={draft.lowStock} onChange={(e) => setDraft({ ...draft, lowStock: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></Field>
-        </div>
+
+        {draft.kind === 'affiliate' ? (
+          <>
+            <Field label="Enlace (URL de afiliado)">
+              <input className="input" type="url" value={draft.url} onChange={(e) => setDraft({ ...draft, url: e.target.value })} placeholder="https://..." />
+            </Field>
+            <Field label="Precio (opcional, solo informativo)">
+              <input type="number" min="0" step="0.01" className="input" value={draft.priceUsd} onChange={(e) => setDraft({ ...draft, priceUsd: Math.max(0, Number(e.target.value) || 0) })} />
+            </Field>
+          </>
+        ) : (
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Precio"><input type="number" min="0" step="0.01" className="input" value={draft.priceUsd} onChange={(e) => setDraft({ ...draft, priceUsd: Math.max(0, Number(e.target.value) || 0) })} /></Field>
+            <Field label="Stock"><input type="number" min="0" step="1" className="input" value={draft.stock} onChange={(e) => setDraft({ ...draft, stock: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></Field>
+            <Field label="Alerta ≤"><input type="number" min="0" step="1" className="input" value={draft.lowStock} onChange={(e) => setDraft({ ...draft, lowStock: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} /></Field>
+          </div>
+        )}
         <label className="flex items-center gap-2 text-sm text-ink-soft">
           <input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} />
           Producto activo (disponible para vender)

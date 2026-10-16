@@ -135,6 +135,7 @@ export default function Store() {
           {products.map((p) => {
             const qty = cart[p.id] ?? 0;
             const left = inStock(p);
+            const isAffiliate = p.kind === 'affiliate';
             return (
               <Card key={p.id} className="flex flex-col p-5">
                 {p.photoUrl && (
@@ -142,11 +143,15 @@ export default function Store() {
                 )}
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-semibold text-ink">{p.name}</h3>
-                  {p.stock <= 0 && <Badge tone="neutral">Agotado</Badge>}
+                  {isAffiliate ? <Badge tone="brand">🔗</Badge> : p.stock <= 0 && <Badge tone="neutral">Agotado</Badge>}
                 </div>
                 {p.description && <p className="mt-1 flex-1 text-sm text-ink-faint">{p.description}</p>}
-                <p className="mt-3 text-2xl font-black text-brand">{usd(p.priceUsd)}</p>
-                {qty === 0 ? (
+                {p.priceUsd > 0 && <p className="mt-3 text-2xl font-black text-brand">{usd(p.priceUsd)}</p>}
+                {isAffiliate ? (
+                  <a href={p.url || '#'} target="_blank" rel="noreferrer" className="mt-3">
+                    <Button className="w-full" disabled={!p.url}>Ver / Comprar →</Button>
+                  </a>
+                ) : qty === 0 ? (
                   <Button className="mt-3" disabled={p.stock <= 0} onClick={() => add(p)}>
                     {p.stock <= 0 ? 'Agotado' : 'Agregar'}
                   </Button>

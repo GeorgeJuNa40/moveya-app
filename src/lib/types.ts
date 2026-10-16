@@ -153,12 +153,19 @@ export interface CoachProfile {
   yearsExp: number;
 }
 
-// Producto físico del punto de venta (POS/tienda). Fase 1: catálogo + stock.
+// Producto del punto de venta (POS/tienda).
+//  - 'physical' (def.): producto físico con stock, se vende/aparta/paga.
+//  - 'affiliate': enlace de afiliado (e-commerce, sin inventario); abre una URL
+//    externa. No usa stock, carrito ni cobro dentro de la app.
+export type ProductKind = 'physical' | 'affiliate';
+
 export interface Product {
   id: string;
   studioId: string;
   name: string;
   description?: string;
+  kind: ProductKind; // 'physical' (def.) o 'affiliate'
+  url?: string; // solo 'affiliate': enlace externo al que se redirige
   priceUsd: number;
   stock: number;
   lowStock: number; // umbral de alerta de stock bajo

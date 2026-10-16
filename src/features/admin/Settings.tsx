@@ -8,6 +8,8 @@ import InfoPageEditor from './InfoPageEditor';
 import StripeConnectCard from './StripeConnectCard';
 import MpConnectCard from './MpConnectCard';
 import { CURRENCIES } from '../../lib/countries';
+import { broadcastAnnouncement, fetchAnnouncements, type Announcement } from '../../lib/announcements';
+import { notifySuccess } from '../../lib/notify';
 import { BRANCH_EXTRA_MXN, BRANCH_EXTRA_USD, branchAddonMxn, branchAddonUsd, branchExtraCount } from '../../lib/plans';
 import type { Branding, StudioInfoPage } from '../../lib/types';
 
@@ -90,6 +92,9 @@ export default function Settings() {
       <PageHeader title="Configuración" subtitle="Personaliza tu negocio y tu app" />
 
       <div className="mx-auto max-w-3xl space-y-6">
+        {/* Avisos a tus alumnos (notificación masiva push) */}
+        <BroadcastCard />
+
         {/* 1 · Datos del negocio (el tipo de negocio se eligió al registrarse) */}
         <Card className="p-6 space-y-4">
           <h2 className="font-semibold text-ink">1 · Datos del negocio</h2>
@@ -420,6 +425,73 @@ export default function Settings() {
 
       <style>{`.input{width:100%;border:1px solid #E8E3D6;border-radius:.75rem;padding:.6rem .8rem;background:#fff;outline:none}.input:focus{box-shadow:0 0 0 2px var(--brand-primary)}`}</style>
     </>
+  );
+}
+
+// Avisos a los alumnos: el estudio escribe un mensaje relevante (clima, cierre,
+// promoción…) y lo envía por notificación push a TODOS sus alumnos de un clic.
+function BroadcastCard() {
+  const { currentStudio } = useStore();
+  const studioId = currentStudio!.id;
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [sending, setSending] = useState(false);
+  const [history, setHistory] = useState<Announcement[]>([]);
+
+  const load = () => { void fetchAnnouncements(studioId).then(setHistory); };
+  useEffect(load, [studioId]);
+
+  const send = async () => {
+    if (!title.trim() || !body.trim() || sending) return;
+    if (!window.confirm('¿Enviar este aviso a TODOS tus alumnos?')) return;
+    setSending(true);
+    const res = await broadcastAnnouncement(title.trim(), body.trim());
+    setSending(false);
+    if (res.ok) {
+      notifySuccess(`Aviso enviado a ${res.recipients ?? 0} alumno(s) con notificaciones activas.`);
+      setTitle(''); setBody(''); load();
+    }
+  };
+
+  return (
+    <Card className="p-6 space-y-4">
+      <div>
+        <h2 className="font-semibold text-ink">📣 Avisos a tus alumnos</h2>
+        <p className="mt-1 text-sm text-ink-faint">
+          Manda un aviso importante (clase cancelada por clima, cierre temprano, promoción…) por
+          notificación a <strong>todos tus alumnos</strong> de un clic. Les llega a quienes tengan las
+          notificaciones activadas.
+        </p>
+      </div>
+      <Field label="Título">
+        <input className="input" value={title} maxLength={60} onChange={(e) => setTitle(e.target.value)} placeholder="Ej. Hoy cerramos a las 6 pm" />
+      </Field>
+      <Field label="Mensaje">
+        <textarea className="input" rows={3} value={body} maxLength={300} onChange={(e) => setBody(e.target.value)} placeholder="Ej. Por el clima, la clase de las 7 pm se cancela. ¡Nos vemos mañana!" />
+      </Field>
+      <div className="flex justify-end">
+        <Button disabled={!title.trim() || !body.trim() || sending} onClick={send}>
+          {sending ? 'Enviando…' : 'Enviar a todos'}
+        </Button>
+      </div>
+
+      {history.length > 0 && (
+        <div className="border-t border-cream-dark pt-4">
+          <p className="mb-2 text-sm font-medium text-ink-soft">Enviados recientemente</p>
+          <div className="space-y-2">
+            {history.slice(0, 5).map((a) => (
+              <div key={a.id} className="rounded-xl bg-cream-dark/40 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-ink">{a.title}</p>
+                  <span className="shrink-0 text-xs text-ink-faint">{new Date(a.createdAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })} · {a.recipients} enviados</span>
+                </div>
+                <p className="text-xs text-ink-soft">{a.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 
