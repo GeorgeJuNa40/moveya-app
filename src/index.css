@@ -22,6 +22,8 @@
   --mint: 136 184 183; /* #88B8B7 */
   --mint-soft: 185 214 213; /* #B9D6D5 */
   --mint-dark: 95 150 149; /* #5F9695 */
+  --card: 255 255 255; /* tarjetas/inputs/paneles (blanco por defecto) */
+  --card-border: 232 227 214; /* borde de tarjetas/inputs (#E8E3D6) */
 }
 
 html,
@@ -33,9 +35,25 @@ body,
 body {
   margin: 0;
   font-family: var(--brand-font);
-  background-color: var(--brand-secondary);
-  color: var(--brand-accent);
+  background-color: rgb(var(--surface-light));
+  color: rgb(var(--text));
   -webkit-font-smoothing: antialiased;
+}
+
+/* Inputs temáticos: fondo/texto/borde siguen el white-label. La mayor
+   especificidad (:root .input) gana sobre los estilos .input incrustados en
+   cada pantalla (que fijaban fondo blanco), así se tiñen sin tocar cada archivo. */
+:root .input,
+:root .inp,
+:root .ginp {
+  background-color: rgb(var(--card));
+  color: rgb(var(--text));
+  border-color: rgb(var(--card-border));
+}
+:root .input::placeholder,
+:root .inp::placeholder,
+:root .ginp::placeholder {
+  color: rgb(var(--text-faint));
 }
 
 /* Utilidades que leen los tokens de branding en vivo (white-label) */

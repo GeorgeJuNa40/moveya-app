@@ -361,7 +361,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-cream-light">
       {/* Sidebar escritorio */}
-      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-white border-r border-cream-dark lg:block">
+      <aside className="fixed inset-y-0 left-0 hidden w-64 bg-card border-r border-cream-dark lg:block">
         {SidebarContent}
       </aside>
 
@@ -375,7 +375,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85%] bg-white">{SidebarContent}</aside>
+          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85%] bg-card">{SidebarContent}</aside>
         </div>
       )}
 
@@ -384,7 +384,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </main>
 
       {/* Barra inferior de navegación (móvil) */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-cream-dark bg-white/95 px-1 shadow-nav backdrop-blur lg:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 flex items-stretch justify-around border-t border-cream-dark bg-card/95 px-1 shadow-nav backdrop-blur lg:hidden">
         {primary.map((item) => (
           <NavLink
             key={item.to}
@@ -422,7 +422,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           </button>
         )}
         {/* respeta el "safe area" de iPhone */}
-        <div className="pointer-events-none absolute inset-x-0 top-full h-[env(safe-area-inset-bottom)] bg-white/95" />
+        <div className="pointer-events-none absolute inset-x-0 top-full h-[env(safe-area-inset-bottom)] bg-card/95" />
       </nav>
 
       {/* Aviso automático para activar notificaciones (una sola vez). */}
