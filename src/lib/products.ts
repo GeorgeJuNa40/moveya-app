@@ -13,6 +13,8 @@ const mapProduct = (r: any): Product => ({
   studioId: r.studio_id,
   name: r.name,
   description: r.description ?? '',
+  kind: (r.kind ?? 'physical') as Product['kind'],
+  url: r.url ?? undefined,
   priceUsd: Number(r.price_usd ?? 0),
   stock: Number(r.stock ?? 0),
   lowStock: Number(r.low_stock ?? 3),
@@ -62,6 +64,8 @@ export async function saveProduct(p: {
   studioId: string;
   name: string;
   description?: string;
+  kind?: 'physical' | 'affiliate';
+  url?: string;
   priceUsd: number;
   stock: number;
   lowStock: number;
@@ -72,6 +76,8 @@ export async function saveProduct(p: {
     studio_id: p.studioId,
     name: p.name,
     description: p.description ?? '',
+    kind: p.kind ?? 'physical',
+    url: p.url ?? null,
     price_usd: p.priceUsd,
     stock: p.stock,
     low_stock: p.lowStock,

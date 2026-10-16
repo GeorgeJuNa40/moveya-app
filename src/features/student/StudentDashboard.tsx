@@ -1,8 +1,9 @@
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore, isUsablePackage, isQueuedPackage } from '../../lib/store';
 import { Card, Button, Badge } from '../../components/ui';
 import { fmtDay, fmtTime, fmtDate, daysUntil, usd } from '../../lib/format';
+import { fetchLatestAnnouncement, type Announcement } from '../../lib/announcements';
 
 // Anillo de progreso circular (estilo "Weekly Goal"). El color del arco usa la
 // marca del estudio (white-label); la pista es crema.
@@ -78,6 +79,23 @@ export default function StudentDashboard() {
   );
   const hasAnyPlan = db.userPackages.some((p) => p.userId === uid && isUsablePackage(p));
 
+  // Aviso más reciente del estudio (se puede ocultar; se recuerda por id).
+  const [aviso, setAviso] = useState<Announcement | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchLatestAnnouncement(currentStudio!.id).then((a) => {
+      if (!alive || !a) return;
+      let dismissed = '';
+      try { dismissed = localStorage.getItem('aviso-visto') ?? ''; } catch { /* sin storage */ }
+      if (dismissed !== a.id) setAviso(a);
+    });
+    return () => { alive = false; };
+  }, [currentStudio]);
+  const dismissAviso = () => {
+    if (aviso) { try { localStorage.setItem('aviso-visto', aviso.id); } catch { /* sin storage */ } }
+    setAviso(null);
+  };
+
   const creditsLeft = availableCredits(uid);
   const stars = starBalance(uid);
   const firstName = currentUser!.fullName.split(' ')[0];
@@ -101,6 +119,19 @@ export default function StudentDashboard() {
         <p className="text-sm text-ink-faint">Hola de nuevo ✦</p>
         <h1 className="text-3xl font-black tracking-tight text-ink">{firstName}</h1>
       </div>
+
+      {/* Aviso del estudio */}
+      {aviso && (
+        <Card className="border-brand/30 bg-brand-soft p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold text-ink">📣 {aviso.title}</p>
+              <p className="mt-1 whitespace-pre-line text-sm text-ink-soft">{aviso.body}</p>
+            </div>
+            <button onClick={dismissAviso} aria-label="Ocultar aviso" className="shrink-0 text-ink-faint hover:text-ink">✕</button>
+          </div>
+        </Card>
+      )}
 
       {/* Hero: anillo de progreso + próxima clase */}
       <Card className="relative overflow-hidden p-6">
