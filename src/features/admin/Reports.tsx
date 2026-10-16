@@ -1,8 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../lib/store';
-import { PageHeader, Card, StatCard } from '../../components/ui';
+import { PageHeader, Card, StatCard, Button } from '../../components/ui';
 import { usd } from '../../lib/format';
-import type { MembershipState, PaymentMethod } from '../../lib/types';
+import { fetchExpenses, saveExpense, deleteExpense } from '../../lib/finance';
+import { fetchSales } from '../../lib/products';
+import { notifySuccess } from '../../lib/notify';
+import type { MembershipState, PaymentMethod, Expense, ProductSale } from '../../lib/types';
 
 const METHOD_LABEL: Record<PaymentMethod, string> = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', paypal: 'PayPal' };
 const STATE_LABEL: Record<MembershipState, string> = { active: 'Activas', expiring: 'Por vencer', expired: 'Vencidas', none: 'Sin plan' };
@@ -39,6 +42,123 @@ export default function Reports() {
   // Por defecto arrancamos en el mes actual (día a día); se puede ver el historial.
   const [periodKey, setPeriodKey] = useState<string>(periods[1]?.key ?? 'all');
   const period = periods.find((p) => p.key === periodKey) ?? periods[0];
+
+  // Egresos (gastos) y ventas de tienda — para el reporte de entradas y salidas.
+  const studioId = currentStudio!.id;
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [sales, setSales] = useState<ProductSale[]>([]);
+  const [downloading, setDownloading] = useState(false);
+  const reloadFinance = () => {
+    void fetchExpenses(studioId).then(setExpenses);
+    void fetchSales(studioId).then(setSales);
+  };
+  useEffect(reloadFinance, [studioId]);
+
+  const inPeriod = (iso?: string | null) => {
+    if (period.key === 'all') return true;
+    if (!iso) return false;
+    const t = new Date(iso).getTime();
+    return t >= period.start && t < period.end;
+  };
+
+  // Entradas (pagos + ventas de tienda) y salidas (egresos) del periodo.
+  const finance = useMemo(() => {
+    const paysIn = db.payments.filter((p) => inPeriod(p.paidAt));
+    const salesIn = sales.filter((s) => inPeriod(s.soldAt));
+    const expIn = expenses.filter((e) => inPeriod(e.spentAt));
+    const entradasPagos = paysIn.reduce((a, p) => a + p.amountUsd, 0);
+    const entradasVentas = salesIn.reduce((a, s) => a + s.total, 0);
+    const entradas = entradasPagos + entradasVentas;
+    const salidas = expIn.reduce((a, e) => a + e.amountUsd, 0);
+    return { paysIn, salesIn, expIn, entradasPagos, entradasVentas, entradas, salidas, saldo: entradas - salidas };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db.payments, sales, expenses, period]);
+
+  // Alta de egreso (gasto).
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const [expForm, setExpForm] = useState({ concept: '', amount: '', category: '', date: todayStr() });
+  const addExp = async () => {
+    const amount = Math.max(0, Number(expForm.amount) || 0);
+    if (!expForm.concept.trim() || amount <= 0) return;
+    const res = await saveExpense({
+      studioId, concept: expForm.concept.trim(),
+      category: expForm.category.trim() || undefined,
+      amountUsd: amount, spentAt: new Date(expForm.date).toISOString(),
+    });
+    if (res.ok) {
+      notifySuccess('Egreso registrado.');
+      setExpForm({ concept: '', amount: '', category: '', date: todayStr() });
+      reloadFinance();
+    }
+  };
+  const delExp = async (id: string) => { if (await deleteExpense(id)) reloadFinance(); };
+
+  // Genera un PDF contable de ENTRADAS y SALIDAS del periodo (letra >= 14pt).
+  const downloadPdf = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const PW = doc.internal.pageSize.getWidth();
+      const RIGHT = PW - 15;
+      const SAGE: [number, number, number] = [74, 93, 85];
+      const INK: [number, number, number] = [33, 33, 33];
+      const fmtd = (iso: string) => new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+      let y = 20;
+      const nl = (h = 7) => { y += h; if (y > 278) { doc.addPage(); y = 20; } };
+
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.setTextColor(...SAGE);
+      doc.text(currentStudio!.name, 15, y); nl(9);
+      doc.setFontSize(16); doc.setTextColor(...INK);
+      doc.text('Reporte de movimientos', 15, y); nl(7);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(14); doc.setTextColor(110, 122, 115);
+      doc.text(`Periodo: ${period.key === 'all' ? 'Todo el tiempo' : period.label}`, 15, y); nl(6);
+      doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}`, 15, y); nl(10);
+
+      const section = (title: string) => {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(...SAGE);
+        doc.text(title, 15, y); nl(8);
+      };
+      const row = (a: string, b: string, c: string, bold = false) => {
+        doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(14);
+        doc.setTextColor(...(bold ? SAGE : INK));
+        doc.text(a, 15, y);
+        doc.text(b.length > 48 ? b.slice(0, 47) + '…' : b, 45, y);
+        doc.text(c, RIGHT, y, { align: 'right' });
+        nl(7);
+      };
+
+      // ENTRADAS
+      section('Entradas (ingresos)');
+      row('Fecha', 'Concepto', 'Monto', true);
+      for (const p of finance.paysIn.slice().sort((x, y2) => x.paidAt.localeCompare(y2.paidAt)))
+        row(fmtd(p.paidAt), `${p.concept} · ${METHOD_LABEL[p.method]}`, usd(p.amountUsd));
+      for (const s of finance.salesIn.slice().sort((x, y2) => x.soldAt.localeCompare(y2.soldAt)))
+        row(fmtd(s.soldAt), `Tienda: ${s.qty}× ${s.productName}`, usd(s.total));
+      if (!finance.paysIn.length && !finance.salesIn.length) row('', 'Sin entradas en el periodo', '');
+      nl(2); row('', 'Total entradas', usd(finance.entradas), true); nl(6);
+
+      // SALIDAS
+      section('Salidas (egresos)');
+      row('Fecha', 'Concepto', 'Monto', true);
+      for (const e of finance.expIn.slice().sort((x, y2) => x.spentAt.localeCompare(y2.spentAt)))
+        row(fmtd(e.spentAt), e.category ? `${e.concept} · ${e.category}` : e.concept, usd(e.amountUsd));
+      if (!finance.expIn.length) row('', 'Sin egresos en el periodo', '');
+      nl(2); row('', 'Total salidas', usd(finance.salidas), true); nl(8);
+
+      // SALDO
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(...SAGE);
+      doc.text('Saldo del periodo', 15, y);
+      doc.text(usd(finance.saldo), RIGHT, y, { align: 'right' }); nl(10);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(14); doc.setTextColor(140, 140, 140);
+      doc.text('Move yA · Reporte generado automáticamente', 15, y);
+
+      doc.save(`reporte-${currentStudio!.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${period.key}.pdf`);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const data = useMemo(() => {
     const sid = currentStudio!.id;
@@ -104,7 +224,11 @@ export default function Reports() {
 
   return (
     <>
-      <PageHeader title="Reportes" subtitle="Métricas de tu estudio — elige un mes para ver su historial" />
+      <PageHeader
+        title="Reportes"
+        subtitle="Métricas de tu estudio — elige un mes para ver su historial"
+        action={<Button variant="secondary" disabled={downloading} onClick={downloadPdf}>{downloading ? 'Generando…' : '⬇ Descargar PDF'}</Button>}
+      />
 
       {/* Selector de periodo (historial hasta 12 meses atrás) */}
       <div className="mb-6 flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
@@ -123,6 +247,56 @@ export default function Reports() {
           );
         })}
       </div>
+
+      {/* Entradas y salidas de dinero del periodo */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <StatCard label="Entradas" value={usd(finance.entradas)} hint="pagos + ventas de tienda" icon="↑" />
+        <StatCard label="Salidas" value={usd(finance.salidas)} hint="egresos / gastos" icon="↓" />
+        <StatCard label="Saldo" value={usd(finance.saldo)} hint="entradas − salidas" icon="=" />
+      </div>
+
+      {/* Egresos / gastos */}
+      <Card className="p-6 mb-6">
+        <h2 className="font-semibold text-ink mb-1">Egresos / gastos</h2>
+        <p className="text-xs text-ink-faint mb-4">Registra las salidas de dinero (renta, nómina, insumos…) para tu reporte contable.</p>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex-1 min-w-[10rem]">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Concepto</span>
+            <input className="rinp" value={expForm.concept} onChange={(e) => setExpForm({ ...expForm, concept: e.target.value })} placeholder="Ej. Renta del local" />
+          </label>
+          <label className="w-28">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Categoría</span>
+            <input className="rinp" value={expForm.category} onChange={(e) => setExpForm({ ...expForm, category: e.target.value })} placeholder="Opcional" />
+          </label>
+          <label className="w-24">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Monto</span>
+            <input type="number" min="0" step="0.01" className="rinp" value={expForm.amount} onChange={(e) => setExpForm({ ...expForm, amount: e.target.value })} />
+          </label>
+          <label className="w-36">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Fecha</span>
+            <input type="date" className="rinp" value={expForm.date} onChange={(e) => setExpForm({ ...expForm, date: e.target.value })} />
+          </label>
+          <Button disabled={!expForm.concept.trim() || !(Number(expForm.amount) > 0)} onClick={addExp}>Agregar</Button>
+        </div>
+
+        {finance.expIn.length > 0 && (
+          <div className="mt-4 divide-y divide-cream-dark">
+            {finance.expIn.map((e) => (
+              <div key={e.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate text-ink">{e.concept}{e.category ? ` · ${e.category}` : ''}</p>
+                  <p className="text-xs text-ink-faint">{new Date(e.spentAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="font-semibold text-ink">{usd(e.amountUsd)}</span>
+                  <button onClick={() => delExp(e.id)} className="text-xs font-medium text-red-600">Eliminar</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <style>{`.rinp{width:100%;border:1px solid #E8E3D6;border-radius:.6rem;padding:.5rem .7rem;background:#fff;outline:none;font-size:14px}.rinp:focus{box-shadow:0 0 0 2px var(--brand-primary)}`}</style>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 mb-6">
         <StatCard label="Ingresos" value={usd(data.revenue)} hint={`${usd(data.online)} en línea · ${usd(data.manual)} en estudio`} />

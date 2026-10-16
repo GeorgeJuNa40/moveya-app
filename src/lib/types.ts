@@ -338,6 +338,18 @@ export interface Payment {
   registeredBy: 'studio' | 'online'; // manual (estudio) u online (pasarela)
 }
 
+// Egreso / gasto del negocio (salida de dinero) — para el reporte contable.
+export interface Expense {
+  id: string;
+  studioId: string;
+  concept: string;
+  category?: string;
+  amountUsd: number;
+  spentAt: string;
+  note?: string;
+  createdAt: string;
+}
+
 export interface StarEntry {
   id: string;
   userId: string;
