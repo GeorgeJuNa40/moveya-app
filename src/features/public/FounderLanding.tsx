@@ -26,7 +26,7 @@ const REGISTRO_FUNDADOR = '/entrar?nuevo=1&fundador=1';
 
 const BENEFITS = [
   { ic: '♾️', t: 'Precio de por vida', d: 'Tu mensualidad de fundador nunca sube, aunque suban los precios al público.' },
-  { ic: '✦', t: 'Todo Premium incluido', d: 'Marca propia, reportes avanzados, recompensas, multi-sucursal, punto de venta y más.' },
+  { ic: '✦', t: 'Todo Premium incluido', d: 'White-label completo (toda la app con tu marca), membresías con planes en cola y avisos automáticos, tienda con pago en línea, multi-sucursal con gerentes, reportes avanzados y más.' },
   { ic: '✆', t: 'Bot de WhatsApp con IA', d: 'Responde dudas y agenda por ti, incluido sin costo extra. Normalmente es un add-on.' },
   { ic: '★', t: 'Trato preferente', d: 'Soporte prioritario y voz directa en lo que construimos a continuación.' },
 ];
@@ -72,9 +72,9 @@ export default function FounderLanding() {
           Sé uno de los <span className="text-brand">10 fundadores</span> de Move yA
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-lg text-ink-soft">
-          El sistema todo-en-uno para tu estudio o gimnasio: reservas, control de acceso, cobros,
-          membresías y WhatsApp con IA — con tu propia marca. Como fundador, lo tienes <strong>completo</strong> a
-          un precio especial <strong>de por vida</strong>.
+          El sistema todo-en-uno para tu estudio, gimnasio o mixto: reservas, control de acceso, membresías
+          con vencimiento, cobros, tienda y WhatsApp con IA — con tu propia marca. Como fundador, lo tienes
+          <strong> completo</strong> a un precio especial <strong>de por vida</strong>.
         </p>
 
         {/* Escasez */}
