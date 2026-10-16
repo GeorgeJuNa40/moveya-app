@@ -174,6 +174,9 @@ interface StoreValue {
   // Estudio — negocio / branding / whatsapp
   updateStudio: (patch: Partial<Studio>) => void;
   updateBranding: (patch: Partial<Branding>) => void;
+  // Guarda datos del negocio + branding en UNA sola escritura (evita que dos
+  // guardados seguidos compitan y se revierta el white-label).
+  updateStudioSettings: (patch: Partial<Studio>, branding: Partial<Branding>) => void;
   // Multi-sucursal (plan Premium)
   addBranch: (name: string, address?: string, phone?: string) => void;
   updateBranch: (id: string, patch: Partial<{ name: string; address: string; phone: string; active: boolean }>) => void;
@@ -264,14 +267,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [currentStudio]);
 
   // Helper: modifica el estudio actual (local) y lo guarda en Supabase.
+  // Modifica el estudio actual de forma SEGURA ante varios cambios seguidos:
+  // compone el cambio SOBRE el estado más reciente (no sobre una copia vieja del
+  // render) y persiste ESE resultado. Así dos llamadas seguidas no se pisan ni
+  // se revierte nada al recargar (bug del white-label que "no se guardaba").
   const patchStudio = (fn: (s: Studio) => Studio) => {
-    if (!currentStudio) return;
-    const next = fn(currentStudio);
-    setDb((prev) => ({
-      ...prev,
-      studios: prev.studios.map((s) => (s.id === next.id ? next : s)),
-    }));
-    void persistStudio(next);
+    const sid = currentStudio?.id;
+    if (!sid) return;
+    let next: Studio | null = null;
+    setDb((prev) => {
+      const cur = prev.studios.find((s) => s.id === sid);
+      if (!cur) return prev;
+      next = fn(cur);
+      return { ...prev, studios: prev.studios.map((s) => (s.id === sid ? next! : s)) };
+    });
+    if (next) void persistStudio(next);
   };
 
   // Moneda local del estudio: se aplica a los precios en toda la app.
@@ -1069,6 +1079,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     updateBranding(patch) {
       patchStudio((s) => ({ ...s, branding: { ...s.branding, ...patch } }));
+    },
+    updateStudioSettings(patch, branding) {
+      patchStudio((s) => ({ ...s, ...patch, branding: { ...s.branding, ...branding } }));
     },
     addBranch(name, address, phone) {
       patchStudio((s) => ({

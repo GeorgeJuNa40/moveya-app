@@ -14,7 +14,7 @@ import type { Branding, StudioInfoPage } from '../../lib/types';
 // Configuración: datos del negocio, fotos y White-label (branding).
 // Los cambios se guardan SOLO al tocar "Guardar cambios" (no en automático).
 export default function Settings() {
-  const { currentStudio, updateStudio, updateBranding, can } = useStore();
+  const { currentStudio, updateStudioSettings, can } = useStore();
   const s = currentStudio!;
   // Tipografías disponibles (cargadas en index.html). El estudio elige la suya.
   const fonts = [
@@ -72,8 +72,12 @@ export default function Settings() {
   const removePhoto = (i: number) => setStudio({ photos: draft.photos.filter((_, idx) => idx !== i) });
 
   const save = () => {
-    updateStudio({ name: draft.name, studioType: draft.studioType, phone: draft.phone, email: draft.email, address: draft.address, photos: draft.photos });
-    updateBranding(draft.branding);
+    // Una sola escritura (datos + branding juntos): así el white-label se guarda
+    // siempre, sin que dos guardados compitan y se revierta.
+    updateStudioSettings(
+      { name: draft.name, studioType: draft.studioType, phone: draft.phone, email: draft.email, address: draft.address, photos: draft.photos },
+      draft.branding,
+    );
     setDirty(false);
   };
   const discard = () => {
