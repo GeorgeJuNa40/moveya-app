@@ -237,6 +237,9 @@ export interface User {
   externalCoachId?: string; // alumno: coach externo al que pertenece (sus clientes)
   branchId?: string; // sucursal a la que pertenece (multi-sucursal); vacío = sede principal
   source?: 'trial' | 'companion'; // de dónde llegó: clase de prueba / invitado 2x1
+  // Estado del miembro: 'active' (def.), 'inactive' (dado de baja) o 'banned'
+  // (vetado). Los no-activos se ocultan de las listas y no pueden usar la app.
+  memberStatus?: 'active' | 'inactive' | 'banned';
 }
 
 // Invitado a una clase (sin cuenta): clase de prueba o acompañante (2x1). Ocupa

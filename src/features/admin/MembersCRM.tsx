@@ -42,7 +42,7 @@ function fmtBirthday(iso?: string): string | null {
 
 // CRM de alumnos: contacto, clases agendadas, membresía y registro de pagos.
 export default function MembersCRM() {
-  const { db, currentStudio, studioUsers, membership, registerManualPlan, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch } = useStore();
+  const { db, currentStudio, studioUsers, membership, registerManualPlan, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember } = useStore();
   const students = studioUsers('STUDENT');
   const packages = db.packages.filter((p) => p.studioId === currentStudio!.id && p.active);
   const isGymish = currentStudio!.studioType === 'gym' || currentStudio!.studioType === 'mixed';
@@ -58,15 +58,21 @@ export default function MembersCRM() {
   const [detail, setDetail] = useState<User | null>(null);
   const [payFor, setPayFor] = useState<User | null>(null);
   const [adding, setAdding] = useState(false);
+  // Vista: miembros activos o dados de baja/vetados.
+  const [view, setView] = useState<'active' | 'inactive'>('active');
 
   const studentIds = useMemo(() => new Set(students.map((s) => s.id)), [students]);
+  const isActiveMember = (u: User) => (u.memberStatus ?? 'active') === 'active';
+  const inactiveCount = useMemo(() => students.filter((s) => !isActiveMember(s)).length, [students]);
 
   const filtered = useMemo(
     () =>
-      students.filter((s) =>
-        `${s.fullName} ${s.email} ${s.phone}`.toLowerCase().includes(query.toLowerCase()),
-      ),
-    [students, query],
+      students
+        .filter((s) => (view === 'active' ? isActiveMember(s) : !isActiveMember(s)))
+        .filter((s) =>
+          `${s.fullName} ${s.email} ${s.phone}`.toLowerCase().includes(query.toLowerCase()),
+        ),
+    [students, query, view],
   );
 
   const summary = useMemo(() => {
@@ -121,8 +127,23 @@ export default function MembersCRM() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Buscar por nombre, correo o teléfono…"
-        className="mb-4 w-full rounded-xl border border-cream-dark bg-white px-4 py-2.5 outline-none focus:ring-2 ring-brand"
+        className="mb-3 w-full rounded-xl border border-cream-dark bg-white px-4 py-2.5 outline-none focus:ring-2 ring-brand"
       />
+
+      <div className="mb-4 flex gap-2">
+        {([
+          { v: 'active', t: 'Activos' },
+          { v: 'inactive', t: `Dados de baja${inactiveCount ? ` (${inactiveCount})` : ''}` },
+        ] as const).map((opt) => (
+          <button
+            key={opt.v}
+            onClick={() => setView(opt.v)}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium border transition ${view === opt.v ? 'bg-brand text-cream border-brand' : 'bg-white text-ink-soft border-cream-dark'}`}
+          >
+            {opt.t}
+          </button>
+        ))}
+      </div>
 
       {/* Tabla (desktop) */}
       <Card className="hidden md:block overflow-hidden">
@@ -158,6 +179,9 @@ export default function MembersCRM() {
                             )}
                             {s.source && (
                               <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{ORIGIN_LABEL[s.source]}</span>
+                            )}
+                            {!isActiveMember(s) && (
+                              <span className="rounded-full bg-cream-dark px-2 py-0.5 text-[10px] font-semibold text-ink-soft">{s.memberStatus === 'banned' ? 'Vetado' : 'Baja'}</span>
                             )}
                           </div>
                           <p className="text-xs text-ink-faint">Alta {fmtDay(s.createdAt)}</p>
@@ -398,6 +422,32 @@ export default function MembersCRM() {
                     </>
                   );
                 })()}
+
+                {/* Estado del miembro: baja / vetar / reactivar / eliminar */}
+                <div className="mb-4 rounded-xl bg-cream-dark/40 p-3">
+                  <p className="mb-2 text-sm font-medium text-ink-soft">Estado del miembro</p>
+                  <div className="flex flex-wrap gap-2">
+                    {isActiveMember(detail) ? (
+                      <>
+                        <Button variant="secondary" onClick={() => { setMemberStatus(detail.id, 'inactive'); setDetail({ ...detail, memberStatus: 'inactive' }); }}>Dar de baja</Button>
+                        <Button variant="secondary" onClick={() => { setMemberStatus(detail.id, 'banned'); setDetail({ ...detail, memberStatus: 'banned' }); }}>Vetar</Button>
+                      </>
+                    ) : (
+                      <Button variant="secondary" onClick={() => { setMemberStatus(detail.id, 'active'); setDetail({ ...detail, memberStatus: 'active' }); }}>Reactivar</Button>
+                    )}
+                    <button
+                      onClick={async () => {
+                        if (!window.confirm(`¿ELIMINAR definitivamente a ${detail.fullName}? Se borran sus datos y NO se puede deshacer.`)) return;
+                        const ok = await deleteMember(detail.id);
+                        if (ok) setDetail(null);
+                      }}
+                      className="rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100"
+                    >
+                      Eliminar definitivamente
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-ink-faint">Dar de baja o vetar conserva su historial (reversible). Eliminar borra todo.</p>
+                </div>
 
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" onClick={() => setDetail(null)}>Cerrar</Button>

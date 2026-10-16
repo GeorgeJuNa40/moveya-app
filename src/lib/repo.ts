@@ -82,6 +82,7 @@ function mapUser(r: Row): User {
     externalFeeNote: r.external_fee_note ?? undefined,
     externalCoachId: r.external_coach_id ?? undefined,
     branchId: r.branch_id ?? undefined,
+    memberStatus: r.member_status ?? undefined,
     coachProfile: hasCoach
       ? { bio: r.coach_bio ?? '', specialties: r.coach_specialties ?? [], yearsExp: r.coach_years_exp ?? 0 }
       : undefined,
@@ -435,4 +436,5 @@ export const rowUser = (u: User): Row => ({
   external_fee_note: u.externalFeeNote ?? null,
   external_coach_id: u.externalCoachId ?? null,
   branch_id: u.branchId ?? null,
+  member_status: u.memberStatus ?? 'active',
 });
