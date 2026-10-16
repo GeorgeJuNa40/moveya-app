@@ -17,11 +17,16 @@ import { useStore } from '../../lib/store';
 const GATE_SINCE = Date.parse('2026-10-17T06:00:00Z'); // 17-oct-2026, 00:00 CDMX
 
 export default function StudentGate({ children }: { children: React.ReactNode }) {
-  const { currentUser, membership } = useStore();
+  const { currentUser, currentStudio, membership } = useStore();
   if (!currentUser) return <Navigate to="/" replace />;
-  // Miembro anterior al candado → acceso respetado.
-  const created = Date.parse(currentUser.createdAt);
-  if (!Number.isNaN(created) && created < GATE_SINCE) return <>{children}</>;
+  // Por default respetamos a los miembros que ya existían (solo se exige plan a
+  // los nuevos). Si el estudio activa "exigir plan a todos", el candado aplica a
+  // TODOS sus miembros sin importar cuándo se registraron.
+  const enforceAll = currentStudio?.branding.requirePlanAll === true;
+  if (!enforceAll) {
+    const created = Date.parse(currentUser.createdAt);
+    if (!Number.isNaN(created) && created < GATE_SINCE) return <>{children}</>;
+  }
   const state = membership(currentUser.id).state;
   const hasPlan = state === 'active' || state === 'expiring';
   if (!hasPlan) {

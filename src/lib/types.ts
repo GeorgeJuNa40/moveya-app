@@ -44,6 +44,7 @@ export interface Branding {
   cancellationPolicy?: string; // política de cancelación (la ve el alumno)
   studioPolicies?: string; // reglas y políticas del negocio (las ve el alumno en su panel)
   storeForMembers?: boolean; // muestra la tienda a alumnos y coaches (def. true si hay productos)
+  requirePlanAll?: boolean; // exige plan activo a TODOS los miembros (no solo a los nuevos)
   cancellationHours?: number; // horas mínimas de anticipación para cancelar (candado)
   noShowPenaltyUsd?: number; // cargo (adeudo) por no asistir sin cancelar (0/omitido = sin penalización)
   bookingCutoffMinutes?: number; // minutos antes de la clase en que se cierran las reservas

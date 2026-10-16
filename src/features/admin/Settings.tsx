@@ -339,6 +339,29 @@ export default function Settings() {
           />
         </Card>
 
+        {/* Acceso: exigir plan activo a todos los miembros */}
+        <Card className="p-6 lg:col-span-2 space-y-3">
+          <div>
+            <h2 className="font-semibold text-ink">Exigir plan activo para usar la app</h2>
+            <p className="mt-1 text-sm text-ink-faint">
+              Los miembros <strong>nuevos</strong> siempre deben adquirir un plan/membresía antes de reservar
+              o registrar entrada. Si activas esto, la regla aplica <strong>también a tus miembros actuales</strong>
+              (los que no tengan un plan activo no podrán usar la app hasta adquirirlo). Déjalo apagado para
+              no afectar a tus miembros de siempre.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBrand({ requirePlanAll: !b.requirePlanAll })}
+            className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${b.requirePlanAll ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'}`}
+          >
+            <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${b.requirePlanAll ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
+              {b.requirePlanAll ? '✓' : ''}
+            </span>
+            <span className="text-sm font-medium text-ink">Exigir plan activo a TODOS los miembros (no solo a los nuevos)</span>
+          </button>
+        </Card>
+
         {/* Tienda para miembros — plan con tienda */}
         {can('store') && (
           <Card className="p-6 lg:col-span-2 space-y-3">
