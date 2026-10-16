@@ -43,6 +43,7 @@ export interface Branding {
   currencyCode?: string; // moneda local del estudio (ej. MXN); default USD
   cancellationPolicy?: string; // política de cancelación (la ve el alumno)
   studioPolicies?: string; // reglas y políticas del negocio (las ve el alumno en su panel)
+  storeForMembers?: boolean; // muestra la tienda a alumnos y coaches (def. true si hay productos)
   cancellationHours?: number; // horas mínimas de anticipación para cancelar (candado)
   noShowPenaltyUsd?: number; // cargo (adeudo) por no asistir sin cancelar (0/omitido = sin penalización)
   bookingCutoffMinutes?: number; // minutos antes de la clase en que se cierran las reservas
@@ -177,6 +178,30 @@ export interface ProductSale {
   method: string;
   soldBy?: string;
   soldAt: string;
+}
+
+// Pedido de tienda (Fase A: "apartar"). El miembro arma un carrito y lo aparta;
+// el admin lo cobra en mostrador y lo marca entregado (descuenta stock).
+export interface StoreOrderItem {
+  productId: string;
+  name: string;
+  qty: number;
+  unitPrice: number;
+}
+
+export type StoreOrderStatus = 'pending' | 'fulfilled' | 'canceled';
+
+export interface StoreOrder {
+  id: string;
+  studioId: string;
+  userId: string;
+  userName?: string;
+  items: StoreOrderItem[];
+  total: number;
+  status: StoreOrderStatus;
+  note?: string;
+  createdAt: string;
+  fulfilledAt?: string;
 }
 
 // Tipo de coach en gimnasios/mixtos:

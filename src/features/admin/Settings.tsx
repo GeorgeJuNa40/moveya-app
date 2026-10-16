@@ -339,6 +339,30 @@ export default function Settings() {
           />
         </Card>
 
+        {/* Tienda para miembros — plan con tienda */}
+        {can('store') && (
+          <Card className="p-6 lg:col-span-2 space-y-3">
+            <div>
+              <h2 className="font-semibold text-ink">Tienda para alumnos y coaches</h2>
+              <p className="mt-1 text-sm text-ink-faint">
+                Si lo activas, tus alumnos y coaches ven tu catálogo de productos y pueden
+                <strong> apartar</strong> lo que quieran; a ti te llega el pedido en <strong>Tienda / Pedidos</strong>
+                para cobrarlo en mostrador y entregarlo. (El pago en línea de productos llega muy pronto.)
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setBrand({ storeForMembers: !(b.storeForMembers !== false) })}
+              className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${b.storeForMembers !== false ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'}`}
+            >
+              <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${b.storeForMembers !== false ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
+                {b.storeForMembers !== false ? '✓' : ''}
+              </span>
+              <span className="text-sm font-medium text-ink">Mostrar la tienda a alumnos y coaches</span>
+            </button>
+          </Card>
+        )}
+
         {/* Multi-sucursal — plan Premium */}
         {can('multiBranch') ? (
           <BranchesCard currency={b.currencyCode ?? 'USD'} />

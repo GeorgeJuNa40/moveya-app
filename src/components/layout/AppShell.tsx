@@ -49,6 +49,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   COACH: [
     { to: '/coach', label: 'Inicio' },
     { to: '/coach/calendar', label: 'Mi Calendario', short: 'Agenda' },
+    { to: '/coach/store', label: 'Tienda', cap: 'store' },
     { to: '/coach/profile', label: 'Mi Perfil', short: 'Perfil' },
   ],
   STUDENT: [
@@ -57,6 +58,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/app/packages', label: 'Mis Paquetes', short: 'Paquetes' },
     { to: '/app/coaches', label: 'Coaches' },
     { to: '/app/rewards', label: 'Recompensas', short: 'Premios' },
+    { to: '/app/store', label: 'Tienda', cap: 'store' },
     { to: '/app/services', label: 'Servicios' },
     { to: '/app/suggestions', label: 'Sugerencias', short: 'Buzón' },
   ],
@@ -228,8 +230,15 @@ export default function AppShell({ children }: { children: ReactNode }) {
   // (acceso), no "Paquetes" (créditos por clase).
   const isGym = currentStudio.studioType === 'gym';
   const isGymish = isGym || currentStudio.studioType === 'mixed';
+  // El estudio puede ocultar la tienda a los miembros (alumno/coach). Por defecto
+  // (sin configurar) se muestra si el plan incluye tienda.
+  const storeForMembers = currentStudio.branding.storeForMembers !== false;
   let nav = NAV_BY_ROLE[currentUser.role]
     .filter((item) => !item.cap || can(item.cap))
+    .filter((item) => {
+      const isMemberStore = item.to === '/app/store' || item.to === '/coach/store';
+      return !isMemberStore || storeForMembers;
+    })
     .map((item) => {
       if (!isGym) return item;
       if (item.to === '/admin/packages') return { ...item, label: 'Membresías' };

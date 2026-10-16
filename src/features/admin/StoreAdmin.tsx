@@ -3,8 +3,9 @@ import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button, StatCard, EmptyState } from '../../components/ui';
 import ImageUpload from '../../components/ImageUpload';
 import { usd } from '../../lib/format';
-import { fetchProducts, fetchSales, saveProduct, deleteProduct, sellProduct } from '../../lib/products';
-import type { Product, ProductSale, PaymentMethod, User } from '../../lib/types';
+import { fetchProducts, fetchSales, saveProduct, deleteProduct, sellProduct, fetchStoreOrders, updateOrderStatus } from '../../lib/products';
+import { fmtDay } from '../../lib/format';
+import type { Product, ProductSale, PaymentMethod, User, StoreOrder } from '../../lib/types';
 
 const METHOD_LABEL: Record<string, string> = {
   cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', paypal: 'PayPal',
@@ -25,20 +26,54 @@ export default function StoreAdmin() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<ProductSale[]>([]);
+  const [orders, setOrders] = useState<StoreOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [sellFor, setSellFor] = useState<Product | null>(null);
   const [toast, setToast] = useState('');
+  const [working, setWorking] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
-    void Promise.all([fetchProducts(studioId), fetchSales(studioId)]).then(([p, s]) => {
+    void Promise.all([fetchProducts(studioId), fetchSales(studioId), fetchStoreOrders(studioId)]).then(([p, s, o]) => {
       setProducts(p);
       setSales(s);
+      setOrders(o);
       setLoading(false);
     });
   };
   useEffect(load, [studioId]);
+
+  const pendingOrders = useMemo(() => orders.filter((o) => o.status === 'pending'), [orders]);
+
+  const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(''), 3500); };
+
+  // Entregar y cobrar un pedido apartado: descuenta stock de cada producto
+  // (RPC pos_sell) y marca el pedido como entregado.
+  const fulfillOrder = async (order: StoreOrder, method: string) => {
+    setWorking(order.id);
+    const fails: string[] = [];
+    for (const it of order.items) {
+      const res = await sellProduct(it.productId, it.qty, order.userId || undefined, method);
+      if (!res.ok) fails.push(`${it.name} (${res.error === 'stock insuficiente' ? 'sin stock' : res.error ?? 'error'})`);
+    }
+    if (fails.length === 0) {
+      await updateOrderStatus(order.id, 'fulfilled');
+      flash(`Pedido entregado · ${usd(order.total)}`);
+    } else {
+      flash(`No se pudo completar: ${fails.join(', ')}`);
+    }
+    setWorking(null);
+    load();
+  };
+
+  const cancelOrder = async (order: StoreOrder) => {
+    setWorking(order.id);
+    await updateOrderStatus(order.id, 'canceled');
+    setWorking(null);
+    flash('Pedido cancelado.');
+    load();
+  };
 
   const lowStock = useMemo(() => products.filter((p) => p.active && p.stock <= p.lowStock), [products]);
   const todayIncome = useMemo(() => {
@@ -91,6 +126,30 @@ export default function StoreAdmin() {
           <p className="mt-1 text-sm text-amber-700">
             {lowStock.map((p) => `${p.name} (${p.stock})`).join(' · ')}
           </p>
+        </Card>
+      )}
+
+      {pendingOrders.length > 0 && (
+        <Card className="mb-6 border border-brand/30 bg-brand-soft/40 p-4">
+          <h2 className="mb-3 font-semibold text-ink">🛎️ Pedidos apartados ({pendingOrders.length})</h2>
+          <div className="space-y-2">
+            {pendingOrders.map((o) => (
+              <div key={o.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-ink">{o.userName ?? 'Miembro'}</p>
+                  <p className="text-xs text-ink-faint">{o.items.map((it) => `${it.qty}× ${it.name}`).join(', ')} · {fmtDay(o.createdAt)}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-brand">{usd(o.total)}</span>
+                  <Button disabled={working === o.id} onClick={() => fulfillOrder(o, 'cash')}>
+                    {working === o.id ? '…' : 'Entregar y cobrar'}
+                  </Button>
+                  <Button variant="ghost" disabled={working === o.id} onClick={() => cancelOrder(o)}>Cancelar</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-ink-faint">“Entregar y cobrar” descuenta el stock y registra la venta (efectivo). Para otra forma de pago, usa “Vender” en el producto.</p>
         </Card>
       )}
 

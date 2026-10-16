@@ -90,6 +90,8 @@ const OptionalServices = lazyWithReload(() => import('./features/student/Optiona
 const StudentCoaches = lazyWithReload(() => import('./features/student/StudentCoaches'));
 const MyRoutine = lazyWithReload(() => import('./features/student/MyRoutine'));
 const Suggestions = lazyWithReload(() => import('./features/student/Suggestions'));
+// Tienda para miembros (alumno y coach): ver y apartar productos.
+const Store = lazyWithReload(() => import('./features/student/Store'));
 
 // Pantalla de carga mientras se descarga el código de una sección.
 function Splash() {
@@ -299,6 +301,7 @@ export default function App() {
       <Route path="/coach/calendar" element={<RequireRole role="COACH"><CoachGate><CoachCalendar /></CoachGate></RequireRole>} />
       <Route path="/coach/profile" element={<RequireRole role="COACH"><CoachGate><CoachProfile /></CoachGate></RequireRole>} />
       <Route path="/coach/routines" element={<RequireRole role="COACH"><CoachGate><RoutinesAdmin /></CoachGate></RequireRole>} />
+      <Route path="/coach/store" element={<RequireRole role="COACH"><CoachGate><Store /></CoachGate></RequireRole>} />
 
       {/* ---- USUARIO (Alumno) ----
           Dashboard y Paquetes SIEMPRE abiertos (puerta de entrada y compra del
@@ -311,6 +314,7 @@ export default function App() {
       <Route path="/app/coaches" element={<RequireRole role="STUDENT"><StudentGate><StudentCoaches /></StudentGate></RequireRole>} />
       <Route path="/app/routine" element={<RequireRole role="STUDENT"><StudentGate><MyRoutine /></StudentGate></RequireRole>} />
       <Route path="/app/services" element={<RequireRole role="STUDENT"><StudentGate><OptionalServices /></StudentGate></RequireRole>} />
+      <Route path="/app/store" element={<RequireRole role="STUDENT"><StudentGate><Store /></StudentGate></RequireRole>} />
       <Route path="/app/suggestions" element={<RequireRole role="STUDENT"><StudentGate><Suggestions /></StudentGate></RequireRole>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />

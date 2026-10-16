@@ -5,7 +5,7 @@
 // pos_sell (atómico: valida stock, descuenta y registra). Admin-facing.
 // ============================================================================
 import { supabase } from './supabase';
-import type { Product, ProductSale } from './types';
+import type { Product, ProductSale, StoreOrder, StoreOrderItem } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mapProduct = (r: any): Product => ({
@@ -87,6 +87,59 @@ export async function saveProduct(p: {
 
 export async function deleteProduct(id: string): Promise<void> {
   await supabase.from('products').delete().eq('id', id);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mapOrder = (r: any): StoreOrder => ({
+  id: r.id,
+  studioId: r.studio_id,
+  userId: r.user_id,
+  userName: r.user_name ?? undefined,
+  items: (r.items ?? []) as StoreOrderItem[],
+  total: Number(r.total ?? 0),
+  status: (r.status ?? 'pending') as StoreOrder['status'],
+  note: r.note ?? undefined,
+  createdAt: r.created_at,
+  fulfilledAt: r.fulfilled_at ?? undefined,
+});
+
+// El miembro "aparta" un pedido (carrito). Lo cobra el estudio en mostrador.
+export async function createStoreOrder(input: {
+  studioId: string;
+  userId: string;
+  userName?: string;
+  items: StoreOrderItem[];
+  note?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const total = input.items.reduce((a, it) => a + it.unitPrice * it.qty, 0);
+  const { error } = await supabase.from('store_orders').insert({
+    studio_id: input.studioId,
+    user_id: input.userId,
+    user_name: input.userName ?? null,
+    items: input.items,
+    total,
+    note: input.note ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function fetchStoreOrders(studioId: string, onlyUser?: string): Promise<StoreOrder[]> {
+  let q = supabase.from('store_orders').select('*').eq('studio_id', studioId);
+  if (onlyUser) q = q.eq('user_id', onlyUser);
+  const { data, error } = await q.order('created_at', { ascending: false }).limit(200);
+  if (error) return [];
+  return (data ?? []).map(mapOrder);
+}
+
+export async function updateOrderStatus(
+  id: string,
+  status: StoreOrder['status'],
+): Promise<void> {
+  await supabase
+    .from('store_orders')
+    .update({ status, fulfilled_at: status === 'fulfilled' ? new Date().toISOString() : null })
+    .eq('id', id);
 }
 
 // Registra una venta: descuenta stock y guarda el movimiento (RPC atómico).
