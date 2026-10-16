@@ -112,11 +112,28 @@ function homeFor(role: Role): string {
 }
 
 function RequireRole({ role, children }: { role: Role | Role[]; children: React.ReactNode }) {
-  const { currentUser } = useStore();
+  const { currentUser, logout } = useStore();
   if (!currentUser) return <Navigate to="/" replace />;
   const allowed = Array.isArray(role) ? role : [role];
   if (!allowed.includes(currentUser.role)) {
     return <Navigate to={homeFor(currentUser.role)} replace />;
+  }
+  // Miembro dado de baja o vetado: no puede usar la app.
+  if (currentUser.role === 'STUDENT' && currentUser.memberStatus && currentUser.memberStatus !== 'active') {
+    return (
+      <div className="min-h-screen grid place-items-center bg-cream p-6 text-center">
+        <div className="max-w-sm">
+          <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-cream-dark text-2xl">🔒</div>
+          <h1 className="text-xl font-bold text-ink">Tu cuenta está inactiva</h1>
+          <p className="mt-2 text-sm text-ink-soft">
+            Tu acceso fue suspendido por el estudio. Si crees que es un error, contáctalos directamente.
+          </p>
+          <button onClick={() => logout()} className="mt-5 rounded-full border border-cream-dark px-5 py-2.5 text-sm font-semibold text-ink-soft">
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    );
   }
   return <AppShell>{children}</AppShell>;
 }

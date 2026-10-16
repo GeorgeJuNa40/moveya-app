@@ -182,6 +182,10 @@ interface StoreValue {
   updateBranch: (id: string, patch: Partial<{ name: string; address: string; phone: string; active: boolean }>) => void;
   removeBranch: (id: string) => void;
   setUserBranch: (userId: string, branchId: string | null) => void;
+  // Baja/vetar/reactivar un miembro (conserva su historial). Eliminar BORRA al
+  // miembro y sus datos (cascade). Devuelve true si se eliminó.
+  setMemberStatus: (userId: string, status: 'active' | 'inactive' | 'banned') => void;
+  deleteMember: (userId: string) => Promise<boolean>;
   updateWhatsapp: (patch: Partial<WhatsappConfig>) => void;
   upsertWhatsappTemplate: (t: WhatsappTemplate) => void;
   deleteWhatsappTemplate: (id: string) => void;
@@ -982,6 +986,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const patch: Record<string, unknown> = { coach_type: coachType };
       if (feeNote !== undefined) patch.external_fee_note = feeNote;
       void dbUpdate('users', userId, patch);
+    },
+    setMemberStatus(userId, status) {
+      setDb((prev) => ({
+        ...prev,
+        users: prev.users.map((u) => (u.id === userId ? { ...u, memberStatus: status } : u)),
+      }));
+      void dbUpdate('users', userId, { member_status: status });
+    },
+    async deleteMember(userId) {
+      // Quita referencias sin cascade (invitados 2x1) y borra al miembro; la RLS
+      // permite al admin y las tablas con cascade se limpian solas.
+      try {
+        await supabase.from('class_guests').update({ host_user_id: null }).eq('host_user_id', userId);
+      } catch { /* best-effort */ }
+      const { error } = await supabase.from('users').delete().eq('id', userId);
+      if (error) {
+        notifyError('eliminar miembro', error.message);
+        return false;
+      }
+      setDb((prev) => ({ ...prev, users: prev.users.filter((u) => u.id !== userId) }));
+      return true;
     },
     setStudentExternalCoach(userId, coachId) {
       setDb((prev) => ({
