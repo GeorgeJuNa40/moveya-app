@@ -1,14 +1,3 @@
-// ============================================================================
-// Move yA — Edge Function: notify-reminders
-// ----------------------------------------------------------------------------
-// Envía recordatorios push AUTOMÁTICOS. La llama pg_cron (ver push-cron.sql):
-//   - Clases: a quien tenga reserva para una clase en las próximas 24 h.
-//   - Paquetes: a quien tenga un paquete que vence en 3 días o menos.
-// Cada recordatorio se envía UNA sola vez (se registra en push_sent_log).
-//
-// Requiere los secrets: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT.
-// DESACTIVA "Enforce JWT" en esta función (la invoca el cron, no un usuario).
-// ============================================================================
 import webpush from 'npm:web-push@3.6.7';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
@@ -34,7 +23,11 @@ function fmtWhen(iso: string): string {
   });
 }
 
-// Envía a todas las suscripciones del usuario; borra las caducadas.
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 async function sendToUser(userId: string, title: string, body: string, url: string): Promise<number> {
   const { data: subs } = await admin
     .from('push_subscriptions')
@@ -61,10 +54,8 @@ async function sendToUser(userId: string, title: string, body: string, url: stri
   return sent;
 }
 
-// ¿Ya se envió este recordatorio? Si no, lo marca y devuelve false.
 async function alreadySent(userId: string, kind: string): Promise<boolean> {
   const { error } = await admin.from('push_sent_log').insert({ user_id: userId, kind });
-  // Si choca con la restricción única (ya existe), es que ya se envió.
   return Boolean(error);
 }
 
@@ -78,7 +69,6 @@ Deno.serve(async () => {
     let classReminders = 0;
     let packageReminders = 0;
 
-    // --- 1) Clases en las próximas 24 h ---
     const { data: sessions } = await admin
       .from('class_sessions')
       .select('id, template_id, starts_at')
@@ -112,25 +102,32 @@ Deno.serve(async () => {
       }
     }
 
-    // --- 2) Paquetes que vencen en 3 días o menos ---
+    // Paquetes / membresías por vencer (3 días antes). Avisa AUTOMÁTICAMENTE, sin
+    // que el estudio tenga que mandar nada. Cubre tanto paquetes por clases
+    // (créditos) como membresías de acceso (gimnasio).
     const { data: pkgs } = await admin
       .from('user_packages')
-      .select('id, user_id, credits_total, credits_used, expires_at')
+      .select('id, user_id, kind, credits_total, credits_used, starts_at, expires_at')
       .eq('active', true)
       .gt('expires_at', nowIso)
       .lte('expires_at', in3d);
 
     for (const up of pkgs ?? []) {
-      if (up.credits_used >= up.credits_total) continue; // ya sin créditos
-      const kind = `pkg-expiring:${up.id}`;
-      if (await alreadySent(up.user_id, kind)) continue;
-      const left = up.credits_total - up.credits_used;
-      const n = await sendToUser(
-        up.user_id,
-        'Tu paquete está por vencer ⏳',
-        `Te quedan ${left} clase(s) y tu paquete vence el ${fmtWhen(up.expires_at)}. Aprovéchalo o renuévalo.`,
-        '/#/app/packages',
-      );
+      // En cola (aún no empieza su vigencia): no avisamos su vencimiento todavía.
+      if (up.starts_at && new Date(up.starts_at).getTime() > now) continue;
+      const isAccess = up.kind === 'access';
+      // Paquete por clases ya agotado: no tiene caso avisar.
+      if (!isAccess && up.credits_used >= up.credits_total) continue;
+
+      const logKind = `pkg-expiring:${up.id}`;
+      if (await alreadySent(up.user_id, logKind)) continue;
+
+      const title = isAccess ? 'Tu membresía está por vencer ⏳' : 'Tu paquete está por vencer ⏳';
+      const body = isAccess
+        ? `Tu membresía vence el ${fmtDate(up.expires_at)}. Renuévala para seguir entrando. 💪`
+        : `Te quedan ${up.credits_total - up.credits_used} clase(s) y tu paquete vence el ${fmtWhen(up.expires_at)}. Aprovéchalo o renuévalo.`;
+
+      const n = await sendToUser(up.user_id, title, body, '/#/app/packages');
       if (n > 0) packageReminders++;
     }
 

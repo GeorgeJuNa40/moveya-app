@@ -136,6 +136,7 @@ const mapUserPackage = (r: Row): UserPackage => ({
   creditsTotal: r.credits_total,
   creditsUsed: r.credits_used,
   purchasedAt: r.purchased_at,
+  startsAt: r.starts_at ?? undefined,
   expiresAt: r.expires_at,
   active: r.active,
   stripeSubscriptionId: r.stripe_subscription_id ?? undefined,
@@ -348,6 +349,7 @@ export const rowUserPackage = (up: UserPackage): Row => ({
   credits_total: up.creditsTotal,
   credits_used: up.creditsUsed,
   purchased_at: up.purchasedAt,
+  starts_at: up.startsAt ?? null,
   expires_at: up.expiresAt,
   active: up.active,
 });

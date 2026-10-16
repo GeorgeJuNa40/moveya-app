@@ -278,6 +278,7 @@ export interface UserPackage {
   creditsTotal: number;
   creditsUsed: number;
   purchasedAt: string;
+  startsAt?: string; // inicio de vigencia (cola). Vacío = empieza al comprarse.
   expiresAt: string;
   active: boolean;
   stripeSubscriptionId?: string; // si es membresía domiciliada (cobro recurrente)

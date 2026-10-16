@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { useStore, isUsablePackage } from '../../lib/store';
+import { useStore, isUsablePackage, isQueuedPackage } from '../../lib/store';
 import { Card, Button, Badge } from '../../components/ui';
 import { fmtDay, fmtTime, fmtDate, daysUntil, usd } from '../../lib/format';
 
@@ -223,6 +223,7 @@ export default function StudentDashboard() {
             {movimientos.slice(0, 6).map((up) => {
               const pkg = db.packages.find((p) => p.id === up.packageId);
               const vigente = isUsablePackage(up);
+              const enCola = isQueuedPackage(up);
               const left = up.kind === 'access' ? null : Math.max(0, up.creditsTotal - up.creditsUsed);
               const amount = db.payments
                 .filter((p) => p.userId === uid && p.packageId === up.packageId)
@@ -232,13 +233,17 @@ export default function StudentDashboard() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-medium text-ink">{pkg?.name ?? 'Plan'}</p>
-                      {vigente
-                        ? <Badge tone="success">Vigente</Badge>
-                        : <Badge tone="neutral">Finalizado</Badge>}
+                      {enCola
+                        ? <Badge tone="warning">En cola</Badge>
+                        : vigente
+                          ? <Badge tone="success">Vigente</Badge>
+                          : <Badge tone="neutral">Finalizado</Badge>}
                     </div>
                     <p className="text-xs text-ink-faint">
-                      Adquirido {fmtDay(up.purchasedAt)} · vence el {fmtDate(up.expiresAt)}
-                      {left != null ? ` · ${left} clases restantes` : ''}
+                      {enCola
+                        ? `Inicia el ${up.startsAt ? fmtDate(up.startsAt) : '—'} · vence el ${fmtDate(up.expiresAt)}`
+                        : `Adquirido ${fmtDay(up.purchasedAt)} · vence el ${fmtDate(up.expiresAt)}`}
+                      {left != null && !enCola ? ` · ${left} clases restantes` : ''}
                     </p>
                   </div>
                   {amount != null && <span className="shrink-0 text-sm font-semibold text-ink-soft">{usd(amount)}</span>}
