@@ -71,6 +71,13 @@ const ROLE_LABEL: Record<Role, string> = {
   STUDENT: 'Alumno',
 };
 
+// Etiqueta de negocio según el tipo elegido al registrarse (estudio/gym/mixto).
+const BUSINESS_LABEL: Record<'studio' | 'gym' | 'mixed', string> = {
+  studio: 'Estudio',
+  gym: 'Gimnasio',
+  mixed: 'Mixto',
+};
+
 const isRoot = (to: string) => to === '/admin' || to === '/coach' || to === '/app';
 
 // Íconos lineales (outline) uniformes, misma familia para toda la app.
@@ -325,7 +332,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <Avatar url={currentUser.avatarUrl} initials={currentUser.avatarInitials} className="h-9 w-9 text-sm" />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-ink">{currentUser.fullName}</p>
-            <p className="text-xs text-ink-faint">{ROLE_LABEL[currentUser.role]}</p>
+            <p className="text-xs text-ink-faint">
+              {currentUser.role === 'STUDIO_ADMIN'
+                ? BUSINESS_LABEL[currentStudio.studioType ?? 'studio']
+                : ROLE_LABEL[currentUser.role]}
+            </p>
           </div>
         </div>
         <ImageUpload
