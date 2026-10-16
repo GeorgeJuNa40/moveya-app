@@ -65,6 +65,32 @@ export interface OptionalService {
   whatsapp?: string; // WhatsApp del proveedor del servicio (a quién contactar)
   enabled: boolean;
   custom: boolean; // los custom se pueden eliminar
+  // Agenda + comisión (fase 1a). El alumno paga DIRECTO al proveedor; el estudio
+  // solo lleva el control de las citas y cobra su comisión.
+  bookable?: boolean;                        // permite "Agendar consulta" (si no, solo WhatsApp)
+  price?: number;                            // lo que cobra el proveedor (informativo para el alumno)
+  commissionType?: 'fixed' | 'percent';      // comisión fija ($) o porcentaje (%)
+  commissionValue?: number;                  // monto fijo o % según commissionType
+}
+
+// Estado de una cita/consulta de servicio.
+export type AppointmentStatus = 'requested' | 'scheduled' | 'done' | 'cancelled';
+
+// Cita de un servicio opcional (nutriólogo, kinesiólogo, convenio...).
+export interface ServiceAppointment {
+  id: string;
+  studioId: string;
+  serviceId: string;
+  serviceName: string;
+  userId: string;
+  userName?: string;
+  preferredAt?: string;   // fecha sugerida por el alumno (ISO)
+  scheduledFor?: string;  // fecha confirmada por el admin (ISO)
+  status: AppointmentStatus;
+  commissionUsd: number;  // comisión que cobra el estudio
+  commissionPaid: boolean;
+  note?: string;
+  createdAt: string;
 }
 
 // Plantilla de mensaje del bot de WhatsApp, editable por el estudio.

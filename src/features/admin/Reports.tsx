@@ -4,8 +4,9 @@ import { PageHeader, Card, StatCard, Button } from '../../components/ui';
 import { usd } from '../../lib/format';
 import { fetchExpenses, saveExpense, deleteExpense } from '../../lib/finance';
 import { fetchSales } from '../../lib/products';
+import { fetchAppointments } from '../../lib/appointments';
 import { notifySuccess } from '../../lib/notify';
-import type { MembershipState, PaymentMethod, Expense, ProductSale } from '../../lib/types';
+import type { MembershipState, PaymentMethod, Expense, ProductSale, ServiceAppointment } from '../../lib/types';
 
 const METHOD_LABEL: Record<PaymentMethod, string> = { cash: 'Efectivo', card: 'Tarjeta', transfer: 'Transferencia', paypal: 'PayPal' };
 const STATE_LABEL: Record<MembershipState, string> = { active: 'Activas', expiring: 'Por vencer', expired: 'Vencidas', none: 'Sin plan' };
@@ -47,10 +48,12 @@ export default function Reports() {
   const studioId = currentStudio!.id;
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [sales, setSales] = useState<ProductSale[]>([]);
+  const [appts, setAppts] = useState<ServiceAppointment[]>([]);
   const [downloading, setDownloading] = useState(false);
   const reloadFinance = () => {
     void fetchExpenses(studioId).then(setExpenses);
     void fetchSales(studioId).then(setSales);
+    void fetchAppointments(studioId).then(setAppts);
   };
   useEffect(reloadFinance, [studioId]);
 
@@ -66,13 +69,16 @@ export default function Reports() {
     const paysIn = db.payments.filter((p) => inPeriod(p.paidAt));
     const salesIn = sales.filter((s) => inPeriod(s.soldAt));
     const expIn = expenses.filter((e) => inPeriod(e.spentAt));
+    // Comisiones de servicios COBRADAS (consulta realizada + comisión marcada cobrada).
+    const commIn = appts.filter((a) => a.status === 'done' && a.commissionPaid && a.commissionUsd > 0 && inPeriod(a.scheduledFor ?? a.createdAt));
     const entradasPagos = paysIn.reduce((a, p) => a + p.amountUsd, 0);
     const entradasVentas = salesIn.reduce((a, s) => a + s.total, 0);
-    const entradas = entradasPagos + entradasVentas;
+    const entradasComisiones = commIn.reduce((a, c) => a + c.commissionUsd, 0);
+    const entradas = entradasPagos + entradasVentas + entradasComisiones;
     const salidas = expIn.reduce((a, e) => a + e.amountUsd, 0);
-    return { paysIn, salesIn, expIn, entradasPagos, entradasVentas, entradas, salidas, saldo: entradas - salidas };
+    return { paysIn, salesIn, expIn, commIn, entradasPagos, entradasVentas, entradasComisiones, entradas, salidas, saldo: entradas - salidas };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [db.payments, sales, expenses, period]);
+  }, [db.payments, sales, expenses, appts, period]);
 
   // Alta de egreso (gasto).
   const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -136,7 +142,9 @@ export default function Reports() {
         row(fmtd(p.paidAt), `${p.concept} · ${METHOD_LABEL[p.method]}`, usd(p.amountUsd));
       for (const s of finance.salesIn.slice().sort((x, y2) => x.soldAt.localeCompare(y2.soldAt)))
         row(fmtd(s.soldAt), `Tienda: ${s.qty}× ${s.productName}`, usd(s.total));
-      if (!finance.paysIn.length && !finance.salesIn.length) row('', 'Sin entradas en el periodo', '');
+      for (const c of finance.commIn.slice().sort((x, y2) => (x.scheduledFor ?? x.createdAt).localeCompare(y2.scheduledFor ?? y2.createdAt)))
+        row(fmtd(c.scheduledFor ?? c.createdAt), `Comisión: ${c.serviceName}`, usd(c.commissionUsd));
+      if (!finance.paysIn.length && !finance.salesIn.length && !finance.commIn.length) row('', 'Sin entradas en el periodo', '');
       nl(2); row('', 'Total entradas', usd(finance.entradas), true); nl(6);
 
       // SALIDAS
@@ -250,7 +258,7 @@ export default function Reports() {
 
       {/* Entradas y salidas de dinero del periodo */}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
-        <StatCard label="Entradas" value={usd(finance.entradas)} hint="pagos + ventas de tienda" icon="↑" />
+        <StatCard label="Entradas" value={usd(finance.entradas)} hint="pagos + tienda + comisiones" icon="↑" />
         <StatCard label="Salidas" value={usd(finance.salidas)} hint="egresos / gastos" icon="↓" />
         <StatCard label="Saldo" value={usd(finance.saldo)} hint="entradas − salidas" icon="=" />
       </div>
