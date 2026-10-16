@@ -350,6 +350,35 @@ export default function Settings() {
               </span>
               <span className="text-sm font-medium text-ink">Mostrar la tienda a alumnos y coaches</span>
             </button>
+
+            <div className="border-t border-cream-dark pt-3">
+              <span className="mb-1 block text-sm font-medium text-ink-soft">¿Cómo compran tus miembros?</span>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { v: 'request', t: 'Apartar', d: 'Cobras en mostrador' },
+                  { v: 'online', t: 'En línea', d: 'Pagan con tarjeta/MP' },
+                  { v: 'both', t: 'Ambos', d: 'El miembro elige' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setBrand({ storeCheckout: opt.v })}
+                    className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                      (b.storeCheckout ?? 'request') === opt.v
+                        ? 'border-brand bg-brand-soft text-brand'
+                        : 'border-cream-dark bg-white text-ink-soft'
+                    }`}
+                  >
+                    <span className="block text-sm font-semibold">{opt.t}</span>
+                    <span className="block text-[11px] leading-tight text-ink-faint">{opt.d}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-ink-faint">
+                El pago en línea usa tu pasarela conectada (sección 5). Si eliges “En línea” y no tienes pasarela,
+                el miembro podrá apartar como respaldo.
+              </p>
+            </div>
           </Card>
         )}
 
