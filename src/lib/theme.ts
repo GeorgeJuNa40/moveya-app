@@ -49,6 +49,8 @@ const DEFAULT_VARS: Record<string, string> = {
   '--mint': '136 184 183', // #88B8B7
   '--mint-soft': '185 214 213', // #B9D6D5
   '--mint-dark': '95 150 149', // #5F9695
+  '--card': '255 255 255', // tarjetas/inputs/paneles (blanco por defecto)
+  '--card-border': '232 227 214', // borde de tarjetas/inputs (#E8E3D6)
 };
 const DEFAULT_PRIMARY = '#4A5D55';
 const DEFAULT_SECONDARY = '#FAF8F3';
@@ -84,40 +86,53 @@ export function applyTheme(branding: Branding | undefined, whitelabel: boolean) 
     return;
   }
 
-  // ---- White-label profundo: derivamos toda la paleta de 3 colores ----
-  // Las tarjetas e inputs de la app son blancos; por eso el TEXTO principal se
-  // mantiene oscuro y legible aunque el estudio elija un acento claro (si el
-  // acento es muy claro, caemos a un gris oscuro). Así personalizan sin romper
-  // la lectura. (El modo oscuro total — tarjetas oscuras — es una fase aparte.)
-  const SAFE_DARK: Rgb = [34, 34, 34];
-  const textSafe = luma(text) > 150 ? SAFE_DARK : text;
+  // ---- White-label profundo: paleta COHERENTE derivada del fondo ----
+  // Detectamos si el fondo elegido es oscuro o claro y derivamos TODA la interfaz
+  // (tarjetas, textos, bordes, inputs) para que siempre sea legible y cambie de
+  // verdad: fondo oscuro → tarjetas y texto claros (modo oscuro); fondo claro →
+  // tarjetas blancas y texto oscuro (modo claro).
+  const dark = luma(surface) < 128;
+  const WHITEISH: Rgb = [245, 245, 245];
+  const DARKISH: Rgb = [28, 28, 30];
 
-  // Superficies derivadas del color secundario (fondo de la app).
-  const surfaceLight = surface; // el fondo principal es el color elegido
-  const surfaceMid = mix(surface, SAFE_DARK, 0.05); // superficies suaves
-  const surfaceDark = mix(surface, SAFE_DARK, 0.14); // bordes y divisores
+  // Texto principal: usamos el acento elegido SOLO si contrasta con el fondo;
+  // si no, el automático legible según el fondo.
+  const autoText: Rgb = dark ? WHITEISH : DARKISH;
+  const accentContrasts = Math.abs(luma(text) - luma(surface)) > 90;
+  const textFinal = accentContrasts ? text : autoText;
 
-  // Textos derivados del acento, mezclados hacia el fondo (sobre blanco siguen
-  // siendo legibles porque parten de un tono oscuro).
-  const textSoft = mix(textSafe, [255, 255, 255], 0.28);
-  const textFaint = mix(textSafe, [255, 255, 255], 0.5);
+  // Tarjetas/inputs: ligeramente "elevadas" respecto al fondo.
+  const card: Rgb = dark ? lighten(surface, 0.1) : luma(surface) > 240 ? [255, 255, 255] : lighten(surface, 0.55);
+  const cardBorder: Rgb = dark ? lighten(surface, 0.22) : darken(surface, 0.08);
 
-  // Menta/acento secundario armonizado con el primario.
+  // Superficies (fondo, superficies suaves, divisores).
+  const surfaceLight = surface; // fondo principal = color elegido
+  const surfaceMid = dark ? lighten(surface, 0.05) : mix(surface, DARKISH, 0.04);
+  const surfaceDark = dark ? lighten(surface, 0.16) : mix(surface, DARKISH, 0.12);
+
+  // Textos suaves/tenues, mezclados hacia el fondo.
+  const textSoft = mix(textFinal, surface, 0.3);
+  const textFaint = mix(textFinal, surface, 0.52);
+
+  // Menta/acento secundario armonizado con el primario y el modo.
   const mintBase = primary;
-  const mintSoft = lighten(primary, 0.55);
+  const mintSoft = dark ? mix(primary, surface, 0.6) : lighten(primary, 0.55);
   const mintDark = darken(primary, 0.18);
 
   const vars: Record<string, string> = {
     '--surface-light': channels(surfaceLight),
     '--surface': channels(surfaceMid),
     '--surface-dark': channels(surfaceDark),
-    '--text': channels(textSafe),
+    '--text': channels(textFinal),
     '--text-soft': channels(textSoft),
     '--text-faint': channels(textFaint),
     '--mint': channels(mintBase),
     '--mint-soft': channels(mintSoft),
     '--mint-dark': channels(mintDark),
+    '--card': channels(card),
+    '--card-border': channels(cardBorder),
   };
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
-  // El fondo del cuerpo = el color elegido (ya fijado en --brand-secondary).
+  // El texto del cuerpo usa el texto final legible (el body lee rgb(var(--text))).
+  root.style.setProperty('--brand-accent', `rgb(${textFinal[0]}, ${textFinal[1]}, ${textFinal[2]})`);
 }

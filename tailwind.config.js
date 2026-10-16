@@ -29,6 +29,11 @@ export default {
           soft: 'rgb(var(--text-soft) / <alpha-value>)',
           faint: 'rgb(var(--text-faint) / <alpha-value>)',
         },
+        // Superficie de tarjetas/paneles/inputs (white-label en runtime).
+        card: {
+          DEFAULT: 'rgb(var(--card) / <alpha-value>)',
+          border: 'rgb(var(--card-border) / <alpha-value>)',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'Avenir', 'Helvetica', 'Arial', 'sans-serif'],

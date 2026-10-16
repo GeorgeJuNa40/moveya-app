@@ -73,7 +73,7 @@ export function Card({
   // Tarjetas con bordes redondeados suaves y sombra difusa (sin bordes duros).
   return (
     <div
-      className={`rounded-2xl bg-white shadow-card ring-1 ring-black/[0.04] ${className}`}
+      className={`rounded-2xl bg-card shadow-card ring-1 ring-black/[0.04] ${className}`}
     >
       {children}
     </div>
