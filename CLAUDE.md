@@ -39,6 +39,12 @@ Paleta: salvia `#4A5D55`, menta `#88B8B7`, crema `#FAF8F3`/`#F4F1EA`, carbón `#
 Tokens Tailwind: `brand` (white-label runtime), `mint`, `cream`, `ink`. Botones píldora,
 sombras suaves, tarjetas `rounded-2xl`. White-label por estudio vía variables CSS.
 
+## Reglas de PDFs (SIEMPRE)
+- **Tipografía grande y legible:** el texto MÁS CHICO de cualquier PDF es **mínimo 14pt**,
+  y de ahí todo escala hacia arriba (cuerpo ~16pt, subtítulos ~18pt, títulos ≥22pt).
+  Nada por debajo de 14pt (ni pies de página, etiquetas, chips, notas). Priorizar claridad.
+- Mantener la paleta de marca (salvia/menta/crema/carbón) y un diseño limpio.
+
 ## Modelo de negocio / promo
 - Planes: **Inicio $24.99 · Pro $44.99 · Premium $84.99** (mensual).
 - Prueba: **$1 · 14 días con acceso Premium**; al vencer se bloquea el panel.

@@ -3,10 +3,14 @@
 const DAY_FMT = new Intl.DateTimeFormat('es-MX', { weekday: 'short', day: 'numeric', month: 'short' });
 const TIME_FMT = new Intl.DateTimeFormat('es-MX', { hour: '2-digit', minute: '2-digit' });
 const FULL_DAY_FMT = new Intl.DateTimeFormat('es-MX', { weekday: 'long', day: 'numeric', month: 'long' });
+// Fecha corta con año (p. ej. "14 nov 2026") — para mostrar vencimientos exactos.
+const DATE_FMT = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 
 export const fmtDay = (iso: string) => DAY_FMT.format(new Date(iso));
 export const fmtTime = (iso: string) => TIME_FMT.format(new Date(iso));
 export const fmtFullDay = (iso: string) => FULL_DAY_FMT.format(new Date(iso));
+// Fecha exacta de vencimiento (con año), para "vence el 14 nov 2026".
+export const fmtDate = (iso: string) => DATE_FMT.format(new Date(iso));
 
 export const dayKey = (iso: string) => new Date(iso).toISOString().slice(0, 10);
 

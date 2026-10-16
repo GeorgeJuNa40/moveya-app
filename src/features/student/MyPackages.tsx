@@ -14,9 +14,15 @@ import type { Package } from '../../lib/types';
 // Stripe (la app nunca recibe datos de tarjeta). El paquete se activa solo
 // cuando Stripe confirma el pago (vía webhook).
 export default function MyPackages() {
-  const { db, currentUser, currentStudio, pendingPenalty } = useStore();
+  const { db, currentUser, currentStudio, pendingPenalty, membership } = useStore();
   const uid = currentUser!.id;
   const penalty = pendingPenalty(uid); // adeudo por no asistir (si el estudio lo cobra)
+  // Estado de la membresía/plan: define si ya tiene acceso a toda la app.
+  const m = membership(uid);
+  const hasPlan = m.state === 'active' || m.state === 'expiring';
+  // Llega aquí redirigido por el candado (StudentGate) al intentar usar la app
+  // sin un plan activo.
+  const needsPlan = new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('necesitas_plan') === '1';
   // Muestra los paquetes vigentes y los que vencieron hace máximo 1 día; los
   // más viejos se ocultan de la vista del alumno para no acumular tarjetas
   // (el historial se conserva en la base para los reportes del estudio).
@@ -114,6 +120,18 @@ export default function MyPackages() {
         subtitle={isGym ? 'Tu membresía activa y el catálogo del estudio' : 'Tus paquetes activos y el catálogo del estudio'}
       />
 
+      {!hasPlan && (
+        <Card className="mb-6 p-4 border-brand/30 bg-brand-soft">
+          <p className="text-sm text-ink">
+            {needsPlan ? '🔒 Para usar la app primero necesitas un plan activo. ' : '👋 ¡Bienvenido! '}
+            {isGym
+              ? 'Adquiere una membresía para registrar tu entrada al gimnasio.'
+              : 'Adquiere un paquete para poder reservar tus clases.'}{' '}
+            Elige el tuyo abajo 👇
+          </p>
+        </Card>
+      )}
+
       {penalty > 0 && (
         <Card className="mb-6 p-4 border-amber-200 bg-amber-50">
           <p className="text-sm text-amber-800">
@@ -123,7 +141,16 @@ export default function MyPackages() {
         </Card>
       )}
 
-      {showAccess && (
+      {showAccess && !hasPlan && (
+        <Card className="mb-6 p-6 text-center">
+          <h2 className="font-semibold text-ink">Mi acceso</h2>
+          <p className="mt-2 text-sm text-ink-soft">
+            🔒 Tu entrada se activa cuando tengas una membresía vigente. Adquiérela abajo para empezar a registrar tus visitas.
+          </p>
+        </Card>
+      )}
+
+      {showAccess && hasPlan && (
         <Card className="mb-6 p-6 text-center">
           <h2 className="font-semibold text-ink">Mi acceso</h2>
 
