@@ -10,9 +10,18 @@ import { useStore } from '../../lib/store';
 //
 // Dashboard (/app) y Paquetes (/app/packages) NO usan este candado: son la
 // puerta de entrada para que el alumno vea su estado y compre su plan.
+// Los miembros que YA existían al activar este candado conservan su acceso
+// (no los bloqueamos de golpe). El candado aplica solo a quienes se registran
+// desde esta fecha en adelante — que es justo la intención: "al registrarse un
+// alumno nuevo, mándalo a adquirir su plan".
+const GATE_SINCE = Date.parse('2026-10-17T06:00:00Z'); // 17-oct-2026, 00:00 CDMX
+
 export default function StudentGate({ children }: { children: React.ReactNode }) {
   const { currentUser, membership } = useStore();
   if (!currentUser) return <Navigate to="/" replace />;
+  // Miembro anterior al candado → acceso respetado.
+  const created = Date.parse(currentUser.createdAt);
+  if (!Number.isNaN(created) && created < GATE_SINCE) return <>{children}</>;
   const state = membership(currentUser.id).state;
   const hasPlan = state === 'active' || state === 'expiring';
   if (!hasPlan) {
