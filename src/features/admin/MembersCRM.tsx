@@ -191,8 +191,10 @@ export default function MembersCRM() {
                     </td>
                     <td className="px-4 py-3">
                       <Badge tone={meta.tone}>{meta.label}</Badge>
-                      {m.state !== 'none' && m.state !== 'expired' && (
-                        <span className="ml-2 text-xs text-ink-faint">{m.creditsLeft} clases · {m.daysLeft}d</span>
+                      {m.state !== 'none' && m.state !== 'expired' && m.expiresAt && (
+                        <span className="ml-2 text-xs text-ink-faint">
+                          Vence {fmtDate(m.expiresAt)}{m.creditsLeft > 0 ? ` · ${m.creditsLeft} clases` : ''}
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -236,7 +238,10 @@ export default function MembersCRM() {
                 </div>
                 <Badge tone={meta.tone}>{meta.label}</Badge>
               </div>
-              <p className="mt-2 text-sm text-ink-soft">{m.planName ?? 'Sin plan'} · {bookingsOf(s.id).length} clases</p>
+              <p className="mt-2 text-sm text-ink-soft">
+                {m.planName ?? 'Sin plan'}
+                {m.state !== 'none' && m.state !== 'expired' && m.expiresAt ? ` · vence ${fmtDate(m.expiresAt)}` : ''}
+              </p>
               <p className="mt-1 text-xs text-ink-faint">
                 {last ? `Últ. pago: ${usd(last.amountUsd)} · ${METHOD_LABEL[last.method]} (${SOURCE_LABEL[last.registeredBy]})` : 'Sin pagos registrados'}
               </p>
@@ -275,7 +280,11 @@ export default function MembersCRM() {
                 <div className="flex items-center gap-2 mb-4">
                   <Badge tone={meta.tone}>{meta.label}</Badge>
                   <span className="text-sm text-ink-soft">{m.planName ?? 'Sin plan'}</span>
-                  {m.state !== 'none' && <span className="text-sm text-ink-faint">· {m.creditsLeft} clases · vence en {m.daysLeft}d</span>}
+                  {m.state !== 'none' && m.expiresAt && (
+                    <span className="text-sm text-ink-faint">
+                      · vence el {fmtDate(m.expiresAt)}{m.creditsLeft > 0 ? ` · ${m.creditsLeft} clases` : ''}
+                    </span>
+                  )}
                 </div>
 
                 {branches.length > 0 && (
