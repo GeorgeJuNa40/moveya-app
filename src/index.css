@@ -5,10 +5,23 @@
 :root {
   /* Tokens de white-label — sobrescritos en runtime por el branding del estudio */
   --brand-primary: #4a5d55; /* Verde Salvia Profundo */
+  --brand-primary-rgb: 74 93 85; /* canales del primario (para opacidades) */
   --brand-secondary: #faf8f3; /* Crema muy limpio (zen) */
   --brand-accent: #212121; /* Carbón */
   --brand-mint: #88b8b7; /* Acento menta/cian */
   --brand-font: 'Inter', system-ui, sans-serif;
+
+  /* Paleta profunda (canales "R G B"). Por defecto = look Move yA de siempre;
+     el motor de tema (src/lib/theme.ts) los re-pinta para Pro/Premium. */
+  --surface-light: 250 248 243; /* #FAF8F3 */
+  --surface: 244 241 234; /* #F4F1EA */
+  --surface-dark: 232 227 214; /* #E8E3D6 */
+  --text: 33 33 33; /* #212121 */
+  --text-soft: 74 74 74; /* #4A4A4A */
+  --text-faint: 138 138 138; /* #8A8A8A */
+  --mint: 136 184 183; /* #88B8B7 */
+  --mint-soft: 185 214 213; /* #B9D6D5 */
+  --mint-dark: 95 150 149; /* #5F9695 */
 }
 
 html,

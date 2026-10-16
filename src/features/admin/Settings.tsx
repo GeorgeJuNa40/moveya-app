@@ -83,25 +83,12 @@ export default function Settings() {
 
   return (
     <>
-      <PageHeader title="Configuración" subtitle="Datos de tu negocio, fotos y personalización White-label" />
+      <PageHeader title="Configuración" subtitle="Personaliza tu negocio y tu app" />
 
-      <InviteCard ceuCode={s.ceuCode} />
-
-      {/* Cobros a tus alumnos: conecta tu propia cuenta de Stripe y/o Mercado Pago
-          para recibir los pagos de paquetes/membresías directo en tu banco. */}
-      <div className="mb-6">
-        <h2 className="mb-2 font-semibold text-ink">Cobros a tus alumnos (pasarela de pago)</h2>
-        <p className="mb-3 text-sm text-ink-faint">
-          Conecta tu cuenta para recibir los pagos de tus alumnos directo en tu banco. La app no toca ese dinero.
-        </p>
-        <StripeConnectCard />
-        <MpConnectCard />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Datos del negocio */}
+      <div className="mx-auto max-w-3xl space-y-6">
+        {/* 1 · Datos del negocio (el tipo de negocio se eligió al registrarse) */}
         <Card className="p-6 space-y-4">
-          <h2 className="font-semibold text-ink">Datos del negocio</h2>
+          <h2 className="font-semibold text-ink">1 · Datos del negocio</h2>
           <Field label="Nombre del negocio">
             <input className="input" value={draft.name} onChange={(e) => setStudio({ name: e.target.value })} />
           </Field>
@@ -166,38 +153,53 @@ export default function Settings() {
               ))}
             </select>
           </Field>
-          <div>
-            <span className="mb-1 block text-sm font-medium text-ink-soft">Tipo de negocio</span>
-            <div className="grid grid-cols-3 gap-2">
-              {([
-                { v: 'studio', t: 'Estudio', d: 'Clases con cupo' },
-                { v: 'gym', t: 'Gimnasio', d: 'Acceso libre' },
-                { v: 'mixed', t: 'Mixto', d: 'Clases + acceso' },
-              ] as const).map((opt) => (
-                <button
-                  key={opt.v}
-                  type="button"
-                  onClick={() => setStudio({ studioType: opt.v })}
-                  className={`rounded-xl border px-2 py-2.5 text-center transition ${
-                    draft.studioType === opt.v
-                      ? 'border-brand bg-brand-soft text-brand'
-                      : 'border-cream-dark bg-white text-ink-soft hover:border-brand-soft'
-                  }`}
-                >
-                  <span className="block text-sm font-semibold">{opt.t}</span>
-                  <span className="block text-[11px] leading-tight text-ink-faint">{opt.d}</span>
-                </button>
-              ))}
-            </div>
-            <p className="mt-1 text-xs text-ink-faint">
-              Define qué ve tu equipo y tus miembros. El <b>gimnasio</b> usará membresías y control de acceso (próximamente); el <b>mixto</b> combina clases y acceso.
-            </p>
-          </div>
         </Card>
 
-        {/* Fotos */}
+        {/* 2 · White-label (branding) con vista previa — plan Pro */}
+        {can('whitelabel') ? (
+          <Card className="p-6 space-y-4">
+            <div>
+              <h2 className="font-semibold text-ink">2 · White-label (tu marca)</h2>
+              <p className="mt-1 text-sm text-ink-faint">
+                Personaliza los colores y la tipografía de <strong>toda la app</strong> con tu marca.
+                Los cambios se aplican al tocar <strong>Guardar cambios</strong>.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-4">
+                <ColorField label="Color primario" value={b.primaryColor} onChange={(v) => setBrand({ primaryColor: v })} />
+                <ColorField label="Color secundario (fondo)" value={b.secondaryColor} onChange={(v) => setBrand({ secondaryColor: v })} />
+                <ColorField label="Color de acento / texto" value={b.accentColor} onChange={(v) => setBrand({ accentColor: v })} />
+                <Field label="Tipografía">
+                  <select className="input" value={b.fontFamily} onChange={(e) => setBrand({ fontFamily: e.target.value })}>
+                    {fonts.map((f) => (
+                      <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              {/* Vista previa */}
+              <div>
+                <p className="text-xs uppercase text-ink-faint mb-2">Vista previa</p>
+                <div className="rounded-2xl p-6 border" style={{ background: b.secondaryColor, borderColor: b.primaryColor }}>
+                  <p className="text-2xl font-black" style={{ color: b.primaryColor, fontFamily: b.fontFamily }}>{b.logoText}</p>
+                  <p className="mt-2" style={{ color: b.accentColor, fontFamily: b.fontFamily }}>Encuentra tu equilibrio. Reserva tu próxima clase.</p>
+                  <button className="mt-4 rounded-xl px-4 py-2 text-sm font-semibold" style={{ background: b.primaryColor, color: b.secondaryColor }}>Reservar clase</button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <LockedFeature
+            title="2 · White-label (tu marca y colores)"
+            plan="Pro"
+            desc="Personaliza los colores y la tipografía de toda la app con tu marca."
+          />
+        )}
+
+        {/* 3 · Fotos del estudio */}
         <Card className="p-6">
-          <h2 className="font-semibold text-ink mb-3">Fotos del estudio</h2>
+          <h2 className="font-semibold text-ink mb-3">3 · Fotos del estudio</h2>
           <ImageUpload variant="dropzone" label="Subir foto desde tu dispositivo" className="w-full mb-4" onSelect={addPhoto} />
           {draft.photos.length === 0 ? (
             <div className="rounded-xl border border-dashed border-cream-dark p-8 text-center text-ink-faint text-sm">Aún no has agregado fotos.</div>
@@ -213,59 +215,36 @@ export default function Settings() {
           )}
         </Card>
 
-        {/* White-label — función del plan Pro */}
-        {can('whitelabel') ? (
-          <>
-            <Card className="p-6 space-y-4">
-              <h2 className="font-semibold text-ink">White-label (branding)</h2>
-              <ColorField label="Color primario" value={b.primaryColor} onChange={(v) => setBrand({ primaryColor: v })} />
-              <ColorField label="Color secundario (fondo)" value={b.secondaryColor} onChange={(v) => setBrand({ secondaryColor: v })} />
-              <ColorField label="Color de acento / texto" value={b.accentColor} onChange={(v) => setBrand({ accentColor: v })} />
-              <Field label="Tipografía">
-                <select className="input" value={b.fontFamily} onChange={(e) => setBrand({ fontFamily: e.target.value })}>
-                  {fonts.map((f) => (
-                    <option key={f} value={f} style={{ fontFamily: f }}>
-                      {f}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </Card>
+        {/* 4 · Invitaciones */}
+        <div>
+          <h2 className="mb-2 font-semibold text-ink">4 · Invitaciones</h2>
+          <InviteCard ceuCode={s.ceuCode} />
+        </div>
 
-            {/* Vista previa White-label */}
-            <Card className="p-6">
-              <p className="text-xs uppercase text-ink-faint mb-3">Vista previa</p>
-              <div className="rounded-2xl p-6 border" style={{ background: b.secondaryColor, borderColor: b.primaryColor }}>
-                <p className="text-2xl font-black" style={{ color: b.primaryColor, fontFamily: b.fontFamily }}>{b.logoText}</p>
-                <p className="mt-2" style={{ color: b.accentColor, fontFamily: b.fontFamily }}>Encuentra tu equilibrio. Reserva tu próxima clase.</p>
-                <button className="mt-4 rounded-xl px-4 py-2 text-sm font-semibold" style={{ background: b.primaryColor, color: b.secondaryColor }}>Reservar clase</button>
-              </div>
-              <p className="mt-4 text-sm text-ink-faint">Los cambios se aplican a toda la interfaz cuando tocas <strong>Guardar cambios</strong>.</p>
-            </Card>
-          </>
-        ) : (
-          <LockedFeature
-            title="White-label (tu marca y colores)"
-            plan="Pro"
-            desc="Personaliza los colores y la tipografía de toda la app con tu marca."
-          />
-        )}
+        {/* 5 · Recibe tus pagos (pasarela) */}
+        <div>
+          <h2 className="mb-2 font-semibold text-ink">5 · Recibe tus pagos</h2>
+          <p className="mb-3 text-sm text-ink-faint">
+            Conecta tu cuenta para recibir los pagos de tus alumnos directo en tu banco. La app no toca ese dinero.
+          </p>
+          <StripeConnectCard />
+          <MpConnectCard />
+        </div>
 
-        {/* Reservas y cancelación */}
-        <Card className="p-6 lg:col-span-2 space-y-4">
+        {/* 6 · Políticas de cancelación y reglas (unificado) */}
+        <Card className="p-6 space-y-4">
+          <h2 className="font-semibold text-ink">6 · Políticas de cancelación y reglas</h2>
+
           <div>
-            <h2 className="font-semibold text-ink">Política de cancelación</h2>
-            <p className="mt-1 mb-3 text-sm text-ink-faint">
-              Este texto se muestra a tus alumnos en la pantalla de <strong>Reservar</strong>. Explica
-              con cuánta anticipación pueden cancelar sin penalización.
-            </p>
-            <textarea
-              className="input"
-              rows={4}
-              value={b.cancellationPolicy ?? ''}
-              onChange={(e) => setBrand({ cancellationPolicy: e.target.value })}
-              placeholder="Ej. Puedes cancelar tu reserva hasta 4 horas antes de la clase sin penalización. Después de ese tiempo, la clase se descuenta de tu paquete."
-            />
+            <Field label="Política de cancelación (la ven tus alumnos al reservar)">
+              <textarea
+                className="input"
+                rows={3}
+                value={b.cancellationPolicy ?? ''}
+                onChange={(e) => setBrand({ cancellationPolicy: e.target.value })}
+                placeholder="Ej. Puedes cancelar tu reserva hasta 4 horas antes de la clase sin penalización. Después de ese tiempo, la clase se descuenta de tu paquete."
+              />
+            </Field>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 border-t border-cream-dark pt-4">
@@ -284,7 +263,6 @@ export default function Settings() {
                 Con <strong>24</strong>, nadie puede cancelar si faltan menos de 24 h. Usa <strong>0</strong> para permitir cancelar siempre.
               </p>
             </div>
-
             <div>
               <Field label="Cierre de reservas — minutos antes de la clase">
                 <input
@@ -319,54 +297,39 @@ export default function Settings() {
               Usa <strong>0</strong> para no cobrar penalización.
             </p>
           </div>
-        </Card>
 
-        {/* Reglas y políticas del negocio (las ve el alumno en su panel) */}
-        <Card className="p-6 lg:col-span-2 space-y-3">
-          <div>
-            <h2 className="font-semibold text-ink">Reglas y políticas del negocio</h2>
-            <p className="mt-1 text-sm text-ink-faint">
-              Escribe aquí las reglas de tu estudio/gym (uso de equipo, higiene, horarios, invitados,
-              código de vestimenta, etc.). Tus alumnos las verán en su panel.
-            </p>
+          <div className="border-t border-cream-dark pt-4">
+            <Field label="Reglas y políticas del negocio (las ven tus alumnos en su panel)">
+              <textarea
+                className="input"
+                rows={6}
+                value={b.studioPolicies ?? ''}
+                onChange={(e) => setBrand({ studioPolicies: e.target.value })}
+                placeholder={'Ej:\n• Llega 10 min antes de tu clase.\n• Trae tu propia toalla y botella de agua.\n• Limpia el equipo después de usarlo.\n• Respeta los horarios de acceso.'}
+              />
+            </Field>
           </div>
-          <textarea
-            className="input"
-            rows={6}
-            value={b.studioPolicies ?? ''}
-            onChange={(e) => setBrand({ studioPolicies: e.target.value })}
-            placeholder={'Ej:\n• Llega 10 min antes de tu clase.\n• Trae tu propia toalla y botella de agua.\n• Limpia el equipo después de usarlo.\n• Cancela con al menos 4 h de anticipación.'}
-          />
         </Card>
 
-        {/* Acceso: exigir plan activo a todos los miembros */}
-        <Card className="p-6 lg:col-span-2 space-y-3">
-          <div>
-            <h2 className="font-semibold text-ink">Exigir plan activo para usar la app</h2>
-            <p className="mt-1 text-sm text-ink-faint">
-              Los miembros <strong>nuevos</strong> siempre deben adquirir un plan/membresía antes de reservar
-              o registrar entrada. Si activas esto, la regla aplica <strong>también a tus miembros actuales</strong>
-              (los que no tengan un plan activo no podrán usar la app hasta adquirirlo). Déjalo apagado para
-              no afectar a tus miembros de siempre.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setBrand({ requirePlanAll: !b.requirePlanAll })}
-            className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${b.requirePlanAll ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'}`}
-          >
-            <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${b.requirePlanAll ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
-              {b.requirePlanAll ? '✓' : ''}
-            </span>
-            <span className="text-sm font-medium text-ink">Exigir plan activo a TODOS los miembros (no solo a los nuevos)</span>
-          </button>
-        </Card>
+        {/* 7 · Multi-sucursal — plan Premium */}
+        <div>
+          <h2 className="mb-2 font-semibold text-ink">7 · Multisucursales</h2>
+          {can('multiBranch') ? (
+            <BranchesCard currency={b.currencyCode ?? 'USD'} />
+          ) : (
+            <LockedFeature
+              title="Multi-sucursal"
+              plan="Premium"
+              desc="Administra varias sedes bajo una sola cuenta. 1ª sede incluida; cada sede extra suma al plan."
+            />
+          )}
+        </div>
 
-        {/* Tienda para miembros — plan con tienda */}
+        {/* 8 · Tienda para alumnos y coaches */}
         {can('store') && (
-          <Card className="p-6 lg:col-span-2 space-y-3">
+          <Card className="p-6 space-y-3">
             <div>
-              <h2 className="font-semibold text-ink">Tienda para alumnos y coaches</h2>
+              <h2 className="font-semibold text-ink">8 · Tienda para alumnos y coaches</h2>
               <p className="mt-1 text-sm text-ink-faint">
                 Si lo activas, tus alumnos y coaches ven tu catálogo de productos y pueden
                 <strong> apartar</strong> lo que quieran; a ti te llega el pedido en <strong>Tienda / Pedidos</strong>
@@ -386,33 +349,25 @@ export default function Settings() {
           </Card>
         )}
 
-        {/* Multi-sucursal — plan Premium */}
-        {can('multiBranch') ? (
-          <BranchesCard currency={b.currencyCode ?? 'USD'} />
-        ) : (
-          <LockedFeature
-            title="Multi-sucursal"
-            plan="Premium"
-            desc="Administra varias sedes bajo una sola cuenta. 1ª sede incluida; cada sede extra suma al plan."
-          />
-        )}
-
-        {/* Página informativa pública (opcional — la llena el estudio) — plan Pro */}
-        {can('publicInfo') ? (
-          <InfoPageEditor
-            value={b.infoPage ?? {}}
-            ceuCode={s.ceuCode}
-            onChange={(patch: Partial<StudioInfoPage>) =>
-              setBrand({ infoPage: { ...(b.infoPage ?? {}), ...patch } })
-            }
-          />
-        ) : (
-          <LockedFeature
-            title="Página pública informativa"
-            plan="Pro"
-            desc="Publica una página con la info de tu estudio y su propio QR/link."
-          />
-        )}
+        {/* 9 · Página informativa pública — plan Pro */}
+        <div>
+          <h2 className="mb-2 font-semibold text-ink">9 · Página informativa</h2>
+          {can('publicInfo') ? (
+            <InfoPageEditor
+              value={b.infoPage ?? {}}
+              ceuCode={s.ceuCode}
+              onChange={(patch: Partial<StudioInfoPage>) =>
+                setBrand({ infoPage: { ...(b.infoPage ?? {}), ...patch } })
+              }
+            />
+          ) : (
+            <LockedFeature
+              title="Página pública informativa"
+              plan="Pro"
+              desc="Publica una página con la info de tu estudio y su propio QR/link."
+            />
+          )}
+        </div>
       </div>
 
       {/* Barra de guardado (los cambios NO se aplican hasta tocar Guardar) */}
