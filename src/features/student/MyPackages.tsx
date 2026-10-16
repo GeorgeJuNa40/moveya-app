@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { useStore } from '../../lib/store';
+import { useStore, isQueuedPackage } from '../../lib/store';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
-import { usd, daysUntil } from '../../lib/format';
+import { usd, daysUntil, fmtDate } from '../../lib/format';
 import { PERIOD_LABEL, PERIOD_SUFFIX, periodOf } from '../../lib/periods';
 import { startCheckout, cancelMembership, type PayProvider } from '../../lib/payments';
 import { accessCheckIn, fmtDur } from '../../lib/access';
@@ -27,9 +27,15 @@ export default function MyPackages() {
   // más viejos se ocultan de la vista del alumno para no acumular tarjetas
   // (el historial se conserva en la base para los reportes del estudio).
   const GRACE_MS = 24 * 60 * 60 * 1000;
-  const myPackages = db.userPackages
+  const mine = db.userPackages
     .filter((p) => p.userId === uid)
-    .filter((p) => new Date(p.expiresAt).getTime() > Date.now() - GRACE_MS)
+    .filter((p) => new Date(p.expiresAt).getTime() > Date.now() - GRACE_MS);
+  // En cola: ya comprados/pagados pero que inician cuando termine el que corre.
+  const queued = mine.filter(isQueuedPackage).sort((a, b) => (a.startsAt ?? '').localeCompare(b.startsAt ?? ''));
+  // Activos ahora (corriendo) + los que vencieron hace poco (gracia). No incluye
+  // los que están en cola (esos van en su propia sección).
+  const myPackages = mine
+    .filter((p) => !isQueuedPackage(p))
     .sort((a, b) => a.expiresAt.localeCompare(b.expiresAt));
   const catalog = db.packages.filter((p) => p.studioId === currentStudio!.id && p.active);
   const [buying, setBuying] = useState<string | null>(null);
@@ -238,6 +244,32 @@ export default function MyPackages() {
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {queued.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-1 font-semibold text-ink">En cola</h2>
+          <p className="mb-3 text-sm text-ink-faint">
+            Ya los pagaste. Cada uno empieza automáticamente cuando termina el anterior — no pierdes días.
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            {queued.map((up) => {
+              const pkg = db.packages.find((p) => p.id === up.packageId);
+              return (
+                <Card key={up.id} className="p-5">
+                  <div className="flex items-start justify-between">
+                    <h3 className="font-semibold text-ink">{pkg?.name ?? 'Plan'}</h3>
+                    <Badge tone="neutral">En cola</Badge>
+                  </div>
+                  <p className="mt-2 text-sm text-ink-soft">
+                    Inicia el <strong>{up.startsAt ? fmtDate(up.startsAt) : '—'}</strong>
+                  </p>
+                  <p className="text-sm text-ink-faint">y vence el {fmtDate(up.expiresAt)}</p>
+                </Card>
+              );
+            })}
+          </div>
         </div>
       )}
 

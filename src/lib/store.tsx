@@ -1163,19 +1163,29 @@ function applyPurchase(
   const now = new Date();
   const isAccess = pkg.kind === 'access';
 
-  // Vigencia acumulable (renovación): si ya tiene VIGENTE el MISMO paquete, los
-  // días nuevos se SUMAN desde su vencimiento actual (no pierde los que le
-  // quedan). Si el admin fija un vencimiento real (opts.expiresAt), se usa ese.
-  const sameUsable = db.userPackages
-    .filter((p) => p.userId === userId && p.packageId === pkg.id && isUsablePackage(p))
-    .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt));
-  const current = sameUsable[0];
+  // Fecha de inicio y vencimiento del nuevo plan.
+  //  - Si el admin fija un vencimiento real (migrar membresía actual): empieza
+  //    HOY y vence en esa fecha.
+  //  - Si es membresía de ACCESO y el miembro ya tiene una corriendo o en cola:
+  //    la nueva se forma EN COLA (empieza cuando termina la última; NO se suma al
+  //    plan actual ni lo reemplaza). El plan que corre ahora sigue igual.
+  //  - Créditos (estudios): empieza hoy y se acumulan en paralelo (como siempre).
+  let startsAt: string | undefined;
   let expiresAt: string;
   if (opts?.expiresAt) {
+    startsAt = undefined; // empieza hoy
     expiresAt = new Date(opts.expiresAt).toISOString();
+  } else if (isAccess) {
+    const futureEndsMs = db.userPackages
+      .filter((p) => p.userId === userId && p.kind === 'access' && p.active && new Date(p.expiresAt).getTime() > now.getTime())
+      .map((p) => new Date(p.expiresAt).getTime());
+    const queueStartMs = futureEndsMs.length ? Math.max(...futureEndsMs) : now.getTime();
+    startsAt = queueStartMs > now.getTime() ? new Date(queueStartMs).toISOString() : undefined;
+    const expires = new Date(queueStartMs);
+    expires.setDate(expires.getDate() + pkg.validityDays);
+    expiresAt = expires.toISOString();
   } else {
-    const baseMs = current ? Math.max(now.getTime(), new Date(current.expiresAt).getTime()) : now.getTime();
-    const expires = new Date(baseMs);
+    const expires = new Date(now);
     expires.setDate(expires.getDate() + pkg.validityDays);
     expiresAt = expires.toISOString();
   }
@@ -1193,36 +1203,6 @@ function applyPurchase(
         registeredBy,
       };
 
-  // Un miembro tiene UNA sola membresía de ACCESO activa a la vez: al registrar
-  // una nueva se renueva la misma (si aplica) y se DESACTIVAN las demás activas
-  // (así no se acumulan pases solapados = la "duplicación"). En créditos sí se
-  // pueden tener varios paquetes en paralelo (se suman las clases).
-  const otherActiveAccess = isAccess
-    ? db.userPackages.filter(
-        (p) => p.userId === userId && p.kind === 'access' && p.id !== current?.id && isUsablePackage(p),
-      )
-    : [];
-
-  if (isAccess && current) {
-    // Renovar/ajustar la membresía vigente del mismo paquete.
-    setDb((prev) => ({
-      ...prev,
-      userPackages: prev.userPackages.map((p) => {
-        if (p.id === current.id) return { ...p, expiresAt, active: true };
-        if (otherActiveAccess.some((o) => o.id === p.id)) return { ...p, active: false };
-        return p;
-      }),
-      payments: payment ? [...prev.payments, payment] : prev.payments,
-    }));
-    void (async () => {
-      await dbUpsert('packages', rowPackage(pkg));
-      await dbUpdate('user_packages', current.id, { expires_at: expiresAt, active: true });
-      for (const o of otherActiveAccess) await dbUpdate('user_packages', o.id, { active: false });
-      if (payment) await dbInsert('payments', rowPayment(payment));
-    })();
-    return;
-  }
-
   const userPackage = {
     id: newId(),
     userId,
@@ -1231,17 +1211,13 @@ function applyPurchase(
     creditsTotal: isAccess ? 0 : pkg.classCredits,
     creditsUsed: 0,
     purchasedAt: new Date().toISOString(),
+    startsAt,
     expiresAt,
     active: true,
   };
   setDb((prev) => ({
     ...prev,
-    userPackages: [
-      ...prev.userPackages.map((p) =>
-        otherActiveAccess.some((o) => o.id === p.id) ? { ...p, active: false } : p,
-      ),
-      userPackage,
-    ],
+    userPackages: [...prev.userPackages, userPackage],
     payments: payment ? [...prev.payments, payment] : prev.payments,
   }));
   // El paquete y el pago referencian a packages(id) por llave foránea. Nos
@@ -1249,7 +1225,6 @@ function applyPurchase(
   void (async () => {
     await dbUpsert('packages', rowPackage(pkg));
     await dbInsert('user_packages', rowUserPackage(userPackage));
-    for (const o of otherActiveAccess) await dbUpdate('user_packages', o.id, { active: false });
     if (payment) await dbInsert('payments', rowPayment(payment));
   })();
 }
@@ -1272,9 +1247,18 @@ export function isSubscriptionActive(studio: Studio | null): boolean {
 // libre) basta con estar vigente — no descuenta créditos.
 export function isUsablePackage(p: UserPackage): boolean {
   if (!p.active) return false;
-  if (new Date(p.expiresAt).getTime() <= Date.now()) return false;
+  const now = Date.now();
+  // En cola: aún no empieza su vigencia → todavía no se puede usar.
+  if (p.startsAt && new Date(p.startsAt).getTime() > now) return false;
+  if (new Date(p.expiresAt).getTime() <= now) return false;
   if (p.kind === 'access') return true;
   return p.creditsUsed < p.creditsTotal;
+}
+
+// ¿Está EN COLA? (ya comprado/pagado pero su vigencia empieza en el futuro,
+// cuando termine el plan que está corriendo ahora).
+export function isQueuedPackage(p: UserPackage): boolean {
+  return p.active && !!p.startsAt && new Date(p.startsAt).getTime() > Date.now();
 }
 
 // ¿Es una membresía de acceso libre (no por créditos)?

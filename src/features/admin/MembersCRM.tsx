@@ -482,8 +482,9 @@ function RegisterPaymentModal({
     <Modal onClose={onClose}>
       <h2 className="text-lg font-bold text-ink mb-1">Registrar pago / membresía</h2>
       <p className="text-sm text-ink-faint mb-4">
-        Asigna un plan al alumno y registra cómo pagó. Si ya tiene una membresía activa,
-        <strong> se renueva o reemplaza</strong> (nunca se duplica).
+        Asigna un plan al alumno y registra cómo pagó. Si ya tiene un plan activo, el nuevo
+        <strong> no lo borra</strong>: en gimnasio se forma <strong>en cola</strong> (empieza al terminar el actual);
+        en estudio se suman las clases.
       </p>
       <div className="space-y-4">
         <Field label="Alumno">
@@ -495,8 +496,8 @@ function RegisterPaymentModal({
         {hasActive && (
           <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
             Ya tiene <strong>{m.planName}</strong> activo
-            {m.expiresAt ? <> hasta el <strong>{fmtDate(m.expiresAt)}</strong></> : ''}. Al registrar,
-            su membresía se <strong>actualiza</strong> (no se agrega otra).
+            {m.expiresAt ? <> hasta el <strong>{fmtDate(m.expiresAt)}</strong></> : ''}. El plan que registres
+            quedará <strong>en cola</strong> y empezará cuando ese termine (no lo reemplaza ni se suma).
           </div>
         )}
 
