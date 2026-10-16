@@ -13,6 +13,7 @@ export const PERIOD_DAYS: Record<BillingPeriod, number> = {
   biweekly: 15,
   month: 30,
   quarter: 90,
+  year: 365,
 };
 
 // Nombre visible del periodo.
@@ -22,6 +23,7 @@ export const PERIOD_LABEL: Record<BillingPeriod, string> = {
   biweekly: 'Quincenal',
   month: 'Mensual',
   quarter: 'Trimestral',
+  year: 'Anual',
 };
 
 // Sufijo corto para el precio (ej. "$500 / mes").
@@ -31,10 +33,11 @@ export const PERIOD_SUFFIX: Record<BillingPeriod, string> = {
   biweekly: '/ quincena',
   month: '/ mes',
   quarter: '/ trimestre',
+  year: '/ año',
 };
 
 // Orden en que se muestran los botones del selector.
-export const PERIOD_ORDER: BillingPeriod[] = ['day', 'week', 'biweekly', 'month', 'quarter'];
+export const PERIOD_ORDER: BillingPeriod[] = ['day', 'week', 'biweekly', 'month', 'quarter', 'year'];
 
 // Periodo de un paquete de acceso: usa el guardado, o lo infiere de la vigencia
 // (para membresías creadas antes de tener el campo `period`).
@@ -45,5 +48,6 @@ export function periodOf(p: Package): BillingPeriod {
   if (d <= 8) return 'week';
   if (d <= 20) return 'biweekly';
   if (d <= 45) return 'month';
-  return 'quarter';
+  if (d <= 180) return 'quarter';
+  return 'year';
 }

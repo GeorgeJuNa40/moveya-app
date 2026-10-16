@@ -227,7 +227,7 @@ export type PackageKind = 'credits' | 'access';
 
 // Periodo de cobro de una membresía de acceso. Define su vigencia y cómo se
 // muestra ("Mensual", "Trimestral", etc.). "Por clase" = paquete de créditos.
-export type BillingPeriod = 'day' | 'week' | 'biweekly' | 'month' | 'quarter';
+export type BillingPeriod = 'day' | 'week' | 'biweekly' | 'month' | 'quarter' | 'year';
 
 export interface Package {
   id: string;

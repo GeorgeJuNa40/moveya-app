@@ -10,6 +10,7 @@ import AppShell from './components/layout/AppShell';
 import SubscriptionGate from './features/admin/SubscriptionGate';
 import PlanGate from './features/admin/PlanGate';
 import CoachGate from './features/coach/CoachGate';
+import StudentGate from './features/student/StudentGate';
 
 // Cada pantalla se carga bajo demanda (code-splitting) para aligerar la carga
 // inicial: el navegador solo descarga el código de la sección que se abre.
@@ -299,15 +300,18 @@ export default function App() {
       <Route path="/coach/profile" element={<RequireRole role="COACH"><CoachGate><CoachProfile /></CoachGate></RequireRole>} />
       <Route path="/coach/routines" element={<RequireRole role="COACH"><CoachGate><RoutinesAdmin /></CoachGate></RequireRole>} />
 
-      {/* ---- USUARIO (Alumno) ---- */}
+      {/* ---- USUARIO (Alumno) ----
+          Dashboard y Paquetes SIEMPRE abiertos (puerta de entrada y compra del
+          plan). El resto va tras StudentGate: sin plan activo no se puede
+          reservar ni usar la app; al adquirirlo se desbloquea todo. */}
       <Route path="/app" element={<RequireRole role="STUDENT"><StudentDashboard /></RequireRole>} />
-      <Route path="/app/book" element={<RequireRole role="STUDENT"><BookClasses /></RequireRole>} />
       <Route path="/app/packages" element={<RequireRole role="STUDENT"><MyPackages /></RequireRole>} />
-      <Route path="/app/rewards" element={<RequireRole role="STUDENT"><Rewards /></RequireRole>} />
-      <Route path="/app/coaches" element={<RequireRole role="STUDENT"><StudentCoaches /></RequireRole>} />
-      <Route path="/app/routine" element={<RequireRole role="STUDENT"><MyRoutine /></RequireRole>} />
-      <Route path="/app/services" element={<RequireRole role="STUDENT"><OptionalServices /></RequireRole>} />
-      <Route path="/app/suggestions" element={<RequireRole role="STUDENT"><Suggestions /></RequireRole>} />
+      <Route path="/app/book" element={<RequireRole role="STUDENT"><StudentGate><BookClasses /></StudentGate></RequireRole>} />
+      <Route path="/app/rewards" element={<RequireRole role="STUDENT"><StudentGate><Rewards /></StudentGate></RequireRole>} />
+      <Route path="/app/coaches" element={<RequireRole role="STUDENT"><StudentGate><StudentCoaches /></StudentGate></RequireRole>} />
+      <Route path="/app/routine" element={<RequireRole role="STUDENT"><StudentGate><MyRoutine /></StudentGate></RequireRole>} />
+      <Route path="/app/services" element={<RequireRole role="STUDENT"><StudentGate><OptionalServices /></StudentGate></RequireRole>} />
+      <Route path="/app/suggestions" element={<RequireRole role="STUDENT"><StudentGate><Suggestions /></StudentGate></RequireRole>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

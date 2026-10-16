@@ -121,6 +121,16 @@ interface StoreValue {
   awardGoal: (goalId: string) => void; // valida y da estrellas si ya cumplió
   // Estudio — pagos y planes
   registerManualPlan: (userId: string, packageId: string, method: PaymentMethod) => void;
+  // Alta manual de miembro (para personas que no usan la app: adultos mayores,
+  // walk-ins). Crea el alumno SIN cuenta/login. Devuelve su id para registrarle
+  // el pago enseguida, o null si falló (p. ej. correo duplicado).
+  addMember: (input: {
+    fullName: string;
+    phone?: string;
+    email?: string;
+    birthDate?: string;
+    branchId?: string;
+  }) => Promise<string | null>;
   // Estudio — paquetes
   upsertPackage: (pkg: Package) => void;
   togglePackageActive: (packageId: string) => void;
@@ -682,6 +692,51 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     registerManualPlan(userId, packageId, method) {
       applyPurchase(setDb, db, userId, packageId, method, 'studio');
     },
+    async addMember(input) {
+      const studioId = currentUser?.studioId;
+      if (!studioId) return null;
+      const name = input.fullName.trim();
+      if (!name) return null;
+      const id = newId();
+      const initials = name
+        .split(/\s+/)
+        .map((p) => p[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase();
+      // El correo es obligatorio y único por estudio. Si no lo dan (walk-in),
+      // sintetizamos uno interno único para no bloquear el alta.
+      const email = (input.email ?? '').trim() || `walkin.${id.slice(0, 8)}@moveya.local`;
+      // Un gerente de sucursal da de alta en SU sede automáticamente.
+      const branchId =
+        input.branchId ?? (currentUser?.role === 'BRANCH_ADMIN' ? currentUser.branchId : undefined);
+      const member: User = {
+        id,
+        studioId,
+        role: 'STUDENT',
+        fullName: name,
+        email,
+        phone: (input.phone ?? '').trim(),
+        birthDate: input.birthDate || undefined,
+        avatarInitials: initials,
+        createdAt: new Date().toISOString(),
+        branchId,
+      };
+      setDb((prev) => ({ ...prev, users: [...prev.users, member] }));
+      const { error } = await supabase.from('users').insert(rowUser(member));
+      if (error) {
+        // Revertimos la adición local y avisamos.
+        setDb((prev) => ({ ...prev, users: prev.users.filter((u) => u.id !== id) }));
+        notifyError(
+          'agregar miembro',
+          /duplicate|unique/i.test(error.message)
+            ? 'Ya existe un miembro con ese correo en tu estudio.'
+            : error.message,
+        );
+        return null;
+      }
+      return id;
+    },
 
     // Canjea una recompensa. El saldo de estrellas se valida en el servidor
     // (RPC redeem_reward). Si esa función aún no está instalada, usa el respaldo
@@ -1097,19 +1152,22 @@ function applyPurchase(
 ) {
   const pkg = db.packages.find((p) => p.id === packageId);
   if (!pkg) return;
-  const expires = new Date();
+  const now = new Date();
+  // Vigencia acumulable: si el alumno ya tiene VIGENTE el MISMO paquete, los días
+  // nuevos se SUMAN a partir de su vencimiento actual (no pierde los que le
+  // quedan al renovar antes de tiempo). Si ya venció o es la primera compra,
+  // cuenta desde hoy.
+  const sameUsable = db.userPackages
+    .filter((p) => p.userId === userId && p.packageId === pkg.id && isUsablePackage(p))
+    .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt));
+  const current = sameUsable[0];
+  const baseMs = current
+    ? Math.max(now.getTime(), new Date(current.expiresAt).getTime())
+    : now.getTime();
+  const expires = new Date(baseMs);
   expires.setDate(expires.getDate() + pkg.validityDays);
-  const userPackage = {
-    id: newId(),
-    userId,
-    packageId: pkg.id,
-    kind: pkg.kind ?? 'credits',
-    creditsTotal: pkg.kind === 'access' ? 0 : pkg.classCredits,
-    creditsUsed: 0,
-    purchasedAt: new Date().toISOString(),
-    expiresAt: expires.toISOString(),
-    active: true,
-  };
+  const expiresAt = expires.toISOString();
+
   const payment: Payment = {
     id: newId(),
     userId,
@@ -1119,6 +1177,38 @@ function applyPurchase(
     concept: pkg.name,
     paidAt: new Date().toISOString(),
     registeredBy,
+  };
+
+  // Membresía de acceso del MISMO paquete que sigue vigente → EXTENDEMOS esa
+  // misma fila: así queda UNA sola membresía con UN vencimiento claro (en vez de
+  // dos pases solapados). En créditos, o sin membresía vigente, creamos una fila
+  // nueva (los créditos sí se acumulan en paralelo).
+  if (pkg.kind === 'access' && current) {
+    setDb((prev) => ({
+      ...prev,
+      userPackages: prev.userPackages.map((p) =>
+        p.id === current.id ? { ...p, expiresAt, active: true } : p,
+      ),
+      payments: [...prev.payments, payment],
+    }));
+    void (async () => {
+      await dbUpsert('packages', rowPackage(pkg));
+      await dbUpdate('user_packages', current.id, { expires_at: expiresAt, active: true });
+      await dbInsert('payments', rowPayment(payment));
+    })();
+    return;
+  }
+
+  const userPackage = {
+    id: newId(),
+    userId,
+    packageId: pkg.id,
+    kind: pkg.kind ?? 'credits',
+    creditsTotal: pkg.kind === 'access' ? 0 : pkg.classCredits,
+    creditsUsed: 0,
+    purchasedAt: new Date().toISOString(),
+    expiresAt,
+    active: true,
   };
   setDb((prev) => ({
     ...prev,

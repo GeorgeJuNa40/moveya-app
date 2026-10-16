@@ -42,7 +42,7 @@ function fmtBirthday(iso?: string): string | null {
 
 // CRM de alumnos: contacto, clases agendadas, membresía y registro de pagos.
 export default function MembersCRM() {
-  const { db, currentStudio, studioUsers, membership, registerManualPlan, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch } = useStore();
+  const { db, currentStudio, studioUsers, membership, registerManualPlan, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch } = useStore();
   const students = studioUsers('STUDENT');
   const packages = db.packages.filter((p) => p.studioId === currentStudio!.id && p.active);
   const isGymish = currentStudio!.studioType === 'gym' || currentStudio!.studioType === 'mixed';
@@ -57,6 +57,7 @@ export default function MembersCRM() {
   const [query, setQuery] = useState('');
   const [detail, setDetail] = useState<User | null>(null);
   const [payFor, setPayFor] = useState<User | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const studentIds = useMemo(() => new Set(students.map((s) => s.id)), [students]);
 
@@ -100,7 +101,12 @@ export default function MembersCRM() {
       <PageHeader
         title="Miembros (CRM)"
         subtitle="Alumnos registrados, sus clases, membresías y pagos"
-        action={<Button onClick={() => setPayFor(students[0] ?? null)}>+ Registrar pago</Button>}
+        action={
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setAdding(true)}>+ Agregar miembro</Button>
+            <Button onClick={() => setPayFor(students[0] ?? null)}>+ Registrar pago</Button>
+          </div>
+        }
       />
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-5 mb-6">
@@ -407,6 +413,20 @@ export default function MembersCRM() {
           }}
         />
       )}
+
+      {/* Alta manual de miembro (sin app) */}
+      {adding && (
+        <AddMemberModal
+          packages={packages}
+          branches={branches}
+          onClose={() => setAdding(false)}
+          onSubmit={async ({ fullName, phone, email, birthDate, branchId, packageId, method }) => {
+            const id = await addMember({ fullName, phone, email, birthDate, branchId });
+            if (id && packageId) registerManualPlan(id, packageId, method);
+            setAdding(false);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -473,6 +493,114 @@ function RegisterPaymentModal({
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
           <Button disabled={!packageId} onClick={() => onSubmit(userId, packageId, method)}>Registrar y asignar plan</Button>
         </div>
+      </div>
+      <style>{`.input{width:100%;border:1px solid #E8E3D6;border-radius:.75rem;padding:.6rem .8rem;background:#fff;outline:none}.input:focus{box-shadow:0 0 0 2px var(--brand-primary)}`}</style>
+    </Modal>
+  );
+}
+
+function AddMemberModal({
+  packages, branches, onClose, onSubmit,
+}: {
+  packages: { id: string; name: string; priceUsd: number }[];
+  branches: { id: string; name: string }[];
+  onClose: () => void;
+  onSubmit: (data: {
+    fullName: string; phone: string; email: string; birthDate: string; branchId?: string;
+    packageId: string; method: PaymentMethod;
+  }) => void;
+}) {
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [branchId, setBranchId] = useState('');
+  const [assignPlan, setAssignPlan] = useState(false);
+  const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
+  const [method, setMethod] = useState<PaymentMethod>('cash');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!fullName.trim() || saving) return;
+    setSaving(true);
+    await onSubmit({
+      fullName, phone, email, birthDate,
+      branchId: branchId || undefined,
+      packageId: assignPlan ? packageId : '',
+      method,
+    });
+  };
+
+  return (
+    <Modal onClose={onClose}>
+      <h2 className="text-lg font-bold text-ink mb-1">Agregar miembro</h2>
+      <p className="text-sm text-ink-faint mb-4">
+        Da de alta a una persona que no usa la app (adultos mayores, walk-ins). Se crea sin cuenta;
+        tú le registras el pago. Solo el nombre es obligatorio.
+      </p>
+      <div className="space-y-4">
+        <Field label="Nombre completo *">
+          <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Ej. María López" />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Teléfono">
+            <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Opcional" />
+          </Field>
+          <Field label="Cumpleaños">
+            <input type="date" className="input" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+          </Field>
+        </div>
+        <Field label="Correo (opcional)">
+          <input className="input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Si no tiene, se omite" />
+        </Field>
+        {branches.length > 0 && (
+          <Field label="Sucursal">
+            <select className="input" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+              <option value="">— Sede principal —</option>
+              {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </Field>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setAssignPlan((v) => !v)}
+          className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${assignPlan ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'}`}
+        >
+          <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${assignPlan ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
+            {assignPlan ? '✓' : ''}
+          </span>
+          <span className="text-sm font-medium text-ink">Asignarle un plan y registrar su pago ahora</span>
+        </button>
+
+        {assignPlan && (
+          <>
+            <Field label="Plan / paquete">
+              <select className="input" value={packageId} onChange={(e) => setPackageId(e.target.value)}>
+                {packages.map((p) => <option key={p.id} value={p.id}>{p.name} — {usd(p.priceUsd)}</option>)}
+              </select>
+            </Field>
+            <Field label="Forma de pago">
+              <div className="flex flex-wrap gap-2">
+                {(['cash', 'card', 'transfer', 'paypal'] as PaymentMethod[]).map((mth) => (
+                  <button
+                    key={mth}
+                    onClick={() => setMethod(mth)}
+                    className={`rounded-full px-3 py-1.5 text-sm border transition ${method === mth ? 'bg-brand text-cream border-brand' : 'bg-white text-ink-soft border-cream-dark'}`}
+                  >
+                    {METHOD_LABEL[mth]}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          </>
+        )}
+      </div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={onClose}>Cancelar</Button>
+        <Button disabled={!fullName.trim() || saving || (assignPlan && !packageId)} onClick={submit}>
+          {saving ? 'Guardando…' : assignPlan ? 'Crear y registrar pago' : 'Crear miembro'}
+        </Button>
       </div>
       <style>{`.input{width:100%;border:1px solid #E8E3D6;border-radius:.75rem;padding:.6rem .8rem;background:#fff;outline:none}.input:focus{box-shadow:0 0 0 2px var(--brand-primary)}`}</style>
     </Modal>

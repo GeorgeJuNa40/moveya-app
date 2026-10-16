@@ -1,8 +1,8 @@
 import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore, isUsablePackage } from '../../lib/store';
-import { Card, Button } from '../../components/ui';
-import { fmtDay, fmtTime, daysUntil } from '../../lib/format';
+import { Card, Button, Badge } from '../../components/ui';
+import { fmtDay, fmtTime, fmtDate, daysUntil, usd } from '../../lib/format';
 
 // Anillo de progreso circular (estilo "Weekly Goal"). El color del arco usa la
 // marca del estudio (white-label); la pista es crema.
@@ -66,6 +66,18 @@ export default function StudentDashboard() {
     return { myBookings, activePkg };
   }, [db, uid]);
 
+  // Historial de planes/membresías adquiridos ("Mis movimientos"): del más
+  // reciente al más viejo. El vigente se destaca.
+  const movimientos = useMemo(
+    () =>
+      db.userPackages
+        .filter((p) => p.userId === uid)
+        .slice()
+        .sort((a, b) => b.purchasedAt.localeCompare(a.purchasedAt)),
+    [db.userPackages, uid],
+  );
+  const hasAnyPlan = db.userPackages.some((p) => p.userId === uid && isUsablePackage(p));
+
   const creditsLeft = availableCredits(uid);
   const stars = starBalance(uid);
   const firstName = currentUser!.fullName.split(' ')[0];
@@ -118,21 +130,26 @@ export default function StudentDashboard() {
                   <p className="text-lg font-bold text-ink">
                     {db.packages.find((p) => p.id === heroPkg.packageId)?.name}
                   </p>
-                  <p className="mt-1 text-sm text-ink-soft">
-                    Vence en {daysUntil(heroPkg.expiresAt)} días
+                  <p className="mt-1 text-sm font-medium text-brand">
+                    Vence el {fmtDate(heroPkg.expiresAt)}
                   </p>
+                  <p className="text-xs text-ink-soft">({Math.max(0, daysUntil(heroPkg.expiresAt))} días restantes)</p>
                 </>
               ) : (
                 <>
                   <p className="text-lg font-bold text-ink">Sin plan activo</p>
-                  <p className="mt-1 text-sm text-ink-soft">Compra uno para reservar clases.</p>
+                  <p className="mt-1 text-sm text-ink-soft">
+                    {isGym ? 'Adquiere tu membresía para entrar.' : 'Compra un paquete para reservar clases.'}
+                  </p>
                 </>
               )}
             </div>
           </div>
 
-          <Link to={isGym ? '/app/packages' : '/app/book'} className="w-full sm:w-auto">
-            <Button className="w-full sm:w-auto">{isGym ? 'Registrar mi entrada' : 'Reservar clase'}</Button>
+          <Link to={heroPkg ? (isGym ? '/app/packages' : '/app/book') : '/app/packages'} className="w-full sm:w-auto">
+            <Button className="w-full sm:w-auto">
+              {!heroPkg ? (isGym ? 'Adquirir membresía' : 'Comprar paquete') : isGym ? 'Registrar mi entrada' : 'Reservar clase'}
+            </Button>
           </Link>
         </div>
       </Card>
@@ -192,6 +209,49 @@ export default function StudentDashboard() {
             <span className="text-brand">→</span>
           </Card>
         </Link>
+      )}
+
+      {/* Mis movimientos: historial de planes/membresías adquiridos. El vigente
+          se marca aunque el alumno haya comprado otros después. */}
+      {movimientos.length > 0 && (
+        <Card className="p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-semibold text-ink">Mis movimientos</h2>
+            <Link to="/app/packages" className="text-sm font-medium text-brand">Ver todo →</Link>
+          </div>
+          <div className="divide-y divide-cream-dark">
+            {movimientos.slice(0, 6).map((up) => {
+              const pkg = db.packages.find((p) => p.id === up.packageId);
+              const vigente = isUsablePackage(up);
+              const left = up.kind === 'access' ? null : Math.max(0, up.creditsTotal - up.creditsUsed);
+              const amount = db.payments
+                .filter((p) => p.userId === uid && p.packageId === up.packageId)
+                .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0]?.amountUsd;
+              return (
+                <div key={up.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-ink">{pkg?.name ?? 'Plan'}</p>
+                      {vigente
+                        ? <Badge tone="success">Vigente</Badge>
+                        : <Badge tone="neutral">Finalizado</Badge>}
+                    </div>
+                    <p className="text-xs text-ink-faint">
+                      Adquirido {fmtDay(up.purchasedAt)} · vence el {fmtDate(up.expiresAt)}
+                      {left != null ? ` · ${left} clases restantes` : ''}
+                    </p>
+                  </div>
+                  {amount != null && <span className="shrink-0 text-sm font-semibold text-ink-soft">{usd(amount)}</span>}
+                </div>
+              );
+            })}
+          </div>
+          {!hasAnyPlan && (
+            <Link to="/app/packages" className="mt-3 block">
+              <Button variant="secondary" className="w-full">Renovar / adquirir plan</Button>
+            </Link>
+          )}
+        </Card>
       )}
 
       {/* Reglas y políticas del negocio */}
