@@ -102,6 +102,29 @@ function Splash() {
   );
 }
 
+// Pantalla de reconexión: hay sesión iniciada, pero los datos del estudio no
+// terminaron de cargar (p. ej. token recién emitido o red intermitente). En vez
+// de dejar al usuario atorado en blanco, le damos un botón para reintentar sin
+// tener que recargar la página a mano.
+function Reconnect({ onRetry, onLogout }: { onRetry: () => void; onLogout: () => void }) {
+  return (
+    <div className="min-h-screen grid place-items-center bg-cream p-6">
+      <div className="max-w-sm text-center space-y-4">
+        <div className="text-2xl font-black text-brand">Move yA</div>
+        <p className="text-ink-soft">No pudimos cargar tu información. Suele resolverse al reintentar.</p>
+        <div className="flex gap-2 justify-center">
+          <button onClick={onRetry} className="rounded-full bg-brand text-cream-light px-5 py-3 text-sm font-semibold shadow-card">
+            Reintentar
+          </button>
+          <button onClick={onLogout} className="rounded-full bg-brand-soft text-brand-soft px-5 py-3 text-sm font-semibold">
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Guarda de rol: redirige al onboarding si no hay sesión o el rol no coincide.
 // Panel inicial según el rol. El gerente de sucursal (BRANCH_ADMIN) usa el panel
 // de administración (filtrado a su sucursal), igual que el dueño.
@@ -139,7 +162,7 @@ function RequireRole({ role, children }: { role: Role | Role[]; children: React.
 }
 
 export default function App() {
-  const { currentUser, authLoading, recoveryMode } = useStore();
+  const { currentUser, authLoading, recoveryMode, hasSession, reloadData, logout } = useStore();
 
   // Al volver de Stripe (?pago=exito / ?suscripcion=exito): avisa y refresca los
   // datos (el webhook ya creó el registro en el servidor).
@@ -245,6 +268,12 @@ export default function App() {
         <ResetPassword />
       </Suspense>
     );
+  }
+
+  // Hay sesión pero los datos no cargaron (token recién emitido / red): en vez de
+  // dejar la pantalla en blanco, ofrecemos reconectar sin recargar la página.
+  if (hasSession && !currentUser) {
+    return <Reconnect onRetry={reloadData} onLogout={() => void logout()} />;
   }
 
   return (

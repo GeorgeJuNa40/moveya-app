@@ -76,9 +76,10 @@ export type PlanCapability =
 export const PLAN_CAPABILITIES: Record<PlanId, PlanCapability[]> = {
   // Inicio: lo esencial para operar (calendario, CRM, recordatorios, cobros).
   inicio: [],
-  // Pro: marca propia, recompensas, servicios, reportes, tienda y página pública.
-  pro: ['whitelabel', 'rewards', 'services', 'reports', 'store', 'publicInfo'],
-  // Premium: todo lo de Pro + WhatsApp IA, reportes avanzados, multi-sucursal.
+  // Pro: marca propia, recompensas, servicios, reportes y página pública.
+  // (La tienda es exclusiva de Premium.)
+  pro: ['whitelabel', 'rewards', 'services', 'reports', 'publicInfo'],
+  // Premium: todo lo de Pro + tienda, WhatsApp IA, reportes avanzados, multi-sucursal.
   premium: ['whitelabel', 'rewards', 'services', 'reports', 'reportsAdvanced', 'whatsapp', 'multiBranch', 'store', 'publicInfo'],
 };
 
@@ -129,7 +130,6 @@ export const PLANS: Plan[] = [
       'Todo lo del plan Inicio',
       'Alumnos ilimitados · hasta 8 coaches',
       'White-label: tu marca en TODA la app (colores, tipografía y logo)',
-      'Tienda para alumnos y coaches: apartar o pagar en línea',
       'Coaches externos (traen a sus propios alumnos)',
       'Gamificación y recompensas · servicios opcionales',
       'Reportes de ingresos y asistencia',
@@ -148,6 +148,7 @@ export const PLANS: Plan[] = [
     features: [
       'Todo lo del plan Pro',
       'Coaches ilimitados',
+      'Tienda para alumnos y coaches: apartar o pagar en línea',
       'Agente de WhatsApp con IA',
       'Multi-sucursal con gerente por sede (login propio)',
       '1ª sede incluida · +$990 MXN por sede adicional',
