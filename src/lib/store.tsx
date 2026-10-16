@@ -121,7 +121,12 @@ interface StoreValue {
   goalProgress: (goal: Goal) => number; // clases asistidas dentro de la ventana
   awardGoal: (goalId: string) => void; // valida y da estrellas si ya cumplió
   // Estudio — pagos y planes
-  registerManualPlan: (userId: string, packageId: string, method: PaymentMethod) => void;
+  registerManualPlan: (
+    userId: string,
+    packageId: string,
+    method: PaymentMethod,
+    opts?: { expiresAt?: string; recordPayment?: boolean },
+  ) => void;
   // Alta manual de miembro (para personas que no usan la app: adultos mayores,
   // walk-ins). Crea el alumno SIN cuenta/login. Devuelve su id para registrarle
   // el pago enseguida, o null si falló (p. ej. correo duplicado).
@@ -688,8 +693,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!currentUser) return;
       applyPurchase(setDb, db, currentUser.id, packageId, method, 'online');
     },
-    registerManualPlan(userId, packageId, method) {
-      applyPurchase(setDb, db, userId, packageId, method, 'studio');
+    registerManualPlan(userId, packageId, method, opts) {
+      applyPurchase(setDb, db, userId, packageId, method, 'studio', opts);
     },
     async addMember(input) {
       const studioId = currentUser?.studioId;
@@ -1140,7 +1145,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 
-// Compra/registro de un plan: crea UserPackage + Payment (local + Supabase).
+// Compra/registro de un plan: crea/actualiza UserPackage + (opcional) Payment.
+// opts.expiresAt   → fija el vencimiento REAL (migrar a un miembro que ya tiene
+//                    plan). Si no se da, se calcula del periodo del paquete.
+// opts.recordPayment=false → no registra pago (solo deja su membresía al día).
 function applyPurchase(
   setDb: React.Dispatch<React.SetStateAction<Database>>,
   db: Database,
@@ -1148,52 +1156,69 @@ function applyPurchase(
   packageId: string,
   method: PaymentMethod,
   registeredBy: 'studio' | 'online',
+  opts?: { expiresAt?: string; recordPayment?: boolean },
 ) {
   const pkg = db.packages.find((p) => p.id === packageId);
   if (!pkg) return;
   const now = new Date();
-  // Vigencia acumulable: si el alumno ya tiene VIGENTE el MISMO paquete, los días
-  // nuevos se SUMAN a partir de su vencimiento actual (no pierde los que le
-  // quedan al renovar antes de tiempo). Si ya venció o es la primera compra,
-  // cuenta desde hoy.
+  const isAccess = pkg.kind === 'access';
+
+  // Vigencia acumulable (renovación): si ya tiene VIGENTE el MISMO paquete, los
+  // días nuevos se SUMAN desde su vencimiento actual (no pierde los que le
+  // quedan). Si el admin fija un vencimiento real (opts.expiresAt), se usa ese.
   const sameUsable = db.userPackages
     .filter((p) => p.userId === userId && p.packageId === pkg.id && isUsablePackage(p))
     .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt));
   const current = sameUsable[0];
-  const baseMs = current
-    ? Math.max(now.getTime(), new Date(current.expiresAt).getTime())
-    : now.getTime();
-  const expires = new Date(baseMs);
-  expires.setDate(expires.getDate() + pkg.validityDays);
-  const expiresAt = expires.toISOString();
+  let expiresAt: string;
+  if (opts?.expiresAt) {
+    expiresAt = new Date(opts.expiresAt).toISOString();
+  } else {
+    const baseMs = current ? Math.max(now.getTime(), new Date(current.expiresAt).getTime()) : now.getTime();
+    const expires = new Date(baseMs);
+    expires.setDate(expires.getDate() + pkg.validityDays);
+    expiresAt = expires.toISOString();
+  }
 
-  const payment: Payment = {
-    id: newId(),
-    userId,
-    amountUsd: pkg.priceUsd,
-    method,
-    packageId: pkg.id,
-    concept: pkg.name,
-    paidAt: new Date().toISOString(),
-    registeredBy,
-  };
+  const payment: Payment | null = opts?.recordPayment === false
+    ? null
+    : {
+        id: newId(),
+        userId,
+        amountUsd: pkg.priceUsd,
+        method,
+        packageId: pkg.id,
+        concept: pkg.name,
+        paidAt: new Date().toISOString(),
+        registeredBy,
+      };
 
-  // Membresía de acceso del MISMO paquete que sigue vigente → EXTENDEMOS esa
-  // misma fila: así queda UNA sola membresía con UN vencimiento claro (en vez de
-  // dos pases solapados). En créditos, o sin membresía vigente, creamos una fila
-  // nueva (los créditos sí se acumulan en paralelo).
-  if (pkg.kind === 'access' && current) {
+  // Un miembro tiene UNA sola membresía de ACCESO activa a la vez: al registrar
+  // una nueva se renueva la misma (si aplica) y se DESACTIVAN las demás activas
+  // (así no se acumulan pases solapados = la "duplicación"). En créditos sí se
+  // pueden tener varios paquetes en paralelo (se suman las clases).
+  const otherActiveAccess = isAccess
+    ? db.userPackages.filter(
+        (p) => p.userId === userId && p.kind === 'access' && p.id !== current?.id && isUsablePackage(p),
+      )
+    : [];
+
+  if (isAccess && current) {
+    // Renovar/ajustar la membresía vigente del mismo paquete.
     setDb((prev) => ({
       ...prev,
-      userPackages: prev.userPackages.map((p) =>
-        p.id === current.id ? { ...p, expiresAt, active: true } : p,
-      ),
-      payments: [...prev.payments, payment],
+      userPackages: prev.userPackages.map((p) => {
+        if (p.id === current.id) return { ...p, expiresAt, active: true };
+        if (otherActiveAccess.some((o) => o.id === p.id)) return { ...p, active: false };
+        return p;
+      }),
+      payments: payment ? [...prev.payments, payment] : prev.payments,
     }));
     void (async () => {
       await dbUpsert('packages', rowPackage(pkg));
       await dbUpdate('user_packages', current.id, { expires_at: expiresAt, active: true });
-      await dbInsert('payments', rowPayment(payment));
+      for (const o of otherActiveAccess) await dbUpdate('user_packages', o.id, { active: false });
+      if (payment) await dbInsert('payments', rowPayment(payment));
     })();
     return;
   }
@@ -1203,7 +1228,7 @@ function applyPurchase(
     userId,
     packageId: pkg.id,
     kind: pkg.kind ?? 'credits',
-    creditsTotal: pkg.kind === 'access' ? 0 : pkg.classCredits,
+    creditsTotal: isAccess ? 0 : pkg.classCredits,
     creditsUsed: 0,
     purchasedAt: new Date().toISOString(),
     expiresAt,
@@ -1211,18 +1236,21 @@ function applyPurchase(
   };
   setDb((prev) => ({
     ...prev,
-    userPackages: [...prev.userPackages, userPackage],
-    payments: [...prev.payments, payment],
+    userPackages: [
+      ...prev.userPackages.map((p) =>
+        otherActiveAccess.some((o) => o.id === p.id) ? { ...p, active: false } : p,
+      ),
+      userPackage,
+    ],
+    payments: payment ? [...prev.payments, payment] : prev.payments,
   }));
-  // El paquete y el pago referencian a packages(id) por llave foránea. Si por
-  // alguna razón la fila del paquete no llegó a guardarse en la base (p. ej. un
-  // fallo puntual al crearlo), el insert se rechazaría y el pago no se
-  // registraría. Nos aseguramos de que el paquete exista (upsert idempotente)
-  // ANTES de insertar el user_package y el pago.
+  // El paquete y el pago referencian a packages(id) por llave foránea. Nos
+  // aseguramos de que el paquete exista (upsert idempotente) ANTES de insertar.
   void (async () => {
     await dbUpsert('packages', rowPackage(pkg));
     await dbInsert('user_packages', rowUserPackage(userPackage));
-    await dbInsert('payments', rowPayment(payment));
+    for (const o of otherActiveAccess) await dbUpdate('user_packages', o.id, { active: false });
+    if (payment) await dbInsert('payments', rowPayment(payment));
   })();
 }
 
