@@ -76,6 +76,12 @@ export interface OptionalService {
   price?: number;                            // lo que cobra el proveedor (informativo para el alumno)
   commissionType?: 'fixed' | 'percent';      // comisión fija ($) o porcentaje (%)
   commissionValue?: number;                  // monto fijo o % según commissionType
+  // Disponibilidad (fase 1b/auto-agenda). El estudio define los días y el horario
+  // de atención y el alumno elige un hueco libre directo.
+  availDays?: number[];                      // días de la semana disponibles (0=Dom … 6=Sáb)
+  availFrom?: string;                        // hora de inicio 'HH:MM' (ej. '10:00')
+  availTo?: string;                          // hora de fin 'HH:MM' (ej. '14:00')
+  slotMinutes?: number;                      // duración de cada cita en minutos (default 60)
 }
 
 // Estado de una cita/consulta de servicio.

@@ -53,6 +53,34 @@ create policy svc_appts_admin on public.service_appointments
   for all
   using      (studio_id = public.auth_studio_id() and public.auth_role() = 'STUDIO_ADMIN')
   with check (studio_id = public.auth_studio_id() and public.auth_role() = 'STUDIO_ADMIN');
+-- ----------------------------------------------------------------------------
+-- Auto-agenda (fase B): el alumno elige un hueco libre y la cita queda AGENDADA.
+-- Política ADICIONAL (OR) a la de solicitud sin fecha.
+drop policy if exists svc_appts_insert_self_slot on public.service_appointments;
+create policy svc_appts_insert_self_slot on public.service_appointments
+  for insert with check (
+    user_id = auth.uid()::text
+    and studio_id = public.auth_studio_id()
+    and public.auth_role() = 'STUDENT'
+    and status = 'scheduled'
+    and commission_usd = 0
+    and commission_paid = false
+    and scheduled_for is not null
+  );
+
+-- Horarios OCUPADOS de un servicio (solo timestamps; no expone a ningún miembro),
+-- para que el alumno calcule los huecos libres.
+create or replace function public.service_taken_slots(p_service_id text)
+returns setof timestamptz
+language sql stable security definer set search_path = public as $$
+  select scheduled_for from public.service_appointments
+  where service_id = p_service_id
+    and studio_id = public.auth_studio_id()
+    and status in ('requested','scheduled')
+    and scheduled_for is not null
+$$;
+revoke all on function public.service_taken_slots(text) from anon;
+grant execute on function public.service_taken_slots(text) to authenticated;
 -- ============================================================================
 -- LISTO. Verifica:  select * from public.service_appointments;
 -- ============================================================================

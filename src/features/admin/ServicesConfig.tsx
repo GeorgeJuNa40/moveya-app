@@ -145,6 +145,42 @@ function ServiceCard({
           </p>
         )}
         {sv.bookable && (
+          <div className="rounded-lg bg-white/70 p-3 space-y-2">
+            <span className="block text-sm font-medium text-ink-soft">Disponibilidad (para que el alumno agende solo)</span>
+            <div className="flex flex-wrap gap-1">
+              {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((lbl, d) => {
+                const on = (sv.availDays ?? []).includes(d);
+                return (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => {
+                      const cur = new Set(sv.availDays ?? []);
+                      if (on) cur.delete(d); else cur.add(d);
+                      updateService(sv.id, { availDays: [...cur].sort((a, b) => a - b) });
+                    }}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${on ? 'bg-sage text-white' : 'bg-cream-dark/50 text-ink-soft'}`}
+                  >
+                    {lbl}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <Field label="Desde">
+                <input type="time" className="input" value={sv.availFrom ?? ''} onChange={(e) => updateService(sv.id, { availFrom: e.target.value || undefined })} />
+              </Field>
+              <Field label="Hasta">
+                <input type="time" className="input" value={sv.availTo ?? ''} onChange={(e) => updateService(sv.id, { availTo: e.target.value || undefined })} />
+              </Field>
+              <Field label="Duración (min)">
+                <input type="number" min={15} step={15} className="input" value={sv.slotMinutes ?? ''} placeholder="60" onChange={(e) => updateService(sv.id, { slotMinutes: e.target.value === '' ? undefined : Number(e.target.value) })} />
+              </Field>
+            </div>
+            <p className="text-xs text-ink-faint">Si no defines disponibilidad, el alumno solo manda una solicitud y tú la agendas a mano.</p>
+          </div>
+        )}
+        {sv.bookable && (
           <div className="pt-1">
             <span className="mb-1 block text-sm font-medium text-ink-soft">Invitar al proveedor (login propio)</span>
             <div className="flex items-center gap-2">

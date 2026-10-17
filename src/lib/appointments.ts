@@ -60,11 +60,13 @@ export async function fetchMyAppointments(userId: string): Promise<ServiceAppoin
   return (data ?? []).map(map);
 }
 
-// Alumno: solicita una cita (status 'requested', sin comisión ni fecha confirmada).
+// Alumno: solicita una cita. Si manda `scheduledFor` (hueco elegido) queda
+// AGENDADA directo; si no, queda como SOLICITUD (sin fecha) para que la agenden.
 export async function requestAppointment(input: {
   studioId: string; serviceId: string; serviceName: string;
-  userId: string; userName?: string; preferredAt?: string; note?: string;
+  userId: string; userName?: string; preferredAt?: string; note?: string; scheduledFor?: string;
 }): Promise<{ ok: boolean; appointment?: ServiceAppointment; error?: string }> {
+  const scheduled = !!input.scheduledFor;
   const { data, error } = await supabase
     .from('service_appointments')
     .insert({
@@ -74,12 +76,20 @@ export async function requestAppointment(input: {
       user_id: input.userId,
       user_name: input.userName ?? null,
       preferred_at: input.preferredAt ?? null,
+      scheduled_for: input.scheduledFor ?? null,
       note: input.note ?? null,
-      status: 'requested',
+      status: scheduled ? 'scheduled' : 'requested',
     })
     .select('*').single();
   if (error) { notifyError('cita', error.message); return { ok: false, error: error.message }; }
   return { ok: true, appointment: map(data) };
+}
+
+// Horarios ya ocupados de un servicio (timestamps ISO), para calcular huecos libres.
+export async function fetchTakenSlots(serviceId: string): Promise<string[]> {
+  const { data, error } = await supabase.rpc('service_taken_slots', { p_service_id: serviceId });
+  if (error || !data) return [];
+  return (data as string[]).map((t) => new Date(t).toISOString());
 }
 
 // Admin: actualiza una cita (agendar, completar, cancelar, fijar/cobrar comisión).
