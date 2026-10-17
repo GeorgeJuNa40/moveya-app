@@ -16,14 +16,20 @@ const PROMO_MXN = Number(Deno.env.get('MP_PROMO_MXN') ?? '20') || 20;
 
 const SAAS_MXN: Record<string, number> = {
   inicio: Number(Deno.env.get('MP_PLAN_INICIO_MXN') ?? '499') || 499,
-  pro: Number(Deno.env.get('MP_PLAN_PRO_MXN') ?? '899') || 899,
-  premium: Number(Deno.env.get('MP_PLAN_PREMIUM_MXN') ?? '1699') || 1699,
+  pro: Number(Deno.env.get('MP_PLAN_PRO_MXN') ?? '999') || 999,
+  premium: Number(Deno.env.get('MP_PLAN_PREMIUM_MXN') ?? '1999') || 1999,
 };
 const SAAS_MXN_YEAR: Record<string, number> = {
   inicio: Number(Deno.env.get('MP_PLAN_INICIO_MXN_YEAR') ?? '4990') || 4990,
-  pro: Number(Deno.env.get('MP_PLAN_PRO_MXN_YEAR') ?? '8990') || 8990,
-  premium: Number(Deno.env.get('MP_PLAN_PREMIUM_MXN_YEAR') ?? '16990') || 16990,
+  pro: Number(Deno.env.get('MP_PLAN_PRO_MXN_YEAR') ?? '9990') || 9990,
+  premium: Number(Deno.env.get('MP_PLAN_PREMIUM_MXN_YEAR') ?? '19990') || 19990,
 };
+// Precios HEREDADOS (grandfather): estudios con subscription.legacyPricing = true
+// conservan los precios anteriores. Coinciden con LEGACY_* de plans.ts.
+const SAAS_MXN_LEGACY: Record<string, number> = { inicio: 499, pro: 899, premium: 1699 };
+const SAAS_MXN_YEAR_LEGACY: Record<string, number> = { inicio: 4990, pro: 8990, premium: 16990 };
+const FOUNDER_MXN_NEW = Number(Deno.env.get('MP_FOUNDER_MXN') ?? '1199') || 1199;
+const FOUNDER_MXN_LEGACY = 1099;
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -162,15 +168,19 @@ Deno.serve(async (req) => {
       const billing = body.billing === 'annual' ? 'annual' : 'monthly';
       const trial = !!body.trial; // 14 días gratis y luego cobra el plan
 
+      // Candado de precio heredado: clientes antiguos conservan precios previos.
+      const { data: stRow } = await admin.from('studios').select('subscription').eq('id', me.studio_id).single();
+      const subMeta = stRow?.subscription ?? {};
+      const legacy = subMeta.legacyPricing === true;
+
       // Programa Fundador: Premium + bot a precio especial de por vida. Solo para
       // estudios invitados por el link privado y mientras queden lugares (tope 10).
       if (plan === 'founder') {
-        const { data: st } = await admin.from('studios').select('subscription').eq('id', me.studio_id).single();
-        if (!st?.subscription?.founderInvited) return json({ error: 'El programa Fundador es solo por invitacion.' }, 403);
+        if (!subMeta.founderInvited) return json({ error: 'El programa Fundador es solo por invitacion.' }, 403);
         const { count } = await admin.from('studios').select('id', { count: 'exact', head: true }).eq('subscription->>founder', 'true');
         const limit = Number(Deno.env.get('FOUNDER_LIMIT') ?? '10') || 10;
         if ((count ?? 0) >= limit) return json({ error: 'El programa Fundador ya esta completo.' }, 400);
-        const famount = Number(Deno.env.get('MP_FOUNDER_MXN') ?? '1099') || 1099;
+        const famount = legacy ? FOUNDER_MXN_LEGACY : FOUNDER_MXN_NEW;
         const fref = JSON.stringify({ kind: 'subscription', studio_id: me.studio_id, plan: 'premium', founder: true });
         const { ok, data } = await mpFetch('/preapproval', PLATFORM_TOKEN, {
           reason: 'Move yA - Fundador (Premium + Bot)',
@@ -185,7 +195,9 @@ Deno.serve(async (req) => {
         return json({ url: data.init_point });
       }
 
-      const amount = billing === 'annual' ? SAAS_MXN_YEAR[plan] : SAAS_MXN[plan];
+      const monthly = legacy ? SAAS_MXN_LEGACY : SAAS_MXN;
+      const yearly = legacy ? SAAS_MXN_YEAR_LEGACY : SAAS_MXN_YEAR;
+      const amount = billing === 'annual' ? yearly[plan] : monthly[plan];
       if (!amount) return json({ error: 'Plan invalido' }, 400);
       const freq = billing === 'annual' ? { frequency: 12, frequency_type: 'months' } : { frequency: 1, frequency_type: 'months' };
       const recurring = {
