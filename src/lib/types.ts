@@ -127,6 +127,7 @@ export interface Subscription {
   isPromo: boolean; // registrado dentro de la ventana de lanzamiento (3 meses)
   founder?: boolean; // parte del programa Fundador (primeros 10): Premium + bot a precio especial de por vida
   founderInvited?: boolean; // se registró por el link privado de fundador (ve la oferta Fundador)
+  legacyPricing?: boolean; // precios HEREDADOS: conserva los precios previos al ajuste (clientes antiguos)
   promoPaymentId?: string; // id del pago de la promo de bienvenida (MP) — idempotencia
   promoSessionId?: string; // id de la sesión de la promo (Stripe) — idempotencia
   billingInterval?: 'monthly' | 'annual'; // periodo de cobro del plan (mensual por defecto)
