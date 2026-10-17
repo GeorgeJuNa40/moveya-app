@@ -353,7 +353,63 @@ Deno.serve(async (req) => {
       return json({ url: session.url });
     }
 
-    return json({ error: 'kind inválido (usa "package", "membership_sub", "subscription" o "promo")' }, 400);
+    if (kind === 'store') {
+      // Pago en línea de un pedido de la tienda (productos físicos). Cargo DIRECTO
+      // en la cuenta Connect del estudio, igual que un paquete.
+      const { data: order } = await supabase
+        .from('store_orders')
+        .select('*')
+        .eq('id', body.orderId)
+        .single();
+      if (!order) return json({ error: 'Pedido no encontrado' }, 404);
+
+      const { data: studio } = await supabase
+        .from('studios')
+        .select('branding, stripe_account_id, stripe_charges_enabled')
+        .eq('id', me.studio_id)
+        .single();
+      const acct = studio?.stripe_account_id as string | undefined;
+      if (!acct || !studio?.stripe_charges_enabled) {
+        return json(
+          { error: 'El estudio aún no activó los pagos en línea. Pídele que conecte su cuenta de Stripe.' },
+          400,
+        );
+      }
+      const currency = (studio?.branding?.currencyCode ?? 'USD').toLowerCase();
+      const amountMinor = Math.round(Number(order.total) * 100);
+      if (amountMinor < 1) return json({ error: 'El pedido no tiene un monto válido.' }, 400);
+      const fee = platformFee(amountMinor);
+      const nItems = Array.isArray(order.items) ? order.items.length : 0;
+
+      const session = await stripe.checkout.sessions.create(
+        {
+          mode: 'payment',
+          line_items: [
+            {
+              quantity: 1,
+              price_data: {
+                currency,
+                unit_amount: amountMinor,
+                product_data: { name: `Pedido de tienda (${nItems} artículo${nItems === 1 ? '' : 's'})` },
+              },
+            },
+          ],
+          ...(fee > 0 ? { payment_intent_data: { application_fee_amount: fee } } : {}),
+          success_url: `${base}/?pago=exito#/app/store`,
+          cancel_url: `${base}/?pago=cancelado#/app/store`,
+          metadata: {
+            kind: 'store',
+            user_id: me.id,
+            studio_id: me.studio_id,
+            order_id: order.id,
+          },
+        },
+        { stripeAccount: acct },
+      );
+      return json({ url: session.url });
+    }
+
+    return json({ error: 'kind inválido (usa "package", "membership_sub", "subscription", "promo" o "store")' }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }

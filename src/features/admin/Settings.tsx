@@ -178,7 +178,8 @@ export default function Settings() {
               <div className="space-y-4">
                 <ColorField label="Color primario" value={b.primaryColor} onChange={(v) => setBrand({ primaryColor: v })} />
                 <ColorField label="Color secundario (fondo)" value={b.secondaryColor} onChange={(v) => setBrand({ secondaryColor: v })} />
-                <ColorField label="Color de acento / texto" value={b.accentColor} onChange={(v) => setBrand({ accentColor: v })} />
+                <ColorField label="Color de acento (detalles de marca)" value={b.accentColor} onChange={(v) => setBrand({ accentColor: v })} />
+                <ColorField label="Color del texto" value={b.textColor ?? b.accentColor} onChange={(v) => setBrand({ textColor: v })} />
                 <Field label="Tipografía">
                   <select className="input" value={b.fontFamily} onChange={(e) => setBrand({ fontFamily: e.target.value })}>
                     {fonts.map((f) => (
@@ -192,7 +193,7 @@ export default function Settings() {
                 <p className="text-xs uppercase text-ink-faint mb-2">Vista previa</p>
                 <div className="rounded-2xl p-6 border" style={{ background: b.secondaryColor, borderColor: b.primaryColor }}>
                   <p className="text-2xl font-black" style={{ color: b.primaryColor, fontFamily: b.fontFamily }}>{b.logoText}</p>
-                  <p className="mt-2" style={{ color: b.accentColor, fontFamily: b.fontFamily }}>Encuentra tu equilibrio. Reserva tu próxima clase.</p>
+                  <p className="mt-2" style={{ color: b.textColor ?? b.accentColor, fontFamily: b.fontFamily }}>Encuentra tu equilibrio. Reserva tu próxima clase.</p>
                   <button className="mt-4 rounded-xl px-4 py-2 text-sm font-semibold" style={{ background: b.primaryColor, color: b.secondaryColor }}>Reservar clase</button>
                 </div>
               </div>

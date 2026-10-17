@@ -78,9 +78,16 @@ export function applyTheme(branding: Branding | undefined, whitelabel: boolean) 
   // tocado nada (o solo cambió el color primario) conserva EXACTO el look Move yA
   // y solo cambian los acentos de marca. Evita cualquier cambio inesperado.
   const sameHex = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
-  const customizedSurface = !sameHex(secondaryHex, DEFAULT_SECONDARY) || !sameHex(accentHex, DEFAULT_ACCENT);
+  // Color de TEXTO independiente del acento. Si no se definió, se usa el acento
+  // (compatibilidad con estudios que ya personalizaron). El acento queda solo
+  // para detalles de marca, no para el texto del cuerpo.
+  const textHex = branding?.textColor || accentHex;
+  const customizedSurface =
+    !sameHex(secondaryHex, DEFAULT_SECONDARY) ||
+    !sameHex(accentHex, DEFAULT_ACCENT) ||
+    (!!branding?.textColor && !sameHex(textHex, DEFAULT_ACCENT));
   const surface = hexToRgb(secondaryHex);
-  const text = hexToRgb(accentHex);
+  const text = hexToRgb(textHex);
   if (!whitelabel || !customizedSurface || !surface || !text || !primary) {
     for (const [k, v] of Object.entries(DEFAULT_VARS)) root.style.setProperty(k, v);
     return;
@@ -133,6 +140,8 @@ export function applyTheme(branding: Branding | undefined, whitelabel: boolean) 
     '--card-border': channels(cardBorder),
   };
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
-  // El texto del cuerpo usa el texto final legible (el body lee rgb(var(--text))).
-  root.style.setProperty('--brand-accent', `rgb(${textFinal[0]}, ${textFinal[1]}, ${textFinal[2]})`);
+  // El acento se mantiene como color de MARCA (no se sobreescribe con el texto);
+  // el texto del cuerpo usa su propio color (rgb(var(--text))). Así acento y
+  // texto son independientes.
+  root.style.setProperty('--brand-accent', accentHex);
 }

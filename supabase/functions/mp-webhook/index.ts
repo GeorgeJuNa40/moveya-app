@@ -23,7 +23,7 @@ async function studioToken(studioId: string): Promise<string | null> {
   return data?.access_token ?? null;
 }
 
-type Ref = { kind?: string; user_id?: string; studio_id?: string; package_id?: string; plan?: string; founder?: boolean };
+type Ref = { kind?: string; user_id?: string; studio_id?: string; package_id?: string; order_id?: string; plan?: string; founder?: boolean };
 const parseRef = (s: unknown): Ref => { try { return JSON.parse(String(s)); } catch { return {}; } };
 
 Deno.serve(async (req) => {
@@ -48,6 +48,8 @@ Deno.serve(async (req) => {
 
       if (ref.kind === 'package') {
         await applyPackage(ref, String(id), Number(pay.transaction_amount) || 0);
+      } else if (ref.kind === 'store' && ref.order_id) {
+        await applyStoreOrder(ref, String(id), Number(pay.transaction_amount) || 0);
       } else if (ref.kind === 'promo' && ref.studio_id) {
         // Promo de bienvenida pagada → abre 14 días de acceso Premium.
         await applyPromo(ref, String(id));
@@ -100,6 +102,22 @@ async function applyPackage(ref: Ref, mpPaymentId: string, amount: number) {
   await admin.from('payments').insert({
     id: crypto.randomUUID(), user_id: ref.user_id, amount_usd: amount || pkg.price_usd, method: 'card',
     package_id: pkg.id, concept: pkg.name, paid_at: now.toISOString(), registered_by: 'online',
+    provider: 'mercadopago', mp_payment_id: mpPaymentId,
+  });
+}
+
+// -------- Pedido de tienda pagado en linea: marca entregado + registra pago --------
+async function applyStoreOrder(ref: Ref, mpPaymentId: string, amount: number) {
+  const { data: existing } = await admin.from('payments').select('id').eq('mp_payment_id', mpPaymentId).maybeSingle();
+  if (existing) return;
+  const { data: order } = await admin.from('store_orders').select('*').eq('id', ref.order_id).single();
+  if (!order) return;
+  await admin.from('store_orders')
+    .update({ status: 'fulfilled', provider: 'mercadopago', paid_ref: mpPaymentId, fulfilled_at: new Date().toISOString() })
+    .eq('id', order.id);
+  await admin.from('payments').insert({
+    id: crypto.randomUUID(), user_id: ref.user_id, amount_usd: amount || order.total, method: 'card',
+    concept: 'Tienda: pedido en linea', paid_at: new Date().toISOString(), registered_by: 'online',
     provider: 'mercadopago', mp_payment_id: mpPaymentId,
   });
 }

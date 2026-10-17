@@ -38,6 +38,7 @@ export interface Branding {
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
+  textColor?: string; // color del TEXTO (independiente del acento); si falta, usa el acento
   fontFamily: string;
   logoText: string;
   logoUrl?: string; // logo del estudio (imagen subida), visible para todos
