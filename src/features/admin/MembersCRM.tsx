@@ -42,7 +42,7 @@ function fmtBirthday(iso?: string): string | null {
 
 // CRM de alumnos: contacto, clases agendadas, membresía y registro de pagos.
 export default function MembersCRM() {
-  const { db, currentStudio, currentUser, studioUsers, membership, registerManualPlan, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember } = useStore();
+  const { db, currentStudio, currentUser, studioUsers, membership, registerManualPlan, removeUserPackage, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember } = useStore();
   // El operador/recepción opera pero NO gestiona estado ni elimina miembros.
   const canManageMembers = currentUser?.role !== 'OPERATOR';
   const students = studioUsers('STUDENT');
@@ -312,6 +312,54 @@ export default function MembersCRM() {
                     </span>
                   )}
                 </div>
+
+                {/* Planes/paquetes asignados: corregir un cobro mal capturado. */}
+                {(() => {
+                  const ups = db.userPackages
+                    .filter((p) => p.userId === detail.id)
+                    .sort((a, b) => b.purchasedAt.localeCompare(a.purchasedAt));
+                  if (ups.length === 0) return null;
+                  return (
+                    <div className="mb-4 rounded-xl bg-cream-dark/40 p-3">
+                      <p className="mb-2 text-sm font-medium text-ink-soft">Planes asignados</p>
+                      <div className="space-y-2">
+                        {ups.map((up) => {
+                          const pk = db.packages.find((k) => k.id === up.packageId);
+                          const vig = new Date(up.expiresAt).getTime() > Date.now() && up.active;
+                          return (
+                            <div key={up.id} className="flex items-center justify-between gap-2 rounded-lg bg-white px-3 py-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-ink">{pk?.name ?? 'Paquete'}</p>
+                                <p className="text-xs text-ink-faint">
+                                  {vig ? 'Vigente' : 'Vencido/!activo'} · vence {fmtDate(up.expiresAt)}
+                                  {up.kind !== 'access' ? ` · ${Math.max(0, up.creditsTotal - up.creditsUsed)}/${up.creditsTotal} clases` : ''}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  const alsoPay = window.confirm(
+                                    `¿Quitar el plan "${pk?.name ?? 'Paquete'}" de ${detail.fullName}?\n\nAceptar = quitar también el PAGO registrado con ese plan.\nCancelar = elegir si lo quitas sin pago.`,
+                                  );
+                                  if (!alsoPay) {
+                                    if (!window.confirm('¿Quitar solo el plan y CONSERVAR el pago registrado?')) return;
+                                    removeUserPackage(up.id);
+                                  } else {
+                                    removeUserPackage(up.id, { removePayment: true });
+                                  }
+                                  setDetail({ ...detail });
+                                }}
+                                className="shrink-0 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-2 text-xs text-ink-faint">Úsalo para corregir un cobro mal capturado: quita el plan equivocado y vuelve a registrar el correcto.</p>
+                    </div>
+                  );
+                })()}
 
                 {branches.length > 0 && (
                   <div className="mb-4 rounded-xl bg-cream-dark/40 px-3 py-3">
