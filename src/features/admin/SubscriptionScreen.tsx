@@ -4,8 +4,8 @@ import { supabase } from '../../lib/supabase';
 import { PageHeader, Card, Button, Badge } from '../../components/ui';
 import { daysUntil } from '../../lib/format';
 import {
-  PLANS, PROMO_PRICE, PROMO_PRICE_MXN, PROMO_TRIAL_DAYS, getPlan,
-  FOUNDER_PRICE_USD, FOUNDER_PRICE_MXN,
+  PROMO_PRICE, PROMO_PRICE_MXN, PROMO_TRIAL_DAYS, getPlan,
+  plansFor, founderPriceUsdFor, founderPriceMxnFor,
   planPriceCur, annualPerMonthCur, annualSavingsCur, CURRENCY_SUFFIX,
   type BillingInterval, type Currency,
 } from '../../lib/plans';
@@ -28,9 +28,12 @@ export default function SubscriptionScreen() {
   const currency: Currency = provider === 'mercadopago' ? 'MXN' : 'USD';
   const promo = provider === 'mercadopago' ? PROMO_PRICE_MXN : PROMO_PRICE;
   const sub = currentStudio!.subscription;
+  // Candado de precio heredado (grandfather): clientes antiguos conservan sus precios.
+  const legacy = sub.legacyPricing;
+  const planList = plansFor(legacy);
   // ¿Ya usó la promo de bienvenida? (el webhook guarda promoPaymentId/promoSessionId)
   const usedPromo = !!(sub.promoPaymentId || sub.promoSessionId);
-  const founderPrice = provider === 'mercadopago' ? FOUNDER_PRICE_MXN : FOUNDER_PRICE_USD;
+  const founderPrice = provider === 'mercadopago' ? founderPriceMxnFor(legacy) : founderPriceUsdFor(legacy);
 
   // Programa Fundador: solo visible para estudios invitados por el link privado,
   // mientras no esté activo y queden lugares (tope de 10 en el servidor).
@@ -73,7 +76,7 @@ export default function SubscriptionScreen() {
   const trialDaysLeft = Math.max(0, daysUntil(trialEndsAt));
   const daysLeft = Math.max(0, daysUntil(sub.currentPeriodEnd));
   const currentPlanId: PlanId = sub.plan ?? 'pro';
-  const currentPlan = getPlan(currentPlanId);
+  const currentPlan = planList.find((p) => p.id === currentPlanId) ?? getPlan(currentPlanId);
   const currentInterval: BillingInterval = sub.billingInterval ?? 'monthly';
   const currentCurrency: Currency = sub.provider === 'mercadopago' ? 'MXN' : 'USD';
 
@@ -218,7 +221,7 @@ export default function SubscriptionScreen() {
 
       {/* Los 3 planes */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {PLANS.map((plan) => {
+        {planList.map((plan) => {
           const isCurrent = active && plan.id === currentPlanId && billing === currentInterval;
           return (
             <Card

@@ -52,10 +52,30 @@ export const PROMO_PLAN: PlanId = 'premium'; // plan que se habilita durante la 
 // entregas solo a tus invitados; el servidor además limita a 10 en total.
 export const FOUNDER_CODE = 'FUNDADOR10';
 export const FOUNDER_BOT_USD = 10;
-export const FOUNDER_PRICE_USD = 44.99 + FOUNDER_BOT_USD; // Pro + bot = 54.99
+export const FOUNDER_PRICE_USD = 49.99 + FOUNDER_BOT_USD; // Pro + bot = 59.99
 // Equivalente en pesos (Mercado Pago): Pro MXN + bot. Ajustable.
 export const FOUNDER_BOT_MXN = 200;
-export const FOUNDER_PRICE_MXN = 899 + FOUNDER_BOT_MXN; // Pro MXN + bot = 1099
+export const FOUNDER_PRICE_MXN = 999 + FOUNDER_BOT_MXN; // Pro MXN + bot = 1199
+
+// ---------------------------------------------------------------------------
+// Precios HEREDADOS (grandfather). Los estudios con `subscription.legacyPricing`
+// conservan los precios ANTERIORES al ajuste de oct-2026 (p. ej. el primer
+// cliente). Lo usa la pantalla de suscripción y DEBE coincidir con la Edge
+// Function de cobro (que también revisa el candado).
+export const LEGACY_PLAN_PRICES: Record<PlanId, { priceUsd: number; priceUsdYear: number; priceMxn: number; priceMxnYear: number }> = {
+  inicio:  { priceUsd: 24.99, priceUsdYear: 249, priceMxn: 499,  priceMxnYear: 4990 },
+  pro:     { priceUsd: 44.99, priceUsdYear: 449, priceMxn: 899,  priceMxnYear: 8990 },
+  premium: { priceUsd: 84.99, priceUsdYear: 799, priceMxn: 1699, priceMxnYear: 16990 },
+};
+export const LEGACY_FOUNDER_USD = 54.99; // Pro anterior + bot
+export const LEGACY_FOUNDER_MXN = 1099;
+// Lista de planes efectiva según el candado del estudio.
+export function plansFor(legacy?: boolean): Plan[] {
+  if (!legacy) return PLANS;
+  return PLANS.map((p) => ({ ...p, ...LEGACY_PLAN_PRICES[p.id] }));
+}
+export const founderPriceUsdFor = (legacy?: boolean): number => (legacy ? LEGACY_FOUNDER_USD : FOUNDER_PRICE_USD);
+export const founderPriceMxnFor = (legacy?: boolean): number => (legacy ? LEGACY_FOUNDER_MXN : FOUNDER_PRICE_MXN);
 
 // ---------------------------------------------------------------------------
 // Capacidades por plan. Cada función "premium/pro" está protegida con una de
@@ -121,10 +141,10 @@ export const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    priceUsd: 44.99,
-    priceUsdYear: 449,
-    priceMxn: 899,
-    priceMxnYear: 8990,
+    priceUsd: 49.99,
+    priceUsdYear: 499,
+    priceMxn: 999,
+    priceMxnYear: 9990,
     tagline: 'El favorito de los negocios en marcha',
     features: [
       'Todo lo del plan Inicio',
@@ -139,10 +159,10 @@ export const PLANS: Plan[] = [
   {
     id: 'premium',
     name: 'Premium',
-    priceUsd: 84.99,
-    priceUsdYear: 799,
-    priceMxn: 1699,
-    priceMxnYear: 16990,
+    priceUsd: 99.99,
+    priceUsdYear: 999,
+    priceMxn: 1999,
+    priceMxnYear: 19990,
     tagline: 'Para negocios en pleno crecimiento',
     highlight: true,
     features: [

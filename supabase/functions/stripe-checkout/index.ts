@@ -41,10 +41,16 @@ function safeBase(origin: unknown): string {
   }
 }
 
-// Precios de los planes del estudio (en centavos de USD).
-const PLAN_PRICES: Record<string, number> = { inicio: 2499, pro: 4499, premium: 8499 };
+// Precios de los planes del estudio (en centavos de USD). Deben coincidir con plans.ts.
+const PLAN_PRICES: Record<string, number> = { inicio: 2499, pro: 4999, premium: 9999 };
 // Precios ANUALES (2 meses gratis). Deben coincidir con plans.ts (priceUsdYear).
-const PLAN_PRICES_YEAR: Record<string, number> = { inicio: 24900, pro: 44900, premium: 79900 };
+const PLAN_PRICES_YEAR: Record<string, number> = { inicio: 24900, pro: 49900, premium: 99900 };
+// Precios HEREDADOS (grandfather): estudios con subscription.legacyPricing = true
+// conservan los precios previos al ajuste. Deben coincidir con LEGACY_* de plans.ts.
+const PLAN_PRICES_LEGACY: Record<string, number> = { inicio: 2499, pro: 4499, premium: 8499 };
+const PLAN_PRICES_YEAR_LEGACY: Record<string, number> = { inicio: 24900, pro: 44900, premium: 79900 };
+const FOUNDER_PRO_BASE = 4999;        // base del Fundador (Pro actual)
+const FOUNDER_PRO_BASE_LEGACY = 4499; // base del Fundador heredado (Pro anterior)
 
 // -------- Comisión de plataforma (Move yA) sobre los pagos en línea de alumnos
 // Se cobra AL ESTUDIO: sale de su parte del cargo directo (no se le suma al
@@ -278,14 +284,18 @@ Deno.serve(async (req) => {
       let amount: number;
       let productName: string;
 
+      // Candado de precio heredado: clientes antiguos conservan precios previos.
+      const admin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      );
+      const { data: stRow } = await admin.from('studios').select('subscription').eq('id', me.studio_id).single();
+      const subMeta = (stRow?.subscription as Record<string, unknown>) ?? {};
+      const legacy = subMeta.legacyPricing === true;
+
       if (isFounder) {
-        const admin = createClient(
-          Deno.env.get('SUPABASE_URL')!,
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-        );
         // Solo estudios invitados por el link privado pueden ser Fundadores.
-        const { data: st } = await admin.from('studios').select('subscription').eq('id', me.studio_id).single();
-        if (!(st?.subscription as Record<string, unknown>)?.founderInvited) {
+        if (!subMeta.founderInvited) {
           return json({ error: 'El programa Fundador es solo por invitación.' }, 403);
         }
         // Tope duro en el servidor: cuenta cuántos fundadores ya existen.
@@ -301,10 +311,13 @@ Deno.serve(async (req) => {
           );
         }
         const botUsd = Number(Deno.env.get('FOUNDER_BOT_PRICE') ?? '10') || 10;
-        amount = PLAN_PRICES.pro + Math.round(botUsd * 100); // Premium al precio de Pro + bot
+        const base = legacy ? FOUNDER_PRO_BASE_LEGACY : FOUNDER_PRO_BASE;
+        amount = base + Math.round(botUsd * 100); // Premium al precio de Pro + bot
         productName = 'Move yA · Fundador (acceso Premium + Bot WhatsApp)';
       } else {
-        amount = billing === 'annual' ? PLAN_PRICES_YEAR[plan] : PLAN_PRICES[plan];
+        const monthly = legacy ? PLAN_PRICES_LEGACY : PLAN_PRICES;
+        const yearly = legacy ? PLAN_PRICES_YEAR_LEGACY : PLAN_PRICES_YEAR;
+        amount = billing === 'annual' ? yearly[plan] : monthly[plan];
         if (!amount) return json({ error: 'Plan inválido' }, 400);
         productName = `Move yA · Plan ${plan}${billing === 'annual' ? ' (anual)' : ''}`;
       }
