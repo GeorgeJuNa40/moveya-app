@@ -5,7 +5,9 @@
 // OPERATOR = empleado/recepción: opera el negocio (miembros, calendario, clases,
 // paquetes, tienda) con acceso LIMITADO; no ve reportes, configuración,
 // suscripción ni datos sensibles del negocio.
-export type Role = 'STUDIO_ADMIN' | 'BRANCH_ADMIN' | 'OPERATOR' | 'COACH' | 'STUDENT';
+// PROVIDER = proveedor de un servicio (nutriólogo/kinesiólogo/convenio) con login
+// propio: ve y gestiona SOLO las citas de su servicio; no ve datos de miembros.
+export type Role = 'STUDIO_ADMIN' | 'BRANCH_ADMIN' | 'OPERATOR' | 'PROVIDER' | 'COACH' | 'STUDENT';
 
 export type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'TRIALING';
 
@@ -270,6 +272,7 @@ export interface User {
   // Estado del miembro: 'active' (def.), 'inactive' (dado de baja) o 'banned'
   // (vetado). Los no-activos se ocultan de las listas y no pueden usar la app.
   memberStatus?: 'active' | 'inactive' | 'banned';
+  providerServiceId?: string; // (rol PROVIDER) id del servicio que atiende
 }
 
 // Invitado a una clase (sin cuenta): clase de prueba o acompañante (2x1). Ocupa

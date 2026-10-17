@@ -79,6 +79,7 @@ const SuggestionsAdmin = lazyWithReload(() => import('./features/admin/Suggestio
 const Settings = lazyWithReload(() => import('./features/admin/Settings'));
 
 const CoachDashboard = lazyWithReload(() => import('./features/coach/CoachDashboard'));
+const ProviderDashboard = lazyWithReload(() => import('./features/provider/ProviderDashboard'));
 const CoachCalendar = lazyWithReload(() => import('./features/coach/CoachCalendar'));
 const CoachProfile = lazyWithReload(() => import('./features/coach/CoachProfile'));
 
@@ -132,6 +133,7 @@ function homeFor(role: Role): string {
   if (role === 'STUDIO_ADMIN' || role === 'BRANCH_ADMIN') return '/admin';
   // El operador/recepción no entra al dashboard de ingresos: su inicio es el CRM.
   if (role === 'OPERATOR') return '/admin/members';
+  if (role === 'PROVIDER') return '/provider';
   if (role === 'COACH') return '/coach';
   return '/app';
 }
@@ -345,6 +347,8 @@ export default function App() {
       <Route path="/admin/settings" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Settings /></SubscriptionGate></RequireRole>} />
 
       {/* ---- COACH — protegido por estado de aprobación ---- */}
+      <Route path="/provider" element={<RequireRole role="PROVIDER"><ProviderDashboard /></RequireRole>} />
+
       <Route path="/coach" element={<RequireRole role="COACH"><CoachGate><CoachDashboard /></CoachGate></RequireRole>} />
       <Route path="/coach/calendar" element={<RequireRole role="COACH"><CoachGate><CoachCalendar /></CoachGate></RequireRole>} />
       <Route path="/coach/profile" element={<RequireRole role="COACH"><CoachGate><CoachProfile /></CoachGate></RequireRole>} />

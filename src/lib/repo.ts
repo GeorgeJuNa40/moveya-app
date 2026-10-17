@@ -83,6 +83,7 @@ function mapUser(r: Row): User {
     externalCoachId: r.external_coach_id ?? undefined,
     branchId: r.branch_id ?? undefined,
     memberStatus: r.member_status ?? undefined,
+    providerServiceId: r.provider_service_id ?? undefined,
     coachProfile: hasCoach
       ? { bio: r.coach_bio ?? '', specialties: r.coach_specialties ?? [], yearsExp: r.coach_years_exp ?? 0 }
       : undefined,

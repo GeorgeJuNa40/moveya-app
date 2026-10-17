@@ -55,6 +55,10 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/admin/packages', label: 'Paquetes' },
     { to: '/admin/store', label: 'Tienda', cap: 'store' },
   ],
+  // Proveedor de servicio: solo su portal de citas.
+  PROVIDER: [
+    { to: '/provider', label: 'Mis citas', short: 'Citas' },
+  ],
   COACH: [
     { to: '/coach', label: 'Inicio' },
     { to: '/coach/calendar', label: 'Mi Calendario', short: 'Agenda' },
@@ -77,6 +81,7 @@ const ROLE_LABEL: Record<Role, string> = {
   STUDIO_ADMIN: 'Estudio',
   BRANCH_ADMIN: 'Gerente',
   OPERATOR: 'Recepción',
+  PROVIDER: 'Proveedor',
   COACH: 'Coach',
   STUDENT: 'Alumno',
 };

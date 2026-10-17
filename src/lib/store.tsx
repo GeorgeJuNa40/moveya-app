@@ -64,8 +64,9 @@ export interface SignUpInput {
   ceuCode?: string; // para unirse a un estudio existente
   studioName?: string; // para crear un estudio nuevo (ADMIN)
   studioType?: 'studio' | 'gym' | 'mixed'; // tipo de negocio al crear (def. 'studio')
-  role?: 'COACH' | 'STUDENT' | 'BRANCH_ADMIN' | 'OPERATOR'; // rol al unirse por CEU (por defecto STUDENT)
+  role?: 'COACH' | 'STUDENT' | 'BRANCH_ADMIN' | 'OPERATOR' | 'PROVIDER'; // rol al unirse por CEU (por defecto STUDENT)
   branchId?: string; // sucursal a la que se liga (gerente/coach/alumno por link)
+  serviceId?: string; // (rol PROVIDER) servicio que atiende, desde el link de invitación
   phone?: string; // teléfono con lada (ej. +52 55 1234 5678)
   birthDate?: string; // fecha de nacimiento (YYYY-MM-DD)
   country?: string; // ISO del país (ej. MX)
@@ -504,6 +505,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             ...(input.studioType ? { studio_type: input.studioType } : {}),
             ...(input.role ? { signup_role: input.role } : {}),
             ...(input.branchId ? { branch_id: input.branchId } : {}),
+            ...(input.serviceId ? { service_id: input.serviceId } : {}),
             ...(input.phone ? { phone: input.phone.trim() } : {}),
             ...(input.birthDate ? { birth_date: input.birthDate } : {}),
             ...(input.country ? { country: input.country } : {}),

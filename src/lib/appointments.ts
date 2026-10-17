@@ -42,6 +42,15 @@ export async function fetchAppointments(studioId: string): Promise<ServiceAppoin
   return (data ?? []).map(map);
 }
 
+// Proveedor: las citas de SU servicio (la RLS ya limita a su servicio/estudio).
+export async function fetchProviderAppointments(serviceId: string): Promise<ServiceAppointment[]> {
+  const { data, error } = await supabase
+    .from('service_appointments').select('*').eq('service_id', serviceId)
+    .order('created_at', { ascending: false }).limit(500);
+  if (error) return [];
+  return (data ?? []).map(map);
+}
+
 // Alumno: mis citas.
 export async function fetchMyAppointments(userId: string): Promise<ServiceAppointment[]> {
   const { data, error } = await supabase
