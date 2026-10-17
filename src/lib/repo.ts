@@ -61,6 +61,7 @@ function mapStudio(r: Row): Studio {
     stripeAccountId: r.stripe_account_id ?? undefined,
     stripeChargesEnabled: r.stripe_charges_enabled ?? false,
     mpConnected: r.mp_connected ?? false,
+    moveyaPicks: r.moveya_picks ?? false,
   };
 }
 

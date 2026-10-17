@@ -49,7 +49,6 @@ export interface Branding {
   cancellationPolicy?: string; // política de cancelación (la ve el alumno)
   studioPolicies?: string; // reglas y políticas del negocio (las ve el alumno en su panel)
   storeForMembers?: boolean; // muestra la tienda a alumnos y coaches (def. true si hay productos)
-  showMoveyaPicks?: boolean; // muestra la sección "Recomendados Move yA" (catálogo de la plataforma) a los alumnos (def. false)
   storeCheckout?: 'request' | 'online' | 'both'; // cómo compran: apartar / en línea / ambos (def. request)
   requirePlanAll?: boolean; // exige plan activo a TODOS los miembros (no solo a los nuevos)
   cancellationHours?: number; // horas mínimas de anticipación para cancelar (candado)
@@ -184,6 +183,7 @@ export interface Studio {
   stripeAccountId?: string; // cuenta Connect (Express) del estudio, para recibir pagos
   stripeChargesEnabled?: boolean; // el estudio ya puede recibir cobros en su cuenta
   mpConnected?: boolean; // el estudio conectó su cuenta de Mercado Pago (marketplace)
+  moveyaPicks?: boolean; // aceptó el programa "Recomendados Move yA" (candado PERMANENTE: una vez true no se revierte)
 }
 
 export interface CoachProfile {
