@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button, EmptyState, Badge, Modal } from '../../components/ui';
 import { notifySuccess } from '../../lib/notify';
-import { requestAppointment, fetchMyAppointments } from '../../lib/appointments';
+import { requestAppointment, fetchMyAppointments, fetchTakenSlots } from '../../lib/appointments';
 import type { OptionalService, ServiceAppointment, AppointmentStatus } from '../../lib/types';
 
 const STATUS_LABEL: Record<AppointmentStatus, string> = {
@@ -132,18 +132,53 @@ function BookingModal({
   const [when, setWhen] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [taken, setTaken] = useState<Set<string>>(new Set());
+  const [slot, setSlot] = useState<string>(''); // ISO del hueco elegido
+
+  // ¿El servicio tiene disponibilidad configurada? → auto-agenda por huecos.
+  const hasAvail = !!(service.availDays?.length && service.availFrom && service.availTo);
+
+  useEffect(() => {
+    if (!hasAvail) return;
+    void fetchTakenSlots(service.id).then((arr) => setTaken(new Set(arr)));
+  }, [hasAvail, service.id]);
+
+  // Genera los huecos libres de los próximos 21 días según la disponibilidad.
+  const slotsByDay = useMemo(() => {
+    if (!hasAvail) return [];
+    const [fh, fm] = service.availFrom!.split(':').map(Number);
+    const [th, tm] = service.availTo!.split(':').map(Number);
+    const step = service.slotMinutes && service.slotMinutes >= 15 ? service.slotMinutes : 60;
+    const now = Date.now();
+    const out: { day: Date; slots: Date[] }[] = [];
+    for (let i = 0; i < 21; i++) {
+      const day = new Date(); day.setHours(0, 0, 0, 0); day.setDate(day.getDate() + i);
+      if (!service.availDays!.includes(day.getDay())) continue;
+      const slots: Date[] = [];
+      const start = new Date(day); start.setHours(fh, fm, 0, 0);
+      const end = new Date(day); end.setHours(th, tm, 0, 0);
+      for (let t = new Date(start); t < end; t = new Date(t.getTime() + step * 60000)) {
+        if (t.getTime() <= now) continue;
+        if (taken.has(t.toISOString())) continue;
+        slots.push(new Date(t));
+      }
+      if (slots.length) out.push({ day: new Date(day), slots });
+    }
+    return out;
+  }, [hasAvail, service.availDays, service.availFrom, service.availTo, service.slotMinutes, taken]);
 
   const submit = async () => {
     setSaving(true);
     const res = await requestAppointment({
       studioId, serviceId: service.id, serviceName: service.name,
       userId, userName,
-      preferredAt: when ? new Date(when).toISOString() : undefined,
+      preferredAt: !hasAvail && when ? new Date(when).toISOString() : undefined,
+      scheduledFor: hasAvail && slot ? slot : undefined,
       note: note.trim() || undefined,
     });
     setSaving(false);
     if (res.ok) {
-      notifySuccess('¡Solicitud enviada! El estudio confirmará tu cita.');
+      notifySuccess(hasAvail ? '¡Cita agendada! Te esperamos.' : '¡Solicitud enviada! El estudio confirmará tu cita.');
       await onDone();
     }
   };
@@ -153,21 +188,64 @@ function BookingModal({
       <Card className="p-6">
       <h2 className="mb-4 text-lg font-bold text-ink">Agendar: {service.name}</h2>
       <div className="space-y-4">
-        <p className="text-sm text-ink-soft">
-          Envía tu solicitud y el estudio confirmará la fecha. El pago lo haces directo con el proveedor.
-        </p>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-ink-soft">Fecha y hora que prefieres (opcional)</span>
-          <input type="datetime-local" className="binp" value={when} onChange={(e) => setWhen(e.target.value)} />
-        </label>
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium text-ink-soft">Nota para el estudio (opcional)</span>
-          <textarea className="binp" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. prefiero por la tarde" />
-        </label>
-        <div className="flex gap-2 justify-end">
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button onClick={submit} disabled={saving}>{saving ? 'Enviando…' : 'Enviar solicitud'}</Button>
-        </div>
+        {hasAvail ? (
+          <>
+            <p className="text-sm text-ink-soft">Elige un horario disponible. El pago lo haces directo con el proveedor.</p>
+            <div className="max-h-64 space-y-3 overflow-y-auto">
+              {slotsByDay.length === 0 ? (
+                <p className="text-sm text-ink-faint">No hay horarios libres próximos. Intenta más tarde.</p>
+              ) : slotsByDay.map(({ day, slots }) => (
+                <div key={day.toISOString()}>
+                  <p className="mb-1 text-sm font-medium text-ink-soft">
+                    {day.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'short' })}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {slots.map((s) => {
+                      const iso = s.toISOString();
+                      const on = slot === iso;
+                      return (
+                        <button
+                          key={iso}
+                          type="button"
+                          onClick={() => setSlot(on ? '' : iso)}
+                          className={`rounded-full px-3 py-1.5 text-sm font-semibold ${on ? 'bg-brand text-cream-light' : 'bg-cream-dark/50 text-ink-soft'}`}
+                        >
+                          {s.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-ink-soft">Nota (opcional)</span>
+              <textarea className="binp" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Algo que deba saber el proveedor" />
+            </label>
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+              <Button onClick={submit} disabled={saving || !slot}>{saving ? 'Agendando…' : 'Confirmar cita'}</Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-ink-soft">
+              Envía tu solicitud y el estudio confirmará la fecha. El pago lo haces directo con el proveedor.
+            </p>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-ink-soft">Fecha y hora que prefieres (opcional)</span>
+              <input type="datetime-local" className="binp" value={when} onChange={(e) => setWhen(e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-ink-soft">Nota para el estudio (opcional)</span>
+              <textarea className="binp" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. prefiero por la tarde" />
+            </label>
+            <div className="flex gap-2 justify-end">
+              <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+              <Button onClick={submit} disabled={saving}>{saving ? 'Enviando…' : 'Enviar solicitud'}</Button>
+            </div>
+          </>
+        )}
       </div>
       <style>{`.binp{width:100%;border:1px solid #E8E3D6;border-radius:.75rem;padding:.6rem .8rem;background:#fff;outline:none}.binp:focus{box-shadow:0 0 0 2px var(--brand-primary)}`}</style>
       </Card>
