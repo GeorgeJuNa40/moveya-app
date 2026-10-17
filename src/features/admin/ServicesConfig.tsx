@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Toggle, Button, Badge, EmptyState } from '../../components/ui';
+import AppointmentsCalendar from '../../components/AppointmentsCalendar';
 import { notifySuccess } from '../../lib/notify';
 import {
   fetchAppointments, updateAppointment, serviceCommission,
@@ -199,6 +200,7 @@ function AppointmentsSection({ studioId, services }: { studioId: string; service
   const [appts, setAppts] = useState<ServiceAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'open' | 'done' | 'all'>('open');
+  const [view, setView] = useState<'list' | 'calendar'>('list');
 
   const reload = async () => {
     setLoading(true);
@@ -226,18 +228,24 @@ function AppointmentsSection({ studioId, services }: { studioId: string; service
 
   return (
     <div className="mt-8">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <h2 className="text-lg font-semibold text-ink">Consultas</h2>
-        <div className="flex gap-1 text-sm">
-          {(['open', 'done', 'all'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1 rounded-full ${filter === f ? 'bg-sage text-white' : 'bg-cream-dark/50 text-ink-soft'}`}
-            >
-              {f === 'open' ? 'Abiertas' : f === 'done' ? 'Realizadas' : 'Todas'}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 text-sm">
+            {(['open', 'done', 'all'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1 rounded-full ${filter === f ? 'bg-sage text-white' : 'bg-cream-dark/50 text-ink-soft'} ${view === 'calendar' ? 'opacity-40 pointer-events-none' : ''}`}
+              >
+                {f === 'open' ? 'Abiertas' : f === 'done' ? 'Realizadas' : 'Todas'}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1 text-sm">
+            <button onClick={() => setView('list')} className={`px-3 py-1 rounded-full ${view === 'list' ? 'bg-brand text-cream-light' : 'bg-cream-dark/50 text-ink-soft'}`}>Lista</button>
+            <button onClick={() => setView('calendar')} className={`px-3 py-1 rounded-full ${view === 'calendar' ? 'bg-brand text-cream-light' : 'bg-cream-dark/50 text-ink-soft'}`}>Calendario</button>
+          </div>
         </div>
       </div>
 
@@ -249,7 +257,9 @@ function AppointmentsSection({ studioId, services }: { studioId: string; service
         </Card>
       )}
 
-      {loading ? (
+      {view === 'calendar' ? (
+        <AppointmentsCalendar appointments={appts} showService />
+      ) : loading ? (
         <Card className="p-6 text-center text-sm text-ink-faint">Cargando…</Card>
       ) : shown.length === 0 ? (
         <EmptyState>No hay consultas {filter === 'open' ? 'abiertas' : filter === 'done' ? 'realizadas' : ''}.</EmptyState>
