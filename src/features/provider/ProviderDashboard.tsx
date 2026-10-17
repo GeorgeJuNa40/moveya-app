@@ -3,6 +3,7 @@ import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button, Badge, EmptyState } from '../../components/ui';
 import { notifySuccess } from '../../lib/notify';
 import { fetchProviderAppointments, updateAppointment } from '../../lib/appointments';
+import AppointmentsCalendar from '../../components/AppointmentsCalendar';
 import type { ServiceAppointment, AppointmentStatus } from '../../lib/types';
 
 const STATUS_LABEL: Record<AppointmentStatus, string> = {
@@ -22,6 +23,7 @@ export default function ProviderDashboard() {
   const [appts, setAppts] = useState<ServiceAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'open' | 'done' | 'all'>('open');
+  const [view, setView] = useState<'list' | 'calendar'>('list');
 
   const reload = async () => {
     if (!serviceId) { setLoading(false); return; }
@@ -53,19 +55,27 @@ export default function ProviderDashboard() {
   return (
     <>
       <PageHeader title="Mis citas" subtitle="Agenda de tu servicio" />
-      <div className="mb-3 flex gap-1 text-sm">
-        {(['open', 'done', 'all'] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1 rounded-full ${filter === f ? 'bg-brand text-cream-light' : 'bg-cream-dark/50 text-ink-soft'}`}
-          >
-            {f === 'open' ? 'Abiertas' : f === 'done' ? 'Realizadas' : 'Todas'}
-          </button>
-        ))}
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex gap-1 text-sm">
+          {(['open', 'done', 'all'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1 rounded-full ${filter === f ? 'bg-brand text-cream-light' : 'bg-cream-dark/50 text-ink-soft'} ${view === 'calendar' ? 'opacity-40 pointer-events-none' : ''}`}
+            >
+              {f === 'open' ? 'Abiertas' : f === 'done' ? 'Realizadas' : 'Todas'}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1 text-sm">
+          <button onClick={() => setView('list')} className={`px-3 py-1 rounded-full ${view === 'list' ? 'bg-sage text-white' : 'bg-cream-dark/50 text-ink-soft'}`}>Lista</button>
+          <button onClick={() => setView('calendar')} className={`px-3 py-1 rounded-full ${view === 'calendar' ? 'bg-sage text-white' : 'bg-cream-dark/50 text-ink-soft'}`}>Calendario</button>
+        </div>
       </div>
 
-      {loading ? (
+      {view === 'calendar' ? (
+        <AppointmentsCalendar appointments={appts} />
+      ) : loading ? (
         <Card className="p-6 text-center text-sm text-ink-faint">Cargando…</Card>
       ) : shown.length === 0 ? (
         <EmptyState>No hay citas {filter === 'open' ? 'abiertas' : filter === 'done' ? 'realizadas' : ''}.</EmptyState>
