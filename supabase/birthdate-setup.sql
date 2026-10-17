@@ -31,6 +31,7 @@ declare
   v_currency    text  := coalesce(nullif(trim(meta->>'currency'), ''), 'USD');
   v_birth       date  := nullif(trim(meta->>'birth_date'), '')::date;
   v_branch      text  := nullif(trim(meta->>'branch_id'), '');  -- sucursal (gerente/coach/alumno por link)
+  v_service     text  := nullif(trim(meta->>'service_id'), ''); -- servicio (proveedor por link)
   -- Tipo de negocio elegido AL REGISTRARSE (estudio/gimnasio/mixto). Esta decisión
   -- es la definitiva; ya no se cambia en Configuración.
   v_studio_type text  := lower(coalesce(nullif(trim(meta->>'studio_type'), ''), 'studio'));
@@ -61,6 +62,11 @@ begin
       -- configuración ni datos sensibles). La APP controla qué pantallas ve.
       insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, branch_id)
       values (new.id::text, v_studio_id, 'OPERATOR', v_full_name, new.email, v_phone, v_birth, v_initials, v_branch);
+    elsif v_signup_role = 'PROVIDER' then
+      -- Proveedor de servicio: login propio, ligado a un servicio. Solo ve/gestiona
+      -- las citas de SU servicio; no ve datos de miembros (RLS restrictiva).
+      insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, branch_id, provider_service_id)
+      values (new.id::text, v_studio_id, 'PROVIDER', v_full_name, new.email, v_phone, v_birth, v_initials, v_branch, v_service);
     else
       insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, branch_id)
       values (new.id::text, v_studio_id, 'STUDENT', v_full_name, new.email, v_phone, v_birth, v_initials, v_branch);

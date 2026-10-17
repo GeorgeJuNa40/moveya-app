@@ -41,7 +41,7 @@ export default function ServicesConfig() {
       {/* Servicios existentes (editables) */}
       <div className="space-y-4">
         {services.map((sv) => (
-          <ServiceCard key={sv.id} sv={sv} updateService={updateService} removeService={removeService} />
+          <ServiceCard key={sv.id} sv={sv} ceuCode={currentStudio!.ceuCode} updateService={updateService} removeService={removeService} />
         ))}
         {services.length === 0 && (
           <Card className="p-6 text-center text-sm text-ink-faint">
@@ -70,13 +70,19 @@ export default function ServicesConfig() {
 }
 
 function ServiceCard({
-  sv, updateService, removeService,
+  sv, ceuCode, updateService, removeService,
 }: {
   sv: OptionalService;
+  ceuCode: string;
   updateService: (id: string, patch: Partial<OptionalService>) => void;
   removeService: (id: string) => void;
 }) {
   const estComm = serviceCommission(sv);
+  const [copied, setCopied] = useState(false);
+  const providerLink = `${window.location.origin}/#/?ceu=${encodeURIComponent(ceuCode)}&role=proveedor&service=${encodeURIComponent(sv.id)}`;
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(providerLink); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* bloqueado */ }
+  };
   return (
     <Card className="p-5 space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -136,6 +142,18 @@ function ServiceCard({
             Comisión estimada por cita: <b>${estComm.toFixed(2)}</b>
             {sv.commissionType === 'percent' && sv.price ? ` (${sv.commissionValue ?? 0}% de $${Number(sv.price).toFixed(2)})` : ''}
           </p>
+        )}
+        {sv.bookable && (
+          <div className="pt-1">
+            <span className="mb-1 block text-sm font-medium text-ink-soft">Invitar al proveedor (login propio)</span>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate rounded-lg bg-cream-dark/50 px-3 py-2 text-xs text-ink-soft">{providerLink}</code>
+              <button type="button" onClick={copyLink} className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-cream">
+                {copied ? '¡Copiado!' : 'Copiar'}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-ink-faint">El proveedor verá y agendará solo las citas de este servicio. No ve datos de tus miembros.</p>
+          </div>
         )}
       </div>
 
