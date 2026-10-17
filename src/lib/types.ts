@@ -49,6 +49,7 @@ export interface Branding {
   cancellationPolicy?: string; // política de cancelación (la ve el alumno)
   studioPolicies?: string; // reglas y políticas del negocio (las ve el alumno en su panel)
   storeForMembers?: boolean; // muestra la tienda a alumnos y coaches (def. true si hay productos)
+  showMoveyaPicks?: boolean; // muestra la sección "Recomendados Move yA" (catálogo de la plataforma) a los alumnos (def. false)
   storeCheckout?: 'request' | 'online' | 'both'; // cómo compran: apartar / en línea / ambos (def. request)
   requirePlanAll?: boolean; // exige plan activo a TODOS los miembros (no solo a los nuevos)
   cancellationHours?: number; // horas mínimas de anticipación para cancelar (candado)
@@ -387,6 +388,19 @@ export interface Expense {
   spentAt: string;
   note?: string;
   createdAt: string;
+}
+
+// Producto del catálogo GLOBAL "Recomendados Move yA" (lo administra la plataforma).
+export interface PlatformProduct {
+  id: string;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  url: string;        // link de afiliado o de la tienda de la plataforma
+  category?: string;
+  priceText?: string; // texto libre, ej. "$499 MXN"
+  active: boolean;
+  sortOrder: number;
 }
 
 export interface StarEntry {
