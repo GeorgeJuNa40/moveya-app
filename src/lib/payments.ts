@@ -204,14 +204,24 @@ export async function getStripeConnectStatus(): Promise<ConnectStatus> {
   }
 }
 
-// Abre el panel de Stripe del estudio (ver cobros y pagos) en una pestaña nueva.
+// Abre el panel de Stripe del estudio (ver cobros y pagos). Abre la pestaña
+// EN EL MISMO click (antes del await) para que el navegador no la bloquee como
+// popup; si aun así la bloquea, navega en la misma pestaña.
 export async function openStripeDashboard(): Promise<void> {
+  // Pestaña en blanco creada por el gesto del usuario (no bloqueada).
+  const win = typeof window !== 'undefined' ? window.open('', '_blank') : null;
   try {
     const data = await invokeConnect('dashboard');
     const url = data.url as string | undefined;
-    if (url) window.open(url, '_blank', 'noopener');
-    else notifyError('cuenta de pagos', 'No se pudo abrir tu panel de Stripe.');
+    if (!url) {
+      if (win) win.close();
+      notifyError('cuenta de pagos', 'No se pudo abrir tu panel de Stripe.');
+      return;
+    }
+    if (win) win.location.href = url;
+    else window.location.href = url; // respaldo: misma pestaña si el popup fue bloqueado
   } catch (e) {
+    if (win) win.close();
     notifyError('cuenta de pagos', String((e as Error)?.message ?? e));
   }
 }
