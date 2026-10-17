@@ -387,6 +387,27 @@ export default function Settings() {
           </Card>
         )}
 
+        {/* Recomendados Move yA — catálogo de la plataforma (opt-in del estudio) */}
+        <Card className="p-6 space-y-3">
+          <div>
+            <h2 className="font-semibold text-ink">Recomendados Move yA</h2>
+            <p className="mt-1 text-sm text-ink-faint">
+              Si lo activas, tus alumnos verán una sección aparte con productos y marcas aliadas de Move yA
+              (suplementos, accesorios, etc.). Es independiente de tu tienda y no afecta tus ventas. Opcional.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setBrand({ showMoveyaPicks: !(b.showMoveyaPicks === true) })}
+            className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${b.showMoveyaPicks === true ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'}`}
+          >
+            <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${b.showMoveyaPicks === true ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
+              {b.showMoveyaPicks === true ? '✓' : ''}
+            </span>
+            <span className="text-sm font-medium text-ink">Mostrar “Recomendados Move yA” a mis alumnos</span>
+          </button>
+        </Card>
+
         {/* 9 · Página informativa pública — plan Pro */}
         <div>
           <h2 className="mb-2 font-semibold text-ink">9 · Página informativa</h2>

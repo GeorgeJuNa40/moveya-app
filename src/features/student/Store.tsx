@@ -4,9 +4,10 @@ import { PageHeader, Card, Badge, Button } from '../../components/ui';
 import { usd } from '../../lib/format';
 import { fmtDay } from '../../lib/format';
 import { fetchProducts, fetchStoreOrders, createStoreOrder } from '../../lib/products';
+import { fetchPlatformProducts } from '../../lib/platformProducts';
 import { startCheckout, type PayProvider } from '../../lib/payments';
 import { notifySuccess, notifyError } from '../../lib/notify';
-import type { Product, StoreOrder } from '../../lib/types';
+import type { Product, StoreOrder, PlatformProduct } from '../../lib/types';
 
 // Tienda para alumnos y coaches (Fase A: apartar / pedir).
 // El miembro arma su carrito y "aparta" el pedido; al estudio le llega en su
@@ -29,6 +30,12 @@ export default function Store() {
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [sending, setSending] = useState(false);
+  // Recomendados Move yA (catálogo de la plataforma). Solo si el estudio lo activó.
+  const showPicks = currentStudio!.branding.showMoveyaPicks === true;
+  const [picks, setPicks] = useState<PlatformProduct[]>([]);
+  useEffect(() => {
+    if (showPicks) void fetchPlatformProducts().then(setPicks);
+  }, [showPicks]);
 
   const load = async () => {
     const [prods, ords] = await Promise.all([
@@ -220,6 +227,29 @@ export default function Store() {
                 </Button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {showPicks && picks.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-ink">Recomendados Move yA</h2>
+          <p className="mb-4 text-sm text-ink-faint">Productos y marcas aliadas que te pueden servir. Al comprar sales de la app.</p>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {picks.map((p) => (
+              <Card key={p.id} className="flex flex-col p-5">
+                {p.imageUrl && <img src={p.imageUrl} alt="" className="mb-3 h-36 w-full rounded-xl object-cover" />}
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-semibold text-ink">{p.title}</h3>
+                  <Badge tone="brand">🔗</Badge>
+                </div>
+                {p.description && <p className="mt-1 flex-1 text-sm text-ink-faint">{p.description}</p>}
+                {p.priceText && <p className="mt-3 text-lg font-black text-brand">{p.priceText}</p>}
+                <a href={p.url} target="_blank" rel="noreferrer" className="mt-3">
+                  <Button className="w-full">Ver / Comprar →</Button>
+                </a>
+              </Card>
+            ))}
           </div>
         </div>
       )}
