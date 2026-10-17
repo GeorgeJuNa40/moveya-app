@@ -130,6 +130,8 @@ function Reconnect({ onRetry, onLogout }: { onRetry: () => void; onLogout: () =>
 // de administración (filtrado a su sucursal), igual que el dueño.
 function homeFor(role: Role): string {
   if (role === 'STUDIO_ADMIN' || role === 'BRANCH_ADMIN') return '/admin';
+  // El operador/recepción no entra al dashboard de ingresos: su inicio es el CRM.
+  if (role === 'OPERATOR') return '/admin/members';
   if (role === 'COACH') return '/coach';
   return '/app';
 }
@@ -323,17 +325,17 @@ export default function App() {
       {/* ---- ESTUDIO (Admin) — protegido por verificación de pago ---- */}
       {/* Dashboard siempre visible: aunque no haya pago, el estudio puede entrar a su panel principal. */}
       <Route path="/admin" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><AdminDashboard /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/members" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><MembersCRM /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/calendar" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><CalendarAdmin /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/classes" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><ClassesManagement /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/packages" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PackageManagement /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/members" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN', 'OPERATOR']}><SubscriptionGate><MembersCRM /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/calendar" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><CalendarAdmin /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/classes" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><ClassesManagement /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/packages" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PackageManagement /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/coaches" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><CoachesAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/rewards" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="rewards"><RewardsAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/services" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="services"><ServicesConfig /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/whatsapp" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappAgent /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/inbox" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><Inbox /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/access" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><AccessControl /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/store" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="store"><StoreAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/store" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PlanGate capability="store"><StoreAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/routines" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><RoutinesAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reports" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="reports"><Reports /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reminders" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Reminders /></SubscriptionGate></RequireRole>} />

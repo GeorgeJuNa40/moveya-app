@@ -46,6 +46,15 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/admin/coaches', label: 'Coaches' },
     { to: '/admin/suggestions', label: 'Sugerencias' },
   ],
+  // Operador / recepción: solo lo elemental para operar el día a día. Sin
+  // dashboard de ingresos, reportes, configuración ni facturación.
+  OPERATOR: [
+    { to: '/admin/members', label: 'Miembros (CRM)', short: 'Miembros' },
+    { to: '/admin/calendar', label: 'Calendario', short: 'Agenda' },
+    { to: '/admin/classes', label: 'Clases' },
+    { to: '/admin/packages', label: 'Paquetes' },
+    { to: '/admin/store', label: 'Tienda', cap: 'store' },
+  ],
   COACH: [
     { to: '/coach', label: 'Inicio' },
     { to: '/coach/calendar', label: 'Mi Calendario', short: 'Agenda' },
@@ -67,6 +76,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
 const ROLE_LABEL: Record<Role, string> = {
   STUDIO_ADMIN: 'Estudio',
   BRANCH_ADMIN: 'Gerente',
+  OPERATOR: 'Recepción',
   COACH: 'Coach',
   STUDENT: 'Alumno',
 };
