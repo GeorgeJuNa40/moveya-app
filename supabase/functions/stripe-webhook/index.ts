@@ -67,6 +67,7 @@ Deno.serve(async (req) => {
       else if (m.kind === 'membership_sub') await applyMembershipSub(m, s);
       else if (m.kind === 'subscription') await applySubscription(m, s);
       else if (m.kind === 'promo') await applyPromo(m, s);
+      else if (m.kind === 'store') await applyStoreOrder(m, s);
     }
     // Renovación mensual: Stripe cobró el siguiente periodo -> extiende el acceso.
     else if (event.type === 'invoice.payment_succeeded' || event.type === 'invoice.paid') {
@@ -141,6 +142,36 @@ async function applyPackage(m: Record<string, string>, s: Stripe.Checkout.Sessio
     package_id: pkg.id,
     concept: pkg.name,
     paid_at: now.toISOString(),
+    registered_by: 'online',
+    stripe_session_id: s.id,
+  });
+}
+
+// Pedido de tienda pagado en línea: marca el pedido como entregado/pagado y
+// registra el pago. Idempotente por stripe_session_id.
+async function applyStoreOrder(m: Record<string, string>, s: Stripe.Checkout.Session) {
+  const { data: existing } = await admin
+    .from('payments')
+    .select('id')
+    .eq('stripe_session_id', s.id)
+    .maybeSingle();
+  if (existing) return;
+
+  const { data: order } = await admin.from('store_orders').select('*').eq('id', m.order_id).single();
+  if (!order) return;
+
+  await admin
+    .from('store_orders')
+    .update({ status: 'fulfilled', provider: 'stripe', paid_ref: s.id, fulfilled_at: new Date().toISOString() })
+    .eq('id', order.id);
+
+  await admin.from('payments').insert({
+    id: crypto.randomUUID(),
+    user_id: m.user_id,
+    amount_usd: order.total,
+    method: 'card',
+    concept: 'Tienda: pedido en línea',
+    paid_at: new Date().toISOString(),
     registered_by: 'online',
     stripe_session_id: s.id,
   });

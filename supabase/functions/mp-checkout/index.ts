@@ -221,7 +221,36 @@ Deno.serve(async (req) => {
       return json({ url: data.init_point });
     }
 
-    return json({ error: 'kind invalido (package | membership_sub | subscription | promo)' }, 400);
+    if (kind === 'store') {
+      // Pago en linea de un pedido de la tienda (productos fisicos).
+      const { data: order } = await supabase.from('store_orders').select('*').eq('id', body.orderId).single();
+      if (!order) return json({ error: 'Pedido no encontrado' }, 404);
+      const studioTok = await studioToken(me.studio_id);
+      const token = studioTok ?? (TEST_MODE && PLATFORM_TOKEN ? PLATFORM_TOKEN : null);
+      if (!token) return json({ error: 'El estudio aun no conecto su cuenta de Mercado Pago.' }, 400);
+      const amount = Number(order.total);
+      if (!(amount > 0)) return json({ error: 'El pedido no tiene un monto valido.' }, 400);
+      const feeAmt = studioTok ? fee(amount) : 0;
+      const ref = JSON.stringify({ kind: 'store', user_id: me.id, studio_id: me.studio_id, order_id: order.id });
+      const { ok, data } = await mpFetch('/checkout/preferences', token, {
+        items: [{ title: 'Pedido de tienda', quantity: 1, unit_price: amount, currency_id: 'MXN' }],
+        marketplace_fee: feeAmt,
+        payer: { email: payerEmail },
+        external_reference: ref,
+        notification_url: notifyUrl(),
+        back_urls: {
+          success: `${APP_URL}/?pago=exito`,
+          failure: `${APP_URL}/?pago=cancelado`,
+          pending: `${APP_URL}/?pago=pendiente`,
+        },
+        auto_return: 'approved',
+        metadata: { kind: 'store', user_id: me.id, studio_id: me.studio_id, order_id: order.id },
+      });
+      if (!ok) return json({ error: `MP: ${mpWhy(data)}`, detail: data }, 400);
+      return json({ url: data.init_point });
+    }
+
+    return json({ error: 'kind invalido (package | membership_sub | subscription | promo | store)' }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message ?? e) }, 500);
   }
