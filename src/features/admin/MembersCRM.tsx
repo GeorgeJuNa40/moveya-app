@@ -42,7 +42,9 @@ function fmtBirthday(iso?: string): string | null {
 
 // CRM de alumnos: contacto, clases agendadas, membresía y registro de pagos.
 export default function MembersCRM() {
-  const { db, currentStudio, studioUsers, membership, registerManualPlan, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember } = useStore();
+  const { db, currentStudio, currentUser, studioUsers, membership, registerManualPlan, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember } = useStore();
+  // El operador/recepción opera pero NO gestiona estado ni elimina miembros.
+  const canManageMembers = currentUser?.role !== 'OPERATOR';
   const students = studioUsers('STUDENT');
   const packages = db.packages.filter((p) => p.studioId === currentStudio!.id && p.active);
   const isGymish = currentStudio!.studioType === 'gym' || currentStudio!.studioType === 'mixed';
@@ -423,7 +425,9 @@ export default function MembersCRM() {
                   );
                 })()}
 
-                {/* Estado del miembro: baja / vetar / reactivar / eliminar */}
+                {/* Estado del miembro: baja / vetar / reactivar / eliminar.
+                    Solo el dueño/gerente — el operador no gestiona estado ni borra. */}
+                {canManageMembers && (
                 <div className="mb-4 rounded-xl bg-cream-dark/40 p-3">
                   <p className="mb-2 text-sm font-medium text-ink-soft">Estado del miembro</p>
                   <div className="flex flex-wrap gap-2">
@@ -448,6 +452,7 @@ export default function MembersCRM() {
                   </div>
                   <p className="mt-2 text-xs text-ink-faint">Dar de baja o vetar conserva su historial (reversible). Eliminar borra todo.</p>
                 </div>
+                )}
 
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" onClick={() => setDetail(null)}>Cerrar</Button>

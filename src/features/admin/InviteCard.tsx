@@ -8,6 +8,7 @@ export default function InviteCard({ ceuCode }: { ceuCode: string }) {
   const origin = window.location.origin;
   const studentLink = `${origin}/#/?ceu=${encodeURIComponent(ceuCode)}`;
   const coachLink = `${origin}/#/?ceu=${encodeURIComponent(ceuCode)}&role=coach`;
+  const operatorLink = `${origin}/#/?ceu=${encodeURIComponent(ceuCode)}&role=operador`;
   const [copied, setCopied] = useState('');
 
   const copy = async (text: string, key: string) => {
@@ -60,6 +61,15 @@ export default function InviteCard({ ceuCode }: { ceuCode: string }) {
           hint="El coach se registra como pendiente. Apruébalo en el menú Coaches."
           fileName={`coaches-${ceuCode}`}
           copyKey="linkCoach"
+          copied={copied}
+          onCopy={copy}
+        />
+        <InviteBlock
+          title="🧾 Invitar recepción / operador"
+          link={operatorLink}
+          hint="Empleado con acceso limitado: opera miembros, calendario, clases, paquetes y tienda. No ve reportes, configuración ni facturación."
+          fileName={`recepcion-${ceuCode}`}
+          copyKey="linkOperator"
           copied={copied}
           onCopy={copy}
         />

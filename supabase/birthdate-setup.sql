@@ -56,6 +56,11 @@ begin
       -- Gerente de sucursal: administra solo su sede.
       insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, branch_id)
       values (new.id::text, v_studio_id, 'BRANCH_ADMIN', v_full_name, new.email, v_phone, v_birth, v_initials, v_branch);
+    elsif v_signup_role = 'OPERATOR' then
+      -- Operador / recepción: opera el negocio con acceso limitado (sin reportes,
+      -- configuración ni datos sensibles). La APP controla qué pantallas ve.
+      insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, branch_id)
+      values (new.id::text, v_studio_id, 'OPERATOR', v_full_name, new.email, v_phone, v_birth, v_initials, v_branch);
     else
       insert into public.users (id, studio_id, role, full_name, email, phone, birth_date, avatar_initials, branch_id)
       values (new.id::text, v_studio_id, 'STUDENT', v_full_name, new.email, v_phone, v_birth, v_initials, v_branch);
@@ -96,7 +101,7 @@ begin
       -- pasarela; al confirmarse el pago, el webhook abre los 14 días.
       -- currentPeriodEnd = now() => isSubscriptionActive() es false (bloqueado).
       jsonb_build_object(
-        'status', 'TRIALING', 'plan', 'premium', 'priceUsd', 84.99, 'promoPriceUsd', 1,
+        'status', 'TRIALING', 'plan', 'premium', 'priceUsd', 99.99, 'promoPriceUsd', 1,
         'trialDays', 14, 'isPromo', true,
         'founderInvited', (coalesce(meta->>'founder_invited', '') = '1'),
         'trialEndsAt', now(),

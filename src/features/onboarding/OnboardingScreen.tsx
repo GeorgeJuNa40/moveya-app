@@ -27,6 +27,8 @@ export default function OnboardingScreen() {
   const isCoachInvite = inviteRole === 'coach';
   // Link de gerente de sucursal: ?ceu=XXXX&branch=<id>&role=branchadmin
   const isBranchAdminInvite = inviteRole === 'branchadmin';
+  // Link de operador/recepción: ?ceu=XXXX&role=operador
+  const isOperatorInvite = inviteRole === 'operador' || inviteRole === 'operator';
   const invitedBranch = searchParams.get('branch') ?? '';
   // Desde la landing, "Registra tu estudio" llega con ?nuevo=1 → abre modo crear.
   const wantsCreate = searchParams.get('nuevo') === '1';
@@ -131,7 +133,7 @@ export default function OnboardingScreen() {
             email,
             password,
             ceuCode: ceu,
-            role: isBranchAdminInvite ? 'BRANCH_ADMIN' : isCoachInvite ? 'COACH' : 'STUDENT',
+            role: isBranchAdminInvite ? 'BRANCH_ADMIN' : isOperatorInvite ? 'OPERATOR' : isCoachInvite ? 'COACH' : 'STUDENT',
             branchId: invitedBranch || undefined,
             birthDate,
             ...contact,
@@ -209,6 +211,8 @@ export default function OnboardingScreen() {
                   ? 'Crea tu estudio'
                   : isBranchAdminInvite
                     ? 'Únete como gerente'
+                    : isOperatorInvite
+                      ? 'Únete como recepción'
                     : isCoachInvite
                       ? 'Únete como coach'
                       : invStudio
@@ -226,6 +230,8 @@ export default function OnboardingScreen() {
                       : 'Registra tu estudio y empieza tu prueba.')
                   : isBranchAdminInvite
                     ? 'Regístrate para administrar tu sucursal.'
+                    : isOperatorInvite
+                    ? 'Regístrate como recepción para operar el día a día del negocio.'
                     : isCoachInvite
                     ? 'Regístrate como coach. El estudio deberá aprobarte para que empieces.'
                     : invStudio

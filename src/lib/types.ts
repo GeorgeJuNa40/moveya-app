@@ -2,7 +2,10 @@
 
 // STUDIO_ADMIN = dueño/super-admin (ve todas las sucursales, factura, crea sedes).
 // BRANCH_ADMIN = gerente de una sucursal (ve/administra solo su sede).
-export type Role = 'STUDIO_ADMIN' | 'BRANCH_ADMIN' | 'COACH' | 'STUDENT';
+// OPERATOR = empleado/recepción: opera el negocio (miembros, calendario, clases,
+// paquetes, tienda) con acceso LIMITADO; no ve reportes, configuración,
+// suscripción ni datos sensibles del negocio.
+export type Role = 'STUDIO_ADMIN' | 'BRANCH_ADMIN' | 'OPERATOR' | 'COACH' | 'STUDENT';
 
 export type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'TRIALING';
 
