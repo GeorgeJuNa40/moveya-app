@@ -226,7 +226,7 @@ async function fetchAutoFacts(studioId: string): Promise<string[]> {
   const facts: string[] = [];
   try {
     const sres = await fetch(
-      `${SUPABASE_URL}/rest/v1/studios?select=name,phone,address,branding&id=eq.${encodeURIComponent(studioId)}`,
+      `${SUPABASE_URL}/rest/v1/studios?select=name,phone,address,branding,services&id=eq.${encodeURIComponent(studioId)}`,
       { headers: svc() },
     );
     const srow: Any = sres.ok ? (await sres.json())[0] : null;
@@ -250,6 +250,22 @@ async function fetchAutoFacts(studioId: string): Promise<string[]> {
     );
     const tpls: Any[] = tres.ok ? await tres.json() : [];
     if (tpls.length) facts.push(`Tipos de clase: ${tpls.map((t) => t.name).join(', ')}.`);
+
+    // Servicios opcionales (nutricion, kinesiologia, convenios) y como agendarlos.
+    const WD = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+    const svcs: Any[] = Array.isArray(srow?.services) ? srow.services : [];
+    for (const s of svcs.filter((x) => x?.enabled)) {
+      let f = `Servicio "${s.name}"${s.description ? ': ' + s.description : ''}.`;
+      if (s.bookable) {
+        if (s.price) f += ` Precio aprox. $${s.price} ${cur} (se paga directo con el proveedor).`;
+        if (Array.isArray(s.availDays) && s.availDays.length && s.availFrom && s.availTo)
+          f += ` Disponible ${s.availDays.map((d: number) => WD[d]).join(', ')} de ${s.availFrom} a ${s.availTo}.`;
+        f += ' Se puede agendar cita desde la app, en la seccion Servicios.';
+      } else if (s.whatsapp) {
+        f += ' Para mas informacion, contacto por WhatsApp.';
+      }
+      facts.push(f);
+    }
 
     if (srow?.address) facts.push(`Direccion: ${srow.address}.`);
     if (srow?.phone) facts.push(`Telefono: ${srow.phone}.`);

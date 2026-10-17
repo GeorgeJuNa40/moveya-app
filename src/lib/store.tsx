@@ -1468,6 +1468,21 @@ export function buildAutoFacts(studio: Studio, db: Database): string[] {
   const tpls = db.classTemplates.filter((t) => t.studioId === studio.id);
   if (tpls.length) facts.push(`Tipos de clase que ofrecemos: ${tpls.map((t) => t.name).join(', ')}.`);
 
+  // Servicios opcionales (nutrición, kinesiología, convenios…) y cómo agendarlos.
+  const WD = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+  for (const s of (studio.services ?? []).filter((sv) => sv.enabled)) {
+    let f = `Servicio "${s.name}"${s.description ? ': ' + s.description : ''}.`;
+    if (s.bookable) {
+      if (s.price) f += ` Precio aprox. $${s.price} ${cur} (se paga directo con el proveedor).`;
+      if (s.availDays?.length && s.availFrom && s.availTo)
+        f += ` Disponible ${s.availDays.map((d) => WD[d]).join(', ')} de ${s.availFrom} a ${s.availTo}.`;
+      f += ' Se puede agendar cita desde la app, en la sección Servicios.';
+    } else if (s.whatsapp) {
+      f += ' Para más información, contacto por WhatsApp.';
+    }
+    facts.push(f);
+  }
+
   if (studio.address) facts.push(`Dirección: ${studio.address}.`);
   if (studio.phone) facts.push(`Teléfono de contacto: ${studio.phone}.`);
 
