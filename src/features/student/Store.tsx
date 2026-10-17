@@ -30,8 +30,9 @@ export default function Store() {
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [sending, setSending] = useState(false);
-  // Recomendados Move yA (catálogo de la plataforma). Solo si el estudio lo activó.
-  const showPicks = currentStudio!.branding.showMoveyaPicks === true;
+  // Recomendados Move yA (catálogo de la plataforma). Solo si el estudio se unió
+  // al programa (candado permanente moveyaPicks).
+  const showPicks = currentStudio!.moveyaPicks === true;
   const [picks, setPicks] = useState<PlatformProduct[]>([]);
   useEffect(() => {
     if (showPicks) void fetchPlatformProducts().then(setPicks);

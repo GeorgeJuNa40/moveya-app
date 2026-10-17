@@ -37,4 +37,37 @@ create policy platform_products_read on public.platform_products
 -- insert into public.platform_products (title, description, image_url, url, category, price_text, sort_order) values
 --   ('Proteína Whey 1kg', 'Proteína de suero, sabor chocolate.', 'https://.../img.jpg', 'https://tu-link-afiliado...', 'Suplementos', '$499 MXN', 1),
 --   ('Banda de resistencia', 'Set de 3 bandas para entrenamiento.', 'https://.../img.jpg', 'https://tu-link-afiliado...', 'Accesorios', 'Desde $199', 2);
+
+-- ----------------------------------------------------------------------------
+-- CANDADO PERMANENTE por estudio: el estudio DECIDE unirse al programa y, una
+-- vez dentro, no se puede revertir (así tus productos no se quitan a capricho).
+-- ----------------------------------------------------------------------------
+alter table public.studios add column if not exists moveya_picks boolean not null default false;
+
+-- El estudio acepta el programa (one-way). Solo prende; nunca apaga.
+create or replace function public.accept_moveya_picks()
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if public.auth_role() <> 'STUDIO_ADMIN' then raise exception 'NOT_ALLOWED'; end if;
+  update public.studios set moveya_picks = true where id = public.auth_studio_id();
+end;
+$$;
+revoke all on function public.accept_moveya_picks() from anon;
+grant execute on function public.accept_moveya_picks() to authenticated;
+
+-- Blindaje: una vez true, no se puede volver a false (ni por API directa).
+create or replace function public.lock_moveya_picks()
+returns trigger language plpgsql as $$
+begin
+  if OLD.moveya_picks = true and NEW.moveya_picks = false then
+    NEW.moveya_picks := true;
+  end if;
+  return NEW;
+end;
+$$;
+drop trigger if exists trg_lock_moveya_picks on public.studios;
+create trigger trg_lock_moveya_picks before update on public.studios
+  for each row execute function public.lock_moveya_picks();
+-- Para TÚ (plataforma) encender el programa a un estudio puntual (service role):
+--   update public.studios set moveya_picks = true where id = '<studio_id>';
 -- ============================================================================

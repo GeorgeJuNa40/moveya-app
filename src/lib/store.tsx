@@ -94,6 +94,7 @@ interface StoreValue {
   authLoading: boolean;
   hasSession: boolean;        // hay sesión de Supabase activa (aunque los datos aún no carguen)
   reloadData: () => void;     // recarga los datos del estudio desde el servidor (reconexión)
+  acceptMoveyaPicks: () => Promise<void>; // acepta el programa "Recomendados Move yA" (permanente)
   signUp: (input: SignUpInput) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -492,6 +493,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     authLoading,
     hasSession: !!currentUserId,
     reloadData: () => setReloadTick((t) => t + 1),
+    async acceptMoveyaPicks() {
+      const sid = currentStudio?.id;
+      if (!sid) return;
+      const { error } = await supabase.rpc('accept_moveya_picks');
+      if (error) { notifyError('programa', error.message); return; }
+      setDb((prev) => ({
+        ...prev,
+        studios: prev.studios.map((s) => (s.id === sid ? { ...s, moveyaPicks: true } : s)),
+      }));
+    },
     plan,
     studioAutoFacts,
     can: (cap) => planHas(plan, cap),

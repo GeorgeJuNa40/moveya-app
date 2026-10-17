@@ -387,26 +387,8 @@ export default function Settings() {
           </Card>
         )}
 
-        {/* Recomendados Move yA — catálogo de la plataforma (opt-in del estudio) */}
-        <Card className="p-6 space-y-3">
-          <div>
-            <h2 className="font-semibold text-ink">Recomendados Move yA</h2>
-            <p className="mt-1 text-sm text-ink-faint">
-              Si lo activas, tus alumnos verán una sección aparte con productos y marcas aliadas de Move yA
-              (suplementos, accesorios, etc.). Es independiente de tu tienda y no afecta tus ventas. Opcional.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setBrand({ showMoveyaPicks: !(b.showMoveyaPicks === true) })}
-            className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${b.showMoveyaPicks === true ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'}`}
-          >
-            <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border ${b.showMoveyaPicks === true ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
-              {b.showMoveyaPicks === true ? '✓' : ''}
-            </span>
-            <span className="text-sm font-medium text-ink">Mostrar “Recomendados Move yA” a mis alumnos</span>
-          </button>
-        </Card>
+        {/* Programa de aliados "Recomendados Move yA" — aceptación permanente */}
+        <MoveyaPicksCard />
 
         {/* 9 · Página informativa pública — plan Pro */}
         <div>
@@ -451,6 +433,44 @@ export default function Settings() {
 
 // Avisos a los alumnos: el estudio escribe un mensaje relevante (clima, cierre,
 // promoción…) y lo envía por notificación push a TODOS sus alumnos de un clic.
+// Programa de aliados "Recomendados Move yA". El estudio DECIDE unirse (gana una
+// comisión por lo que compren sus alumnos). Al unirse queda activo de forma
+// permanente. Redactado para que el beneficio pese más que el candado.
+function MoveyaPicksCard() {
+  const { currentStudio, acceptMoveyaPicks } = useStore();
+  const active = currentStudio?.moveyaPicks === true;
+  const join = async () => {
+    const ok = window.confirm(
+      'Vas a unirte al programa Recomendados Move yA.\n\n' +
+        '• Ganas una comisión por las compras que hagan tus alumnos en esa sección.\n' +
+        '• Queda activo de forma permanente en tu app (no requiere mantenimiento de tu parte).\n\n' +
+        '¿Activar el programa?',
+    );
+    if (ok) await acceptMoveyaPicks();
+  };
+  return (
+    <Card className="p-6 space-y-3">
+      <div>
+        <h2 className="font-semibold text-ink">Gana con Recomendados Move yA 💸</h2>
+        <p className="mt-1 text-sm text-ink-faint">
+          Súmate al programa de aliados: tus alumnos ven una sección de productos recomendados
+          (suplementos, accesorios) y <strong>tú ganas una comisión</strong> por lo que compren ahí. Es
+          una sección aparte, no te quita trabajo ni toca tu propia tienda. Un ingreso extra para tu
+          negocio, sin costo.
+        </p>
+      </div>
+      {active ? (
+        <div className="flex items-center gap-2 rounded-xl border border-brand bg-brand-soft p-3">
+          <span className="grid h-5 w-5 place-items-center rounded-md bg-brand text-cream">✓</span>
+          <span className="text-sm font-medium text-ink">Estás dentro del programa. ¡A ganar! 🎉</span>
+        </div>
+      ) : (
+        <Button onClick={join}>Unirme y empezar a ganar</Button>
+      )}
+    </Card>
+  );
+}
+
 function BroadcastCard() {
   const { currentStudio } = useStore();
   const studioId = currentStudio!.id;
