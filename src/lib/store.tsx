@@ -130,6 +130,9 @@ interface StoreValue {
     method: PaymentMethod,
     opts?: { expiresAt?: string; recordPayment?: boolean },
   ) => void;
+  // Corrección: quita un plan/paquete asignado por error (y, opcionalmente, el
+  // pago registrado junto con él). Útil cuando el admin captura mal un cobro.
+  removeUserPackage: (userPackageId: string, opts?: { removePayment?: boolean }) => void;
   // Alta manual de miembro (para personas que no usan la app: adultos mayores,
   // walk-ins). Crea el alumno SIN cuenta/login. Devuelve su id para registrarle
   // el pago enseguida, o null si falló (p. ej. correo duplicado).
@@ -746,6 +749,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     registerManualPlan(userId, packageId, method, opts) {
       applyPurchase(setDb, db, userId, packageId, method, 'studio', opts);
+    },
+    removeUserPackage(userPackageId, opts) {
+      const up = db.userPackages.find((p) => p.id === userPackageId);
+      if (!up) return;
+      // Pago a anular (opcional): el más reciente del mismo miembro y paquete.
+      let paymentId: string | undefined;
+      if (opts?.removePayment) {
+        paymentId = db.payments
+          .filter((p) => p.userId === up.userId && p.packageId === up.packageId)
+          .sort((a, b) => b.paidAt.localeCompare(a.paidAt))[0]?.id;
+      }
+      setDb((prev) => ({
+        ...prev,
+        userPackages: prev.userPackages.filter((p) => p.id !== userPackageId),
+        payments: paymentId ? prev.payments.filter((p) => p.id !== paymentId) : prev.payments,
+      }));
+      void dbDelete('user_packages', userPackageId);
+      if (paymentId) void dbDelete('payments', paymentId);
     },
     async addMember(input) {
       const studioId = currentUser?.studioId;

@@ -356,18 +356,19 @@ export default function App() {
       <Route path="/coach/store" element={<RequireRole role="COACH"><CoachGate><Store /></CoachGate></RequireRole>} />
 
       {/* ---- USUARIO (Alumno) ----
-          Dashboard y Paquetes SIEMPRE abiertos (puerta de entrada y compra del
-          plan). El resto va tras StudentGate: sin plan activo no se puede
-          reservar ni usar la app; al adquirirlo se desbloquea todo. */}
+          El alumno ve TODA la interfaz y puede comprar en la tienda sin plan. El
+          único candado (StudentGate) está en Reservar: sin plan activo no puede
+          reservar clase; al adquirirlo se desbloquea. El check-in distingue por
+          su cuenta la membresía activa. */}
       <Route path="/app" element={<RequireRole role="STUDENT"><StudentDashboard /></RequireRole>} />
       <Route path="/app/packages" element={<RequireRole role="STUDENT"><MyPackages /></RequireRole>} />
       <Route path="/app/book" element={<RequireRole role="STUDENT"><StudentGate><BookClasses /></StudentGate></RequireRole>} />
-      <Route path="/app/rewards" element={<RequireRole role="STUDENT"><StudentGate><Rewards /></StudentGate></RequireRole>} />
-      <Route path="/app/coaches" element={<RequireRole role="STUDENT"><StudentGate><StudentCoaches /></StudentGate></RequireRole>} />
-      <Route path="/app/routine" element={<RequireRole role="STUDENT"><StudentGate><MyRoutine /></StudentGate></RequireRole>} />
-      <Route path="/app/services" element={<RequireRole role="STUDENT"><StudentGate><OptionalServices /></StudentGate></RequireRole>} />
-      <Route path="/app/store" element={<RequireRole role="STUDENT"><StudentGate><Store /></StudentGate></RequireRole>} />
-      <Route path="/app/suggestions" element={<RequireRole role="STUDENT"><StudentGate><Suggestions /></StudentGate></RequireRole>} />
+      <Route path="/app/rewards" element={<RequireRole role="STUDENT"><Rewards /></RequireRole>} />
+      <Route path="/app/coaches" element={<RequireRole role="STUDENT"><StudentCoaches /></RequireRole>} />
+      <Route path="/app/routine" element={<RequireRole role="STUDENT"><MyRoutine /></RequireRole>} />
+      <Route path="/app/services" element={<RequireRole role="STUDENT"><OptionalServices /></RequireRole>} />
+      <Route path="/app/store" element={<RequireRole role="STUDENT"><Store /></RequireRole>} />
+      <Route path="/app/suggestions" element={<RequireRole role="STUDENT"><Suggestions /></RequireRole>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
