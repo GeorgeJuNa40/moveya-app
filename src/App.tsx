@@ -67,8 +67,7 @@ const PackageManagement = lazyWithReload(() => import('./features/admin/PackageM
 const CoachesAdmin = lazyWithReload(() => import('./features/admin/CoachesAdmin'));
 const RewardsAdmin = lazyWithReload(() => import('./features/admin/RewardsAdmin'));
 const ServicesConfig = lazyWithReload(() => import('./features/admin/ServicesConfig'));
-const WhatsappAgent = lazyWithReload(() => import('./features/admin/WhatsappAgent'));
-const Inbox = lazyWithReload(() => import('./features/admin/Inbox'));
+const WhatsappHub = lazyWithReload(() => import('./features/admin/WhatsappHub'));
 const AccessControl = lazyWithReload(() => import('./features/admin/AccessControl'));
 const StoreAdmin = lazyWithReload(() => import('./features/admin/StoreAdmin'));
 const RoutinesAdmin = lazyWithReload(() => import('./features/admin/RoutinesAdmin'));
@@ -335,8 +334,9 @@ export default function App() {
       <Route path="/admin/coaches" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><CoachesAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/rewards" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="rewards"><RewardsAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/services" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="services"><ServicesConfig /></PlanGate></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/whatsapp" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappAgent /></PlanGate></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/inbox" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><Inbox /></PlanGate></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/whatsapp" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappHub /></PlanGate></SubscriptionGate></RequireRole>} />
+      {/* Compatibilidad: el link viejo de la bandeja abre el hub de WhatsApp. */}
+      <Route path="/admin/inbox" element={<Navigate to="/admin/whatsapp" replace />} />
       <Route path="/admin/access" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><AccessControl /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/store" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PlanGate capability="store"><StoreAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/routines" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><RoutinesAdmin /></SubscriptionGate></RequireRole>} />

@@ -29,7 +29,7 @@ function fmtTime(iso?: string): string {
 
 const prettyPhone = (p: string) => (p ? `+${p}` : '');
 
-export default function Inbox() {
+export default function Inbox({ embedded = false }: { embedded?: boolean }) {
   const { currentStudio } = useStore();
   const [convos, setConvos] = useState<WaConversation[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -108,12 +108,14 @@ export default function Inbox() {
 
   return (
     <div>
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold text-ink">Bandeja de WhatsApp</h1>
-        <p className="text-sm text-ink-soft mt-1">
-          Chats de tus alumnos. Cuando alguien pide hablar con una persona, el bot se calla y tú tomas el control aquí.
-        </p>
-      </div>
+      {!embedded && (
+        <div className="mb-5">
+          <h1 className="text-2xl font-bold text-ink">Bandeja de WhatsApp</h1>
+          <p className="text-sm text-ink-soft mt-1">
+            Chats de tus alumnos. Cuando alguien pide hablar con una persona, el bot se calla y tú tomas el control aquí.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
         {/* Lista de conversaciones */}
