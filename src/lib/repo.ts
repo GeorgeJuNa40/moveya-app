@@ -153,6 +153,7 @@ const mapClassTemplate = (r: Row): ClassTemplate => ({
   durationMin: r.duration_min,
   colorHex: r.color_hex,
   photoUrl: r.photo_url ?? undefined,
+  spots: Array.isArray(r.spots) ? (r.spots as string[]) : undefined,
 });
 
 const mapClassSession = (r: Row): ClassSession => ({
@@ -173,6 +174,7 @@ const mapBooking = (r: Row): Booking => ({
   userPackageId: r.user_package_id ?? null,
   status: r.status,
   createdAt: r.created_at,
+  spot: r.spot ?? undefined,
   penaltyUsd: Number(r.penalty_usd ?? 0),
   penaltyPaid: r.penalty_paid ?? false,
 });
@@ -363,6 +365,7 @@ export const rowClassTemplate = (t: ClassTemplate): Row => ({
   duration_min: t.durationMin,
   color_hex: t.colorHex,
   photo_url: t.photoUrl ?? null,
+  spots: t.spots && t.spots.length ? t.spots : null,
 });
 export const rowClassSession = (s: ClassSession): Row => ({
   id: s.id,
@@ -381,6 +384,7 @@ export const rowBooking = (b: Booking): Row => ({
   user_package_id: b.userPackageId,
   status: b.status,
   created_at: b.createdAt,
+  spot: b.spot ?? null,
   penalty_usd: b.penaltyUsd ?? 0,
   penalty_paid: b.penaltyPaid ?? false,
 });

@@ -345,6 +345,7 @@ export interface ClassTemplate {
   durationMin: number;
   colorHex: string;
   photoUrl?: string; // foto que define el tipo de clase
+  spots?: string[]; // lugares con nombre (ej. "Reformer 1".."Reformer 8"); vacío = sin elegir lugar
 }
 
 export interface ClassSession {
@@ -365,6 +366,7 @@ export interface Booking {
   userPackageId: string | null;
   status: BookingStatus;
   createdAt: string;
+  spot?: string; // lugar elegido (cama/bici), si el tipo de clase usa lugares
   penaltyUsd?: number; // adeudo por no asistir/cancelar tarde (0 = sin cargo)
   penaltyPaid?: boolean; // el estudio ya cobró/condonó ese adeudo
 }
