@@ -7,7 +7,9 @@ import { extractTextFromFile } from '../../lib/extractText';
 import { notifySuccess, notifyError } from '../../lib/notify';
 
 // Agente de IA para WhatsApp: recordatorios de pago, avisos y respuestas del bot.
-export default function WhatsappAgent() {
+// `embedded`: cuando se muestra dentro del hub de WhatsApp (con pestañas), se
+// omite su propio encabezado para no duplicar títulos.
+export default function WhatsappAgent({ embedded = false }: { embedded?: boolean }) {
   const {
     currentStudio, updateWhatsapp, upsertWhatsappTemplate, deleteWhatsappTemplate,
     addKnowledge, addKnowledgeMany, removeKnowledge, studioAutoFacts,
@@ -91,7 +93,7 @@ export default function WhatsappAgent() {
 
   return (
     <>
-      <PageHeader title="WhatsApp IA" subtitle="Recordatorios de pago, avisos del estudio y respuestas automáticas del bot" />
+      {!embedded && <PageHeader title="WhatsApp IA" subtitle="Recordatorios de pago, avisos del estudio y respuestas automáticas del bot" />}
 
       {/* Estado del bot (lo controla la plataforma, no el estudio). */}
       {wa.aiActive ? (

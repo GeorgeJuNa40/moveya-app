@@ -1,9 +1,12 @@
 -- ============================================================================
 -- Move yA — Elegir lugar en la reserva (cama de Reformer, bici, etc.)
 -- ----------------------------------------------------------------------------
--- Cada TIPO de clase (class_templates) puede definir sus lugares con nombre
--- (jsonb array). Si los tiene, el alumno elige un lugar libre al reservar y no
--- puede tomar uno ya ocupado. Aditivo y seguro.
+-- Cada TIPO de clase (class_templates) puede definir sus lugares (jsonb array).
+-- Hoy cada lugar es un objeto {id,label,x,y} con su posición en el mapa visual
+-- del salón (el formato viejo de solo strings sigue siendo válido). Si los tiene,
+-- el alumno elige un lugar libre al reservar y no puede tomar uno ya ocupado.
+-- NOTA: la versión vigente de book_session vive en waitlist.sql (contempla la
+-- lista de espera). Aquí se deja por referencia. Aditivo y seguro.
 --
 -- Cómo usarlo: Supabase → SQL Editor → pega TODO → Run. Seguro re-correrlo.
 -- ============================================================================

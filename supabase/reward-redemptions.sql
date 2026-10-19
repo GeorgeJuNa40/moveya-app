@@ -22,7 +22,11 @@ begin
   if v_studio is null then raise exception 'NOT_FOUND'; end if;
   if v_studio <> public.auth_studio_id() then raise exception 'NOT_ALLOWED'; end if;
   if v_active is not true then raise exception 'NOT_ACTIVE'; end if;
-  select coalesce(sum(delta), 0) into v_balance from public.star_entries where user_id = v_uid for update;
+  -- Serializa los canjes del mismo alumno para evitar doble gasto. (Antes se
+  -- usaba FOR UPDATE + sum(), que Postgres NO permite: "FOR UPDATE is not
+  -- allowed with aggregate functions".)
+  perform pg_advisory_xact_lock(hashtext('redeem:' || v_uid));
+  select coalesce(sum(delta), 0) into v_balance from public.star_entries where user_id = v_uid;
   if v_balance < v_cost then raise exception 'NO_STARS'; end if;
   v_entry := gen_random_uuid()::text;
   insert into public.star_entries (id, user_id, delta, reason, reward_id)

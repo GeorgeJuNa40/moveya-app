@@ -338,6 +338,16 @@ export interface UserPackage {
   cancelAtPeriodEnd?: boolean; // la domiciliación se cancela al terminar el periodo
 }
 
+// Un lugar físico de la clase (cama de Reformer, bici, colchoneta…). El estudio
+// lo acomoda en un mapa visual: x/y son porcentajes (0–100) sobre ese mapa, para
+// reproducir la distribución real del salón. El alumno elige su lugar al reservar.
+export interface Spot {
+  id: string;
+  label: string; // nombre visible (ej. "Reformer 1", "Bici 3")
+  x: number; // posición horizontal en el mapa (0–100 %)
+  y: number; // posición vertical en el mapa (0–100 %)
+}
+
 export interface ClassTemplate {
   id: string;
   studioId: string;
@@ -345,7 +355,7 @@ export interface ClassTemplate {
   durationMin: number;
   colorHex: string;
   photoUrl?: string; // foto que define el tipo de clase
-  spots?: string[]; // lugares con nombre (ej. "Reformer 1".."Reformer 8"); vacío = sin elegir lugar
+  spots?: Spot[]; // lugares del salón (mapa editable); vacío/omitido = sin elegir lugar
 }
 
 export interface ClassSession {

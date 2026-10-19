@@ -4,7 +4,8 @@ import { PageHeader, Button, Card, Modal } from '../../components/ui';
 import WeekCalendar from '../../components/WeekCalendar';
 import { useStore } from '../../lib/store';
 import { fetchTakenSpots } from '../../lib/spots';
-import type { ClassSession } from '../../lib/types';
+import SpotMap from '../../components/SpotMap';
+import type { ClassSession, Spot } from '../../lib/types';
 
 // Alumno: reserva de clases con disponibilidad en tiempo real ("Quedan X lugares").
 export default function BookClasses() {
@@ -163,12 +164,13 @@ export default function BookClasses() {
   );
 }
 
-// Modal para elegir un lugar (cama/bici) libre antes de reservar.
+// Modal para elegir un lugar (cama/bici) libre antes de reservar. Muestra el
+// mapa del salón tal como lo acomodó el estudio; los ocupados salen tachados.
 function SpotPicker({
   session, spots, onClose, onConfirm,
 }: {
   session: ClassSession;
-  spots: string[];
+  spots: Spot[];
   onClose: () => void;
   onConfirm: (spot: string) => void;
 }) {
@@ -185,34 +187,18 @@ function SpotPicker({
     <Modal onClose={onClose}>
       <Card className="p-6">
         <h2 className="mb-1 text-lg font-bold text-ink">Elige tu lugar</h2>
-        <p className="mb-4 text-sm text-ink-faint">Selecciona un lugar disponible para tu clase.</p>
+        <p className="mb-4 text-sm text-ink-faint">Toca un lugar disponible en el mapa de tu salón.</p>
         {loading ? (
           <p className="text-sm text-ink-faint">Cargando lugares…</p>
         ) : (
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-            {spots.map((sp) => {
-              const isTaken = taken.has(sp);
-              const on = sel === sp;
-              return (
-                <button
-                  key={sp}
-                  type="button"
-                  disabled={isTaken}
-                  onClick={() => setSel(on ? '' : sp)}
-                  className={`rounded-xl px-2 py-3 text-sm font-semibold transition ${
-                    isTaken
-                      ? 'bg-cream-dark/40 text-ink-faint line-through cursor-not-allowed'
-                      : on
-                        ? 'bg-brand text-cream-light'
-                        : 'bg-cream-dark/50 text-ink-soft hover:brightness-95'
-                  }`}
-                >
-                  {sp}
-                </button>
-              );
-            })}
-          </div>
+          <SpotMap
+            spots={spots}
+            takenLabels={taken}
+            selected={sel}
+            onSelect={(label) => setSel((cur) => (cur === label ? '' : label))}
+          />
         )}
+        {sel && <p className="mt-3 text-sm text-ink">Lugar elegido: <span className="font-semibold text-brand">{sel}</span></p>}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button disabled={!sel} onClick={() => sel && onConfirm(sel)}>Reservar lugar</Button>

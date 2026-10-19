@@ -42,7 +42,12 @@ begin
   if v_taken >= v_cap then raise exception 'FULL'; end if;
 
   if v_has_spots then
-    if p_spot is null or not (v_spots ? p_spot) then raise exception 'BAD_SPOT'; end if;
+    -- Valida que el lugar exista por su ETIQUETA. Acepta el formato nuevo
+    -- (objetos {id,label,x,y}) y el viejo (array de strings).
+    if p_spot is null or not exists (
+      select 1 from jsonb_array_elements(v_spots) e
+      where (case when jsonb_typeof(e) = 'string' then e #>> '{}' else e->>'label' end) = p_spot
+    ) then raise exception 'BAD_SPOT'; end if;
     if exists (select 1 from public.bookings
                where session_id = p_session_id and status not in ('CANCELED','WAITLIST') and spot = p_spot) then
       raise exception 'SPOT_TAKEN';
