@@ -47,6 +47,7 @@ export interface Branding {
   heroPhotoUrl?: string;
   country?: string; // ISO del país del estudio (ej. MX), derivado del registro
   currencyCode?: string; // moneda local del estudio (ej. MXN); default USD
+  promoText?: string; // "promoción del momento": texto libre que el estudio edita y se muestra al alumno (2x1, descuento, etc.)
   cancellationPolicy?: string; // política de cancelación (la ve el alumno)
   studioPolicies?: string; // reglas y políticas del negocio (las ve el alumno en su panel)
   storeForMembers?: boolean; // muestra la tienda a alumnos y coaches (def. true si hay productos)
