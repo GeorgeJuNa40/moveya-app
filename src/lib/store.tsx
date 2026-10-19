@@ -110,7 +110,7 @@ interface StoreValue {
   membership: (userId: string) => MembershipInfo;
   availableCredits: (userId: string) => number; // créditos usables (activos, con vigencia)
   // Alumno
-  bookSession: (sessionId: string) => void;
+  bookSession: (sessionId: string, spot?: string) => void;
   cancelBooking: (bookingId: string) => void;
   markAttendance: (bookingId: string, attended: boolean) => void; // el coach marca asistencia
   // Penalizaciones (adeudos) por no asistir sin cancelar
@@ -622,10 +622,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // (book_session), que valida cupo, créditos y vigencia de forma atómica y
     // evita sobrecupo cuando dos alumnos reservan al mismo tiempo. Si esa función
     // aún no está instalada en Supabase, usa el método local como respaldo.
-    async bookSession(sessionId) {
+    async bookSession(sessionId, spot) {
       if (!currentUser) return;
       const uid = currentUser.id;
-      const { data, error } = await supabase.rpc('book_session', { p_session_id: sessionId });
+      const { data, error } = await supabase.rpc('book_session', { p_session_id: sessionId, p_spot: spot ?? null });
       if (error) {
         const msg = error.message || '';
         if (error.code === 'PGRST202' || /Could not find the function/i.test(msg)) {
@@ -635,7 +635,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         notifyError('reservar', bookingErrorMessage(msg));
         return;
       }
-      const res = data as { booking_id: string; user_package_id: string } | null;
+      const res = data as { booking_id: string; user_package_id: string; spot?: string | null } | null;
       if (!res) return;
       setDb((prev) => {
         const exists = prev.bookings.some((b) => b.id === res.booking_id);
@@ -646,13 +646,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           userPackageId: res.user_package_id,
           status: 'RESERVED',
           createdAt: new Date().toISOString(),
+          spot: res.spot ?? undefined,
         };
         return {
           ...prev,
           bookings: exists
             ? prev.bookings.map((b) =>
                 b.id === res.booking_id
-                  ? { ...b, status: 'RESERVED', userPackageId: res.user_package_id }
+                  ? { ...b, status: 'RESERVED', userPackageId: res.user_package_id, spot: res.spot ?? undefined }
                   : b,
               )
             : [...prev.bookings, nb],
@@ -1379,6 +1380,8 @@ function bookingErrorMessage(msg: string): string {
   if (/NO_CREDITS/.test(msg))
     return 'No tienes clases disponibles. Revisa la vigencia de tu paquete o compra uno nuevo.';
   if (/ALREADY/.test(msg)) return 'Ya tienes esta clase reservada.';
+  if (/SPOT_TAKEN/.test(msg)) return 'Ese lugar ya fue tomado. Elige otro.';
+  if (/BAD_SPOT/.test(msg)) return 'Elige un lugar válido para reservar.';
   if (/NOT_ALLOWED|NOT_FOUND/.test(msg)) return 'No se pudo reservar esta clase.';
   return 'No se pudo completar la reserva. Inténtalo de nuevo.';
 }

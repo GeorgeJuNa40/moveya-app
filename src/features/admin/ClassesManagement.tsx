@@ -81,6 +81,38 @@ export default function ClassesManagement() {
                   )}
                 </div>
               </Field>
+              <Field label="Lugares (cama/bici) — opcional">
+                <textarea
+                  className="input"
+                  rows={3}
+                  value={(draft.spots ?? []).join('\n')}
+                  onChange={(e) => setDraft({ ...draft, spots: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean) })}
+                  placeholder={'Un lugar por línea, ej:\nReformer 1\nReformer 2\nReformer 3'}
+                />
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    className="input !w-40"
+                    placeholder="Prefijo (ej. Reformer)"
+                    id="spot-prefix"
+                  />
+                  <input className="input !w-20" type="number" min={1} max={60} placeholder="#" id="spot-count" />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      const pre = (document.getElementById('spot-prefix') as HTMLInputElement)?.value.trim() || 'Lugar';
+                      const n = Math.max(0, Math.min(60, Number((document.getElementById('spot-count') as HTMLInputElement)?.value) || 0));
+                      if (n > 0) setDraft({ ...draft, spots: Array.from({ length: n }, (_, i) => `${pre} ${i + 1}`) });
+                    }}
+                  >
+                    Generar
+                  </Button>
+                </div>
+                <span className="mt-1 block text-xs text-ink-faint">
+                  Si defines lugares, el alumno elegirá su lugar al reservar. Déjalo vacío para no usar lugares.
+                  Asegúrate de que el cupo de cada clase sea igual al número de lugares.
+                </span>
+              </Field>
               <div>
                 <span className="mb-1 block text-sm font-medium text-ink-soft">Vista previa</span>
                 <ClassThumb tpl={{ ...draft, photoUrl: draft.photoUrl?.trim() || undefined }} className="h-28 w-full text-3xl" />

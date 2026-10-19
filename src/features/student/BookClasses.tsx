@@ -1,13 +1,18 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, Button, Card } from '../../components/ui';
+import { PageHeader, Button, Card, Modal } from '../../components/ui';
 import WeekCalendar from '../../components/WeekCalendar';
 import { useStore } from '../../lib/store';
+import { fetchTakenSpots } from '../../lib/spots';
+import type { ClassSession } from '../../lib/types';
 
 // Alumno: reserva de clases con disponibilidad en tiempo real ("Quedan X lugares").
 export default function BookClasses() {
   const { db, currentUser, currentStudio, bookSession, cancelBooking, availableCredits } = useStore();
   const uid = currentUser!.id;
+  // Clase para la que el alumno está eligiendo lugar (modal).
+  const [pickFor, setPickFor] = useState<ClassSession | null>(null);
+  const spotsFor = (s: ClassSession) => db.classTemplates.find((t) => t.id === s.templateId)?.spots ?? [];
 
   const myActiveBookings = useMemo(
     () =>
@@ -95,10 +100,11 @@ export default function BookClasses() {
           // Cerrada si ya empezó (no se reserva en el pasado) o si pasó el cierre del estudio.
           const closed = minutesUntil <= 0 || (cutoffMin > 0 && minutesUntil < cutoffMin);
           const canBook = seats > 0 && creditsLeft > 0 && !closed;
+          const hasSpots = spotsFor(s).length > 0;
           return (
             <Button
               disabled={!canBook}
-              onClick={() => bookSession(s.id)}
+              onClick={() => (hasSpots ? setPickFor(s) : bookSession(s.id))}
               className="w-full"
             >
               {closed
@@ -107,11 +113,81 @@ export default function BookClasses() {
                   ? 'Sin lugares'
                   : creditsLeft === 0
                     ? 'Sin clases'
-                    : 'Reservar'}
+                    : hasSpots
+                      ? 'Elegir lugar'
+                      : 'Reservar'}
             </Button>
           );
         }}
       />
+
+      {pickFor && (
+        <SpotPicker
+          session={pickFor}
+          spots={spotsFor(pickFor)}
+          onClose={() => setPickFor(null)}
+          onConfirm={(spot) => { bookSession(pickFor.id, spot); setPickFor(null); }}
+        />
+      )}
     </>
+  );
+}
+
+// Modal para elegir un lugar (cama/bici) libre antes de reservar.
+function SpotPicker({
+  session, spots, onClose, onConfirm,
+}: {
+  session: ClassSession;
+  spots: string[];
+  onClose: () => void;
+  onConfirm: (spot: string) => void;
+}) {
+  const [taken, setTaken] = useState<Set<string>>(new Set());
+  const [sel, setSel] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    fetchTakenSpots(session.id).then((arr) => { if (alive) { setTaken(new Set(arr)); setLoading(false); } });
+    return () => { alive = false; };
+  }, [session.id]);
+
+  return (
+    <Modal onClose={onClose}>
+      <Card className="p-6">
+        <h2 className="mb-1 text-lg font-bold text-ink">Elige tu lugar</h2>
+        <p className="mb-4 text-sm text-ink-faint">Selecciona un lugar disponible para tu clase.</p>
+        {loading ? (
+          <p className="text-sm text-ink-faint">Cargando lugares…</p>
+        ) : (
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+            {spots.map((sp) => {
+              const isTaken = taken.has(sp);
+              const on = sel === sp;
+              return (
+                <button
+                  key={sp}
+                  type="button"
+                  disabled={isTaken}
+                  onClick={() => setSel(on ? '' : sp)}
+                  className={`rounded-xl px-2 py-3 text-sm font-semibold transition ${
+                    isTaken
+                      ? 'bg-cream-dark/40 text-ink-faint line-through cursor-not-allowed'
+                      : on
+                        ? 'bg-brand text-cream-light'
+                        : 'bg-cream-dark/50 text-ink-soft hover:brightness-95'
+                  }`}
+                >
+                  {sp}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+          <Button disabled={!sel} onClick={() => sel && onConfirm(sel)}>Reservar lugar</Button>
+        </div>
+      </Card>
+    </Modal>
   );
 }
