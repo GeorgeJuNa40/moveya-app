@@ -111,6 +111,8 @@ interface StoreValue {
   availableCredits: (userId: string) => number; // créditos usables (activos, con vigencia)
   // Alumno
   bookSession: (sessionId: string, spot?: string) => void;
+  joinWaitlist: (sessionId: string) => void;
+  leaveWaitlist: (bookingId: string) => void;
   cancelBooking: (bookingId: string) => void;
   markAttendance: (bookingId: string, attended: boolean) => void; // el coach marca asistencia
   // Penalizaciones (adeudos) por no asistir sin cancelar
@@ -564,7 +566,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const s = db.classSessions.find((x) => x.id === sessionId);
       if (!s) return 0;
       const taken = db.bookings.filter(
-        (b) => b.sessionId === sessionId && b.status !== 'CANCELED',
+        (b) => b.sessionId === sessionId && b.status !== 'CANCELED' && b.status !== 'WAITLIST',
       ).length;
       // Los invitados (clase de prueba / 2x1) también ocupan lugar.
       const guests = db.classGuests.filter((g) => g.sessionId === sessionId).length;
@@ -697,6 +699,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return;
       }
       applyLocal();
+      // Se liberó un lugar: avisa al primero de la lista de espera (push).
+      if (booking.status === 'RESERVED') {
+        void supabase.functions.invoke('notify-waitlist', { body: { sessionId: booking.sessionId } }).catch(() => {});
+      }
+    },
+
+    // Lista de espera: el alumno se une cuando la clase está llena (sin crédito).
+    async joinWaitlist(sessionId) {
+      if (!currentUser) return;
+      const uid = currentUser.id;
+      const existing = db.bookings.find((b) => b.userId === uid && b.sessionId === sessionId && b.status !== 'CANCELED');
+      if (existing) return; // ya reservada o ya en espera
+      const nb: Booking = {
+        id: newId(), userId: uid, sessionId, userPackageId: null,
+        status: 'WAITLIST', createdAt: new Date().toISOString(),
+      };
+      setDb((prev) => ({ ...prev, bookings: [...prev.bookings, nb] }));
+      const { error } = await supabase.from('bookings').insert(rowBooking(nb));
+      if (error) {
+        setDb((prev) => ({ ...prev, bookings: prev.bookings.filter((b) => b.id !== nb.id) }));
+        notifyError('lista de espera', error.message);
+      }
+    },
+    // Salir de la lista de espera (no devuelve crédito porque no se consumió).
+    async leaveWaitlist(bookingId) {
+      const b = db.bookings.find((x) => x.id === bookingId);
+      if (!b || b.status !== 'WAITLIST') return;
+      setDb((prev) => ({ ...prev, bookings: prev.bookings.map((x) => (x.id === bookingId ? { ...x, status: 'CANCELED' } : x)) }));
+      void dbUpdate('bookings', bookingId, { status: 'CANCELED' });
     },
 
     // El coach marca si el alumno asistió. Al asistir gana 1 estrella (recompensa);

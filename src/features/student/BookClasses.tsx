@@ -8,17 +8,27 @@ import type { ClassSession } from '../../lib/types';
 
 // Alumno: reserva de clases con disponibilidad en tiempo real ("Quedan X lugares").
 export default function BookClasses() {
-  const { db, currentUser, currentStudio, bookSession, cancelBooking, availableCredits } = useStore();
+  const { db, currentUser, currentStudio, bookSession, cancelBooking, joinWaitlist, leaveWaitlist, availableCredits } = useStore();
   const uid = currentUser!.id;
   // Clase para la que el alumno está eligiendo lugar (modal).
   const [pickFor, setPickFor] = useState<ClassSession | null>(null);
   const spotsFor = (s: ClassSession) => db.classTemplates.find((t) => t.id === s.templateId)?.spots ?? [];
 
+  // Reservas activas (RESERVED) y lista de espera (WAITLIST) del alumno, por sesión.
   const myActiveBookings = useMemo(
     () =>
       new Map(
         db.bookings
-          .filter((b) => b.userId === uid && b.status !== 'CANCELED')
+          .filter((b) => b.userId === uid && b.status === 'RESERVED')
+          .map((b) => [b.sessionId, b.id]),
+      ),
+    [db.bookings, uid],
+  );
+  const myWaitlist = useMemo(
+    () =>
+      new Map(
+        db.bookings
+          .filter((b) => b.userId === uid && b.status === 'WAITLIST')
           .map((b) => [b.sessionId, b.id]),
       ),
     [db.bookings, uid],
@@ -99,8 +109,30 @@ export default function BookClasses() {
           const minutesUntil = (new Date(s.startsAt).getTime() - Date.now()) / 60000;
           // Cerrada si ya empezó (no se reserva en el pasado) o si pasó el cierre del estudio.
           const closed = minutesUntil <= 0 || (cutoffMin > 0 && minutesUntil < cutoffMin);
-          const canBook = seats > 0 && creditsLeft > 0 && !closed;
           const hasSpots = spotsFor(s).length > 0;
+
+          // Ya está en lista de espera → puede salir de ella.
+          const waitId = myWaitlist.get(s.id);
+          if (waitId) {
+            return (
+              <div className="text-center">
+                <Button variant="secondary" disabled className="w-full">🕒 En lista de espera</Button>
+                <button onClick={() => leaveWaitlist(waitId)} className="mt-1 text-xs font-medium text-red-600">Salir de la lista</button>
+              </div>
+            );
+          }
+          // Llena pero abierta → ofrecer lista de espera (sin consumir crédito).
+          if (seats === 0 && !closed) {
+            return (
+              <div className="text-center">
+                <Button variant="secondary" className="w-full" onClick={() => joinWaitlist(s.id)}>
+                  Unirme a lista de espera
+                </Button>
+                <p className="mt-1 text-xs text-ink-faint">Te avisamos si se libera un lugar.</p>
+              </div>
+            );
+          }
+          const canBook = seats > 0 && creditsLeft > 0 && !closed;
           return (
             <Button
               disabled={!canBook}
@@ -109,13 +141,11 @@ export default function BookClasses() {
             >
               {closed
                 ? 'Reservas cerradas'
-                : seats === 0
-                  ? 'Sin lugares'
-                  : creditsLeft === 0
-                    ? 'Sin clases'
-                    : hasSpots
-                      ? 'Elegir lugar'
-                      : 'Reservar'}
+                : creditsLeft === 0
+                  ? 'Sin clases'
+                  : hasSpots
+                    ? 'Elegir lugar'
+                    : 'Reservar'}
             </Button>
           );
         }}
