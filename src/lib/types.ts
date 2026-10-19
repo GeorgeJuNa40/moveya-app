@@ -13,7 +13,7 @@ export type SubscriptionStatus = 'ACTIVE' | 'PAST_DUE' | 'CANCELED' | 'TRIALING'
 
 export type PlanId = 'inicio' | 'pro' | 'premium';
 
-export type BookingStatus = 'RESERVED' | 'ATTENDED' | 'CANCELED' | 'NO_SHOW';
+export type BookingStatus = 'RESERVED' | 'ATTENDED' | 'CANCELED' | 'NO_SHOW' | 'WAITLIST';
 
 export type CoachStatus = 'APPROVED' | 'PENDING' | 'DENIED';
 
