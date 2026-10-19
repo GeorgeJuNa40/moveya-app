@@ -84,6 +84,9 @@ export default function PackageManagement() {
         action={<Button onClick={startNew}>+ Nuevo</Button>}
       />
 
+      {/* Promoción del momento: texto libre que se muestra al alumno. */}
+      <PromoCard />
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {packages.map((p) => {
           const usedCount = db.userPackages.filter((up) => up.packageId === p.id).length;
@@ -313,6 +316,67 @@ export default function PackageManagement() {
         .input:focus { box-shadow:0 0 0 2px var(--brand-primary); }
       `}</style>
     </>
+  );
+}
+
+// Tarjeta "Promoción del momento": el estudio escribe libremente su promo (2x1,
+// descuento…) y se refleja al alumno. Es texto informativo; no cambia el precio.
+// Vive aquí (junto a Paquetes) para editarla como si fuera un paquete más.
+function PromoCard() {
+  const { currentStudio, updateStudioSettings } = useStore();
+  const saved = currentStudio!.branding.promoText ?? '';
+  const [text, setText] = useState(saved);
+  const [open, setOpen] = useState(false);
+  const dirty = text.trim() !== saved.trim();
+
+  const save = () => {
+    updateStudioSettings({}, { promoText: text.trim() });
+    setOpen(false);
+  };
+
+  return (
+    <Card className="mb-5 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-semibold text-ink">🎉 Promoción del momento</h3>
+          <p className="mt-0.5 text-sm text-ink-faint">
+            Un texto libre (2x1, descuento, inscripción gratis…) que se muestra a tus alumnos. Edítalo cuando quieras.
+          </p>
+          {!open && (
+            <p className="mt-2 text-sm text-ink">
+              {saved.trim()
+                ? <span className="rounded-xl bg-mint-soft/40 px-3 py-1.5 font-medium">{saved}</span>
+                : <span className="text-ink-faint">Sin promoción activa.</span>}
+            </p>
+          )}
+        </div>
+        {!open && (
+          <Button variant="secondary" onClick={() => { setText(saved); setOpen(true); }}>
+            {saved.trim() ? 'Editar' : 'Agregar'}
+          </Button>
+        )}
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-2">
+          <textarea
+            className="input"
+            rows={2}
+            value={text}
+            maxLength={160}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Ej. 2x1 en Reformer esta semana · 20% de descuento al inscribirte hoy"
+          />
+          <p className="text-xs text-ink-faint">
+            Es informativo; no cambia el precio automáticamente. Déjalo vacío para quitar la promo.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => { setText(saved); setOpen(false); }}>Cancelar</Button>
+            <Button onClick={save} disabled={!dirty}>Guardar promo</Button>
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
 

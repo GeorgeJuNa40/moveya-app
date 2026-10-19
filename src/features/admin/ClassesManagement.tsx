@@ -3,6 +3,7 @@ import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button } from '../../components/ui';
 import ClassThumb from '../../components/ClassThumb';
 import ImageUpload from '../../components/ImageUpload';
+import SpotMap from '../../components/SpotMap';
 import type { ClassTemplate } from '../../lib/types';
 
 const emptyDraft = (studioId: string): ClassTemplate => ({
@@ -81,38 +82,53 @@ export default function ClassesManagement() {
                   )}
                 </div>
               </Field>
-              <Field label="Lugares (cama/bici) — opcional">
-                <textarea
-                  className="input"
-                  rows={3}
-                  value={(draft.spots ?? []).join('\n')}
-                  onChange={(e) => setDraft({ ...draft, spots: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean) })}
-                  placeholder={'Un lugar por línea, ej:\nReformer 1\nReformer 2\nReformer 3'}
-                />
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+              <div>
+                <span className="mb-1 block text-sm font-medium text-ink-soft">Mapa de lugares (opcional)</span>
+                <div className="mb-2 flex flex-wrap items-center gap-2">
                   <input
                     className="input !w-40"
                     placeholder="Prefijo (ej. Reformer)"
                     id="spot-prefix"
                   />
-                  <input className="input !w-20" type="number" min={1} max={60} placeholder="#" id="spot-count" />
+                  <input className="input !w-20" type="number" min={1} max={40} placeholder="#" id="spot-count" />
                   <Button
                     type="button"
                     variant="secondary"
                     onClick={() => {
                       const pre = (document.getElementById('spot-prefix') as HTMLInputElement)?.value.trim() || 'Lugar';
-                      const n = Math.max(0, Math.min(60, Number((document.getElementById('spot-count') as HTMLInputElement)?.value) || 0));
-                      if (n > 0) setDraft({ ...draft, spots: Array.from({ length: n }, (_, i) => `${pre} ${i + 1}`) });
+                      const n = Math.max(0, Math.min(40, Number((document.getElementById('spot-count') as HTMLInputElement)?.value) || 0));
+                      if (n <= 0) return;
+                      // Genera los lugares acomodados en rejilla (el estudio los
+                      // mueve luego a su gusto en el mapa).
+                      const perRow = Math.ceil(Math.sqrt(n));
+                      const spots = Array.from({ length: n }, (_, i) => {
+                        const col = i % perRow;
+                        const rowN = Math.floor(i / perRow);
+                        const rows = Math.ceil(n / perRow);
+                        return {
+                          id: `sp_${i}`,
+                          label: `${pre} ${i + 1}`,
+                          x: Math.round((perRow === 1 ? 50 : 15 + (col * 70) / (perRow - 1))),
+                          y: Math.round((rows === 1 ? 50 : 22 + (rowN * 60) / (rows - 1))),
+                        };
+                      });
+                      setDraft({ ...draft, spots });
                     }}
                   >
-                    Generar
+                    Generar en rejilla
                   </Button>
                 </div>
-                <span className="mt-1 block text-xs text-ink-faint">
-                  Si defines lugares, el alumno elegirá su lugar al reservar. Déjalo vacío para no usar lugares.
-                  Asegúrate de que el cupo de cada clase sea igual al número de lugares.
+                <SpotMap
+                  spots={draft.spots ?? []}
+                  editable
+                  accent={draft.colorHex}
+                  onChange={(spots) => setDraft({ ...draft, spots })}
+                />
+                <span className="mt-2 block text-xs text-ink-faint">
+                  Si defines lugares, el alumno elegirá el suyo al reservar (ves el mapa como está tu salón).
+                  Déjalo vacío para no usar lugares. Procura que el cupo de la clase sea igual al número de lugares.
                 </span>
-              </Field>
+              </div>
               <div>
                 <span className="mb-1 block text-sm font-medium text-ink-soft">Vista previa</span>
                 <ClassThumb tpl={{ ...draft, photoUrl: draft.photoUrl?.trim() || undefined }} className="h-28 w-full text-3xl" />

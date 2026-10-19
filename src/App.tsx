@@ -77,6 +77,7 @@ const Reminders = lazyWithReload(() => import('./features/admin/Reminders'));
 const SubscriptionScreen = lazyWithReload(() => import('./features/admin/SubscriptionScreen'));
 const SuggestionsAdmin = lazyWithReload(() => import('./features/admin/SuggestionsAdmin'));
 const Settings = lazyWithReload(() => import('./features/admin/Settings'));
+const Profile = lazyWithReload(() => import('./features/admin/Profile'));
 
 const CoachDashboard = lazyWithReload(() => import('./features/coach/CoachDashboard'));
 const ProviderDashboard = lazyWithReload(() => import('./features/provider/ProviderDashboard'));
@@ -345,6 +346,7 @@ export default function App() {
       <Route path="/admin/subscription" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate allow><SubscriptionScreen /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/suggestions" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><SuggestionsAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/settings" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Settings /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/profile" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate allow><Profile /></SubscriptionGate></RequireRole>} />
 
       {/* ---- COACH — protegido por estado de aprobación ---- */}
       <Route path="/provider" element={<RequireRole role="PROVIDER"><ProviderDashboard /></RequireRole>} />

@@ -13,11 +13,34 @@ import type {
   Package,
   Payment,
   Reward,
+  Spot,
   StarEntry,
   Studio,
   User,
   UserPackage,
 } from './types';
+
+// Normaliza los lugares de una clase a Spot[] (mapa). Acepta el formato nuevo
+// (objetos {id,label,x,y}) y el viejo (array de strings), para no romper datos
+// previos: a los strings les asigna una posición en rejilla automática.
+function normalizeSpots(raw: unknown): Spot[] | undefined {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out = raw.map((el, i): Spot => {
+    if (typeof el === 'string') {
+      const col = i % 4;
+      const rowN = Math.floor(i / 4);
+      return { id: `s${i}`, label: el, x: 14 + col * 24, y: 18 + rowN * 22 };
+    }
+    const o = (el ?? {}) as Record<string, unknown>;
+    return {
+      id: String(o.id ?? `s${i}`),
+      label: String(o.label ?? ''),
+      x: Math.max(0, Math.min(100, Number(o.x ?? 50))),
+      y: Math.max(0, Math.min(100, Number(o.y ?? 50))),
+    };
+  });
+  return out.filter((s) => s.label.trim().length > 0);
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Row = Record<string, any>;
@@ -153,7 +176,7 @@ const mapClassTemplate = (r: Row): ClassTemplate => ({
   durationMin: r.duration_min,
   colorHex: r.color_hex,
   photoUrl: r.photo_url ?? undefined,
-  spots: Array.isArray(r.spots) ? (r.spots as string[]) : undefined,
+  spots: normalizeSpots(r.spots),
 });
 
 const mapClassSession = (r: Row): ClassSession => ({
