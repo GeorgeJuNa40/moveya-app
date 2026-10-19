@@ -104,6 +104,16 @@ export default function Settings() {
           <Field label="Nombre visible (texto, si no subes logo)">
             <input className="input" value={b.logoText} onChange={(e) => setBrand({ logoText: e.target.value })} />
           </Field>
+          <Field label="Promoción del momento (se muestra al alumno)">
+            <textarea
+              className="input"
+              rows={2}
+              value={b.promoText ?? ''}
+              onChange={(e) => setBrand({ promoText: e.target.value })}
+              placeholder="Ej. 2x1 en Reformer esta semana · 20% de descuento al inscribirte hoy"
+            />
+            <span className="mt-1 block text-xs text-ink-faint">Déjalo vacío para no mostrar ninguna promo. Es un texto informativo; no cambia el precio automáticamente.</span>
+          </Field>
           <div>
             <span className="mb-1 block text-sm font-medium text-ink-soft">Logo del estudio (imagen)</span>
             <div className="flex items-center gap-3">

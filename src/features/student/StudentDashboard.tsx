@@ -120,6 +120,14 @@ export default function StudentDashboard() {
         <h1 className="text-3xl font-black tracking-tight text-ink">{firstName}</h1>
       </div>
 
+      {/* Promoción del momento (texto libre que edita el estudio) */}
+      {currentStudio?.branding.promoText?.trim() && (
+        <Card className="border-mint/40 bg-mint-soft/30 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-brand">🏷️ Promoción</p>
+          <p className="mt-1 whitespace-pre-line text-sm font-medium text-ink">{currentStudio.branding.promoText}</p>
+        </Card>
+      )}
+
       {/* Aviso del estudio */}
       {aviso && (
         <Card className="border-brand/30 bg-brand-soft p-4">
