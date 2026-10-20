@@ -80,6 +80,15 @@ function ServiceCard({
 }) {
   const estComm = serviceCommission(sv);
   const [copied, setCopied] = useState(false);
+  // "Guardado ✓": confirmación visual breve al cambiar la disponibilidad (los
+  // cambios se guardan solos; este aviso le da certeza al estudio).
+  const [saved, setSaved] = useState(false);
+  const flashSaved = () => { setSaved(true); window.setTimeout(() => setSaved(false), 1600); };
+  // Abre el selector nativo (hora) al tocar TODO el recuadro, no solo el ícono.
+  const openPicker = (e: React.SyntheticEvent<HTMLInputElement>) => {
+    const el = e.currentTarget as HTMLInputElement & { showPicker?: () => void };
+    try { el.showPicker?.(); } catch { /* algunos navegadores lo bloquean fuera de un gesto */ }
+  };
   const providerLink = `${window.location.origin}/#/?ceu=${encodeURIComponent(ceuCode)}&role=proveedor&service=${encodeURIComponent(sv.id)}`;
   const copyLink = async () => {
     try { await navigator.clipboard.writeText(providerLink); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* bloqueado */ }
@@ -146,7 +155,15 @@ function ServiceCard({
         )}
         {sv.bookable && (
           <div className="rounded-lg bg-white/70 p-3 space-y-2">
-            <span className="block text-sm font-medium text-ink-soft">Disponibilidad (para que el alumno agende solo)</span>
+            <div className="flex items-center justify-between gap-2">
+              <span className="block text-sm font-medium text-ink-soft">Disponibilidad (para que el alumno agende solo)</span>
+              <span
+                className={`rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 transition-opacity duration-300 ${saved ? 'opacity-100' : 'opacity-0'}`}
+                aria-live="polite"
+              >
+                Guardado ✓
+              </span>
+            </div>
             <div className="flex flex-wrap gap-1">
               {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map((lbl, d) => {
                 const on = (sv.availDays ?? []).includes(d);
@@ -158,9 +175,15 @@ function ServiceCard({
                       const cur = new Set(sv.availDays ?? []);
                       if (on) cur.delete(d); else cur.add(d);
                       updateService(sv.id, { availDays: [...cur].sort((a, b) => a - b) });
+                      flashSaved();
                     }}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${on ? 'bg-sage text-white' : 'bg-cream-dark/50 text-ink-soft'}`}
+                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                      on
+                        ? 'bg-brand text-cream-light border-brand shadow-soft'
+                        : 'bg-white text-ink-soft border-cream-dark hover:bg-cream-dark/40'
+                    }`}
                   >
+                    {on && <span aria-hidden>✓</span>}
                     {lbl}
                   </button>
                 );
@@ -168,13 +191,27 @@ function ServiceCard({
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
               <Field label="Desde">
-                <input type="time" className="input" value={sv.availFrom ?? ''} onChange={(e) => updateService(sv.id, { availFrom: e.target.value || undefined })} />
+                <input
+                  type="time"
+                  className="input cursor-pointer"
+                  value={sv.availFrom ?? ''}
+                  onClick={openPicker}
+                  onFocus={openPicker}
+                  onChange={(e) => { updateService(sv.id, { availFrom: e.target.value || undefined }); flashSaved(); }}
+                />
               </Field>
               <Field label="Hasta">
-                <input type="time" className="input" value={sv.availTo ?? ''} onChange={(e) => updateService(sv.id, { availTo: e.target.value || undefined })} />
+                <input
+                  type="time"
+                  className="input cursor-pointer"
+                  value={sv.availTo ?? ''}
+                  onClick={openPicker}
+                  onFocus={openPicker}
+                  onChange={(e) => { updateService(sv.id, { availTo: e.target.value || undefined }); flashSaved(); }}
+                />
               </Field>
               <Field label="Duración (min)">
-                <input type="number" min={15} step={15} className="input" value={sv.slotMinutes ?? ''} placeholder="60" onChange={(e) => updateService(sv.id, { slotMinutes: e.target.value === '' ? undefined : Number(e.target.value) })} />
+                <input type="number" min={15} step={15} className="input" value={sv.slotMinutes ?? ''} placeholder="60" onChange={(e) => { updateService(sv.id, { slotMinutes: e.target.value === '' ? undefined : Number(e.target.value) }); flashSaved(); }} />
               </Field>
             </div>
             <p className="text-xs text-ink-faint">Si no defines disponibilidad, el alumno solo manda una solicitud y tú la agendas a mano.</p>
@@ -272,7 +309,7 @@ function AppointmentsSection({ studioId, services }: { studioId: string; service
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`px-3 py-1 rounded-full ${filter === f ? 'bg-sage text-white' : 'bg-cream-dark/50 text-ink-soft'} ${view === 'calendar' ? 'opacity-40 pointer-events-none' : ''}`}
+                className={`px-3 py-1 rounded-full font-semibold ${filter === f ? 'bg-brand text-cream-light shadow-soft' : 'bg-cream-dark/50 text-ink-soft'} ${view === 'calendar' ? 'opacity-40 pointer-events-none' : ''}`}
               >
                 {f === 'open' ? 'Abiertas' : f === 'done' ? 'Realizadas' : 'Todas'}
               </button>
