@@ -22,6 +22,12 @@ const map = (r: any): ServiceAppointment => ({
   createdAt: r.created_at,
 });
 
+// Dispara el aviso push de una cita (lo decide el servidor: a quién y con qué
+// texto). Es "fire-and-forget": si falla, la cita igual se guardó.
+function notifyAppointment(appointmentId: string, kind: 'created' | 'scheduled' | 'done') {
+  void supabase.functions.invoke('notify-appointment', { body: { appointmentId, kind } }).catch(() => {});
+}
+
 // Comisión que cobra el estudio por un servicio, dado su precio.
 export function serviceCommission(sv: Pick<OptionalService, 'commissionType' | 'commissionValue' | 'price'>): number {
   const val = Number(sv.commissionValue ?? 0);
@@ -82,7 +88,10 @@ export async function requestAppointment(input: {
     })
     .select('*').single();
   if (error) { notifyError('cita', error.message); return { ok: false, error: error.message }; }
-  return { ok: true, appointment: map(data) };
+  const appt = map(data);
+  // Avisa al personal del estudio que entró una nueva cita/solicitud.
+  notifyAppointment(appt.id, 'created');
+  return { ok: true, appointment: appt };
 }
 
 // Horarios ya ocupados de un servicio (timestamps ISO), para calcular huecos libres.
@@ -106,5 +115,8 @@ export async function updateAppointment(
   if (patch.note !== undefined) row.note = patch.note;
   const { error } = await supabase.from('service_appointments').update(row).eq('id', id);
   if (error) { notifyError('cita', error.message); return false; }
+  // Avisa al alumno cuando su cita se agenda o se marca realizada.
+  if (patch.status === 'scheduled') notifyAppointment(id, 'scheduled');
+  else if (patch.status === 'done') notifyAppointment(id, 'done');
   return true;
 }
