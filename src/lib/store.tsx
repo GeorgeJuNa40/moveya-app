@@ -1143,14 +1143,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void dbUpdate('users', userId, { member_status: status });
     },
     async deleteMember(userId) {
-      // Quita referencias sin cascade (invitados 2x1) y borra al miembro; la RLS
-      // permite al admin y las tablas con cascade se limpian solas.
+      // Borra al miembro Y su cuenta de acceso (para LIBERAR el correo y poder
+      // reutilizarlo). Lo hace la Edge Function delete-member (service role). Si
+      // esa función aún no está desplegada, cae al borrado directo (que deja la
+      // cuenta de auth y, por tanto, el correo ocupado).
       try {
         await supabase.from('class_guests').update({ host_user_id: null }).eq('host_user_id', userId);
       } catch { /* best-effort */ }
-      const { error } = await supabase.from('users').delete().eq('id', userId);
+
+      const { data, error } = await supabase.functions.invoke('delete-member', { body: { userId } });
       if (error) {
-        notifyError('eliminar miembro', error.message);
+        // Respaldo: la función no existe/respondió error de red → borrado directo.
+        const { error: e2 } = await supabase.from('users').delete().eq('id', userId);
+        if (e2) { notifyError('eliminar miembro', e2.message); return false; }
+      } else if ((data as { ok?: boolean; error?: string } | null)?.ok === false) {
+        notifyError('eliminar miembro', (data as { error?: string })?.error ?? 'No se pudo eliminar.');
         return false;
       }
       setDb((prev) => ({ ...prev, users: prev.users.filter((u) => u.id !== userId) }));

@@ -536,7 +536,7 @@ export default function MembersCRM() {
                     )}
                     <button
                       onClick={async () => {
-                        if (!window.confirm(`¿ELIMINAR definitivamente a ${detail.fullName}? Se borran sus datos y NO se puede deshacer.`)) return;
+                        if (!window.confirm(`¿ELIMINAR definitivamente a ${detail.fullName}? Se borran sus datos, se libera su correo (podrá volver a usarse) y NO se puede deshacer.`)) return;
                         const ok = await deleteMember(detail.id);
                         if (ok) setDetail(null);
                       }}
