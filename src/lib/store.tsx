@@ -177,6 +177,10 @@ interface StoreValue {
     specialties?: string[];
     yearsExp?: number;
   }) => void;
+  // El estudio corrige los datos de contacto de un miembro (ej. un nombre mal
+  // escrito al registrarse). El `email` es solo el de contacto en la ficha, NO
+  // cambia su correo de acceso (login).
+  updateMemberProfile: (userId: string, patch: { fullName?: string; phone?: string; email?: string }) => void;
   // Estudio — servicios
   addService: (name: string, description: string, whatsapp?: string) => void;
   updateService: (id: string, patch: Partial<OptionalService>) => void;
@@ -1151,6 +1155,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       setDb((prev) => ({ ...prev, users: prev.users.filter((u) => u.id !== userId) }));
       return true;
+    },
+    updateMemberProfile(userId, patch) {
+      setDb((prev) => ({
+        ...prev,
+        users: prev.users.map((u) => {
+          if (u.id !== userId) return u;
+          const next: User = { ...u };
+          if (patch.fullName !== undefined) next.fullName = patch.fullName;
+          if (patch.phone !== undefined) next.phone = patch.phone;
+          if (patch.email !== undefined) next.email = patch.email;
+          return next;
+        }),
+      }));
+      const row: Record<string, unknown> = {};
+      if (patch.fullName !== undefined) row.full_name = patch.fullName;
+      if (patch.phone !== undefined) row.phone = patch.phone;
+      if (patch.email !== undefined) row.email = patch.email;
+      if (Object.keys(row).length) void dbUpdate('users', userId, row);
     },
     setStudentExternalCoach(userId, coachId) {
       setDb((prev) => ({
