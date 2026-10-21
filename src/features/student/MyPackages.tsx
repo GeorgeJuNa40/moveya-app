@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { useStore, isQueuedPackage } from '../../lib/store';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
+import ProfileSwitcher from './ProfileSwitcher';
 import { usd, daysUntil, fmtDate } from '../../lib/format';
 import { PERIOD_LABEL, PERIOD_SUFFIX, periodOf } from '../../lib/periods';
 import { startCheckout, cancelMembership, type PayProvider } from '../../lib/payments';
@@ -14,7 +15,7 @@ import type { Package } from '../../lib/types';
 // Stripe (la app nunca recibe datos de tarjeta). El paquete se activa solo
 // cuando Stripe confirma el pago (vía webhook).
 export default function MyPackages() {
-  const { db, currentUser, currentStudio, pendingPenalty, membership } = useStore();
+  const { db, currentUser, accountUser, currentStudio, pendingPenalty, membership } = useStore();
   const uid = currentUser!.id;
   const penalty = pendingPenalty(uid); // adeudo por no asistir (si el estudio lo cobra)
   // Estado de la membresía/plan: define si ya tiene acceso a toda la app.
@@ -99,10 +100,12 @@ export default function MyPackages() {
 
   const buy = async (p: Package, provider: PayProvider) => {
     setBuying(p.id);
+    // Si hay un familiar como perfil activo, el pago es PARA ese familiar.
+    const forUserId = currentUser && accountUser && currentUser.id !== accountUser.id ? currentUser.id : undefined;
     // Membresía con domiciliación → suscripción mensual; si no, compra única.
     const body = p.kind === 'access' && p.recurring
-      ? ({ kind: 'membership_sub', packageId: p.id } as const)
-      : ({ kind: 'package', packageId: p.id } as const);
+      ? ({ kind: 'membership_sub', packageId: p.id, forUserId } as const)
+      : ({ kind: 'package', packageId: p.id, forUserId } as const);
     const ok = await startCheckout(provider, body);
     if (!ok) setBuying(null); // si falla, reactiva el botón (si funciona, ya redirige)
   };
@@ -125,6 +128,9 @@ export default function MyPackages() {
         title={isGym ? 'Mi membresía' : 'Mis Paquetes'}
         subtitle={isGym ? 'Tu membresía activa y el catálogo del estudio' : 'Tus paquetes activos y el catálogo del estudio'}
       />
+
+      {/* Perfil activo: deja claro para quién se compra (titular o familiar). */}
+      <div className="mb-4"><ProfileSwitcher variant="compact" /></div>
 
       {!hasPlan && (
         <Card className="mb-6 p-4 border-brand/30 bg-brand-soft">

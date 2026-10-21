@@ -77,6 +77,18 @@ Deno.serve(async (req) => {
     // En sandbox el comprador debe ser usuario de prueba; MP_TEST_PAYER_EMAIL lo fuerza.
     const payerEmail = Deno.env.get('MP_TEST_PAYER_EMAIL') || me.email;
 
+    // Subcuentas: si el titular paga por un FAMILIAR, el paquete se asigna a ese
+    // familiar (validando que lo gestione). Si no, al titular.
+    const forUserId = body.forUserId ? String(body.forUserId) : '';
+    let buyerId = me.id;
+    if (forUserId && forUserId !== me.id) {
+      const { data: fam } = await supabase
+        .from('users').select('id')
+        .eq('id', forUserId).eq('managed_by', me.id).eq('studio_id', me.studio_id)
+        .maybeSingle();
+      if (fam) buyerId = forUserId;
+    }
+
     const studioToken = async (studioId: string): Promise<string | null> => {
       const { data } = await admin.from('mp_accounts').select('access_token, connected').eq('studio_id', studioId).maybeSingle();
       return data?.connected && data?.access_token ? data.access_token : null;
@@ -97,7 +109,7 @@ Deno.serve(async (req) => {
       // Sin comisión cuando el cobrador es el token de plataforma (prueba): no se
       // puede cobrar marketplace_fee a uno mismo.
       const feeAmt = studioTok ? fee(amount) : 0;
-      const ref = JSON.stringify({ kind: 'package', user_id: me.id, studio_id: me.studio_id, package_id: pkg.id });
+      const ref = JSON.stringify({ kind: 'package', user_id: buyerId, studio_id: me.studio_id, package_id: pkg.id });
       const { ok, data } = await mpFetch('/checkout/preferences', token, {
         items: [{ title: pkg.name, quantity: 1, unit_price: amount, currency_id: 'MXN' }],
         marketplace_fee: feeAmt,
@@ -110,7 +122,7 @@ Deno.serve(async (req) => {
           pending: `${APP_URL}/?pago=pendiente`,
         },
         auto_return: 'approved',
-        metadata: { kind: 'package', user_id: me.id, studio_id: me.studio_id, package_id: pkg.id },
+        metadata: { kind: 'package', user_id: buyerId, studio_id: me.studio_id, package_id: pkg.id },
       });
       if (!ok) return json({ error: `MP: ${mpWhy(data)}`, detail: data }, 400);
       return json({ url: data.init_point });
@@ -124,7 +136,7 @@ Deno.serve(async (req) => {
       const token = studioTok ?? (TEST_MODE && PLATFORM_TOKEN ? PLATFORM_TOKEN : null);
       if (!token) return json({ error: 'El estudio aun no conecto su cuenta de Mercado Pago.' }, 400);
       const amount = Number(pkg.price_usd);
-      const ref = JSON.stringify({ kind: 'membership_sub', user_id: me.id, studio_id: me.studio_id, package_id: pkg.id });
+      const ref = JSON.stringify({ kind: 'membership_sub', user_id: buyerId, studio_id: me.studio_id, package_id: pkg.id });
       const { ok, data } = await mpFetch('/preapproval', token, {
         reason: pkg.name,
         external_reference: ref,
