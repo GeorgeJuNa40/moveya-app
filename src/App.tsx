@@ -91,6 +91,7 @@ const OptionalServices = lazyWithReload(() => import('./features/student/Optiona
 const StudentCoaches = lazyWithReload(() => import('./features/student/StudentCoaches'));
 const MyRoutine = lazyWithReload(() => import('./features/student/MyRoutine'));
 const Suggestions = lazyWithReload(() => import('./features/student/Suggestions'));
+const MyProfile = lazyWithReload(() => import('./features/student/MyProfile'));
 // Tienda para miembros (alumno y coach): ver y apartar productos.
 const Store = lazyWithReload(() => import('./features/student/Store'));
 
@@ -371,6 +372,7 @@ export default function App() {
       <Route path="/app/services" element={<RequireRole role="STUDENT"><OptionalServices /></RequireRole>} />
       <Route path="/app/store" element={<RequireRole role="STUDENT"><Store /></RequireRole>} />
       <Route path="/app/suggestions" element={<RequireRole role="STUDENT"><Suggestions /></RequireRole>} />
+      <Route path="/app/profile" element={<RequireRole role="STUDENT"><MyProfile /></RequireRole>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

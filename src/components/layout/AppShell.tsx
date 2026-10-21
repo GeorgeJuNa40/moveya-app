@@ -74,6 +74,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/app/store', label: 'Tienda', cap: 'store' },
     { to: '/app/services', label: 'Servicios' },
     { to: '/app/suggestions', label: 'Sugerencias', short: 'Buzón' },
+    { to: '/app/profile', label: 'Mi perfil', short: 'Perfil' },
   ],
 };
 

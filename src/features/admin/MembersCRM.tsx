@@ -43,7 +43,7 @@ function fmtBirthday(iso?: string): string | null {
 
 // CRM de alumnos: contacto, clases agendadas, membresía y registro de pagos.
 export default function MembersCRM() {
-  const { db, currentStudio, currentUser, studioUsers, membership, registerManualPlan, removeUserPackage, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember, pendingMembership, settleMembershipPayment, waiveMembershipPending } = useStore();
+  const { db, currentStudio, currentUser, studioUsers, membership, registerManualPlan, removeUserPackage, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember, pendingMembership, settleMembershipPayment, waiveMembershipPending, updateMemberProfile } = useStore();
   // Etiqueta del adeudo de mensualidad según el periodo del paquete del alumno.
   const pendingLabel = (userId: string): string | null => {
     const up = pendingMembership(userId);
@@ -319,6 +319,12 @@ export default function MembersCRM() {
                     )}
                   </div>
                 </div>
+                <MemberEditCard
+                  key={detail.id}
+                  member={detail}
+                  onSave={(patch) => { updateMemberProfile(detail.id, patch); setDetail({ ...detail, ...patch }); }}
+                />
+
                 <div className="flex items-center gap-2 mb-4">
                   <Badge tone={meta.tone}>{meta.label}</Badge>
                   <span className="text-sm text-ink-soft">{m.planName ?? 'Sin plan'}</span>
@@ -587,6 +593,68 @@ export default function MembersCRM() {
         />
       )}
     </>
+  );
+}
+
+// Edición de los datos de contacto de un miembro (corrige un nombre mal escrito,
+// teléfono, etc.). El correo aquí es solo de contacto; no cambia el login.
+function MemberEditCard({
+  member, onSave,
+}: {
+  member: User;
+  onSave: (patch: { fullName?: string; phone?: string; email?: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [fullName, setFullName] = useState(member.fullName);
+  const [phone, setPhone] = useState(member.phone);
+  const [email, setEmail] = useState(member.email);
+  const inp = 'w-full rounded-xl border border-cream-dark bg-white px-3 py-2 text-sm outline-none focus:ring-2 ring-brand';
+  const dirty =
+    fullName.trim() !== member.fullName.trim() ||
+    phone.trim() !== (member.phone ?? '').trim() ||
+    email.trim() !== (member.email ?? '').trim();
+
+  if (!open) {
+    return (
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => { setFullName(member.fullName); setPhone(member.phone); setEmail(member.email); setOpen(true); }}
+          className="text-sm font-medium text-brand"
+        >
+          ✏️ Editar datos del alumno
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="mb-4 rounded-xl bg-cream-dark/40 p-3 space-y-3">
+      <p className="text-sm font-medium text-ink-soft">Editar datos del alumno</p>
+      <label className="block">
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Nombre completo</span>
+        <input className={inp} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Teléfono</span>
+          <input className={inp} value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Correo (contacto)</span>
+          <input className={inp} value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+      </div>
+      <p className="text-xs text-ink-faint">El correo aquí es solo de contacto; no cambia el correo con el que el alumno inicia sesión.</p>
+      <div className="flex justify-end gap-2">
+        <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+        <Button
+          disabled={!dirty || !fullName.trim()}
+          onClick={() => { onSave({ fullName: fullName.trim(), phone: phone.trim(), email: email.trim() }); setOpen(false); }}
+        >
+          Guardar
+        </Button>
+      </div>
+    </div>
   );
 }
 
