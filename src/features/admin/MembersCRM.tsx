@@ -317,6 +317,9 @@ export default function MembersCRM() {
                     {fmtBirthday(detail.birthDate) && (
                       <p className="text-sm text-ink-faint">🎂 Cumpleaños: {fmtBirthday(detail.birthDate)}</p>
                     )}
+                    {detail.managedBy && (
+                      <p className="text-sm text-ink-faint">👨‍👩‍👧 Gestionado por {db.users.find((x) => x.id === detail.managedBy)?.fullName ?? 'otro miembro'}</p>
+                    )}
                   </div>
                 </div>
                 <MemberEditCard
