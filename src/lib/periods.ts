@@ -36,6 +36,16 @@ export const PERIOD_SUFFIX: Record<BillingPeriod, string> = {
   year: '/ año',
 };
 
+// Sustantivo del cobro de cada periodo (para "pago pendiente de la MENSUALIDAD").
+export const PERIOD_NOUN: Record<BillingPeriod, string> = {
+  day: 'día',
+  week: 'semana',
+  biweekly: 'quincena',
+  month: 'mensualidad',
+  quarter: 'trimestre',
+  year: 'anualidad',
+};
+
 // Orden en que se muestran los botones del selector.
 export const PERIOD_ORDER: BillingPeriod[] = ['day', 'week', 'biweekly', 'month', 'quarter', 'year'];
 

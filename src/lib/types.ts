@@ -336,6 +336,11 @@ export interface UserPackage {
   active: boolean;
   stripeSubscriptionId?: string; // si es membresía domiciliada (cobro recurrente)
   cancelAtPeriodEnd?: boolean; // la domiciliación se cancela al terminar el periodo
+  // Acceso dado "a crédito": el miembro ya tiene acceso pero el pago NO se ha
+  // registrado. Genera un recordatorio para el alumno (banner) y para el estudio
+  // (CRM) hasta que el admin registre el pago. Lo limpia `settleMembershipPayment`.
+  paymentPending?: boolean;
+  pendingDue?: string; // fecha acordada de pago (ISO), opcional
 }
 
 // Un lugar físico de la clase (cama de Reformer, bici, colchoneta…). El estudio

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useStore, isUsablePackage, isQueuedPackage } from '../../lib/store';
 import { Card, Button, Badge } from '../../components/ui';
+import { PERIOD_NOUN, periodOf } from '../../lib/periods';
 import { fmtDay, fmtTime, fmtDate, daysUntil, usd } from '../../lib/format';
 import { fetchLatestAnnouncement, type Announcement } from '../../lib/announcements';
 
@@ -49,7 +50,7 @@ function StatChip({ icon, value, label }: { icon: string; value: ReactNode; labe
 }
 
 export default function StudentDashboard() {
-  const { db, currentUser, currentStudio, starBalance, availableCredits } = useStore();
+  const { db, currentUser, currentStudio, starBalance, availableCredits, pendingMembership } = useStore();
   const uid = currentUser!.id;
   const photos = currentStudio!.photos;
   const studioType = currentStudio!.studioType ?? 'studio';
@@ -98,6 +99,10 @@ export default function StudentDashboard() {
 
   const creditsLeft = availableCredits(uid);
   const stars = starBalance(uid);
+  // Adeudo de mensualidad: si el estudio le dio acceso "a crédito", se muestra un
+  // recordatorio persistente hasta que registre el pago.
+  const pendingUp = pendingMembership(uid);
+  const pendingPkg = pendingUp ? db.packages.find((p) => p.id === pendingUp.packageId) : null;
   const firstName = currentUser!.fullName.split(' ')[0];
   const next = data.myBookings[0];
   const nextTpl = next ? db.classTemplates.find((t) => t.id === next.session.templateId) : null;
@@ -119,6 +124,20 @@ export default function StudentDashboard() {
         <p className="text-sm text-ink-faint">Hola de nuevo ✦</p>
         <h1 className="text-3xl font-black tracking-tight text-ink">{firstName}</h1>
       </div>
+
+      {/* Recordatorio de pago pendiente (persistente hasta que el estudio lo registre) */}
+      {pendingUp && (
+        <Card className="border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-800">
+            💰 Tienes un pago pendiente de tu {pendingPkg ? PERIOD_NOUN[periodOf(pendingPkg)] : 'mensualidad'}
+          </p>
+          <p className="mt-1 text-sm text-amber-700">
+            {pendingPkg ? `${pendingPkg.name} · ${usd(pendingPkg.priceUsd)}. ` : ''}
+            Acércate a {currentStudio?.name ?? 'tu estudio'} para registrar tu pago.
+            {pendingUp.pendingDue ? ` Fecha acordada: ${fmtDate(pendingUp.pendingDue)}.` : ''}
+          </p>
+        </Card>
+      )}
 
       {/* Promoción del momento (texto libre que edita el estudio) */}
       {currentStudio?.branding.promoText?.trim() && (
