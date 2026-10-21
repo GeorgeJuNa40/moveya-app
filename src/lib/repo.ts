@@ -167,6 +167,8 @@ const mapUserPackage = (r: Row): UserPackage => ({
   active: r.active,
   stripeSubscriptionId: r.stripe_subscription_id ?? undefined,
   cancelAtPeriodEnd: r.cancel_at_period_end ?? false,
+  paymentPending: r.payment_pending ?? false,
+  pendingDue: r.pending_due ?? undefined,
 });
 
 const mapClassTemplate = (r: Row): ClassTemplate => ({
@@ -380,6 +382,8 @@ export const rowUserPackage = (up: UserPackage): Row => ({
   starts_at: up.startsAt ?? null,
   expires_at: up.expiresAt,
   active: up.active,
+  payment_pending: up.paymentPending ?? false,
+  pending_due: up.pendingDue ?? null,
 });
 export const rowClassTemplate = (t: ClassTemplate): Row => ({
   id: t.id,

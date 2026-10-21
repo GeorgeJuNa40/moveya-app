@@ -131,8 +131,12 @@ interface StoreValue {
     userId: string,
     packageId: string,
     method: PaymentMethod,
-    opts?: { expiresAt?: string; recordPayment?: boolean },
+    opts?: { expiresAt?: string; recordPayment?: boolean; paymentPending?: boolean; pendingDue?: string },
   ) => void;
+  // Adeudo de mensualidad: membresía dada "a crédito" con pago aún pendiente.
+  pendingMembership: (userId: string) => UserPackage | null; // la más reciente pendiente, o null
+  settleMembershipPayment: (userPackageId: string, method: PaymentMethod) => void; // registra el pago y la salda
+  waiveMembershipPending: (userPackageId: string) => void; // condona (quita el pendiente sin cobrar)
   // Corrección: quita un plan/paquete asignado por error (y, opcionalmente, el
   // pago registrado junto con él). Útil cuando el admin captura mal un cobro.
   removeUserPackage: (userPackageId: string, opts?: { removePayment?: boolean }) => void;
@@ -793,6 +797,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     registerManualPlan(userId, packageId, method, opts) {
       applyPurchase(setDb, db, userId, packageId, method, 'studio', opts);
     },
+    pendingMembership(userId) {
+      // La membresía pendiente más reciente del alumno (si tiene).
+      return db.userPackages
+        .filter((p) => p.userId === userId && p.paymentPending === true)
+        .sort((a, b) => b.purchasedAt.localeCompare(a.purchasedAt))[0] ?? null;
+    },
+    settleMembershipPayment(userPackageId, method) {
+      const up = db.userPackages.find((p) => p.id === userPackageId);
+      if (!up) return;
+      const pkg = db.packages.find((p) => p.id === up.packageId);
+      const payment: Payment = {
+        id: newId(),
+        userId: up.userId,
+        amountUsd: pkg?.priceUsd ?? 0,
+        method,
+        packageId: up.packageId,
+        concept: pkg?.name ?? 'Mensualidad',
+        paidAt: new Date().toISOString(),
+        registeredBy: 'studio',
+      };
+      setDb((prev) => ({
+        ...prev,
+        userPackages: prev.userPackages.map((p) =>
+          p.id === userPackageId ? { ...p, paymentPending: false, pendingDue: undefined } : p,
+        ),
+        payments: [...prev.payments, payment],
+      }));
+      void dbUpdate('user_packages', userPackageId, { payment_pending: false, pending_due: null });
+      void dbInsert('payments', rowPayment(payment));
+    },
+    waiveMembershipPending(userPackageId) {
+      setDb((prev) => ({
+        ...prev,
+        userPackages: prev.userPackages.map((p) =>
+          p.id === userPackageId ? { ...p, paymentPending: false, pendingDue: undefined } : p,
+        ),
+      }));
+      void dbUpdate('user_packages', userPackageId, { payment_pending: false, pending_due: null });
+    },
     removeUserPackage(userPackageId, opts) {
       const up = db.userPackages.find((p) => p.id === userPackageId);
       if (!up) return;
@@ -1295,7 +1338,7 @@ function applyPurchase(
   packageId: string,
   method: PaymentMethod,
   registeredBy: 'studio' | 'online',
-  opts?: { expiresAt?: string; recordPayment?: boolean },
+  opts?: { expiresAt?: string; recordPayment?: boolean; paymentPending?: boolean; pendingDue?: string },
 ) {
   const pkg = db.packages.find((p) => p.id === packageId);
   if (!pkg) return;
@@ -1329,7 +1372,10 @@ function applyPurchase(
     expiresAt = expires.toISOString();
   }
 
-  const payment: Payment | null = opts?.recordPayment === false
+  // Acceso "a crédito": da acceso pero NO registra pago (queda pendiente).
+  const pending = opts?.paymentPending === true;
+  const record = opts?.recordPayment !== false && !pending;
+  const payment: Payment | null = !record
     ? null
     : {
         id: newId(),
@@ -1353,6 +1399,8 @@ function applyPurchase(
     startsAt,
     expiresAt,
     active: true,
+    paymentPending: pending,
+    pendingDue: pending ? opts?.pendingDue : undefined,
   };
   setDb((prev) => ({
     ...prev,

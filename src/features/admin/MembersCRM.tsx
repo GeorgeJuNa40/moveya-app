@@ -3,7 +3,8 @@ import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button, StatCard } from '../../components/ui';
 import Avatar from '../../components/Avatar';
 import { fmtDay, fmtTime, fmtDate, usd } from '../../lib/format';
-import type { MembershipState, Payment, PaymentMethod, User } from '../../lib/types';
+import { PERIOD_NOUN, PERIOD_DAYS, periodOf } from '../../lib/periods';
+import type { MembershipState, Package, Payment, PaymentMethod, User } from '../../lib/types';
 
 const STATE_META: Record<MembershipState, { label: string; tone: 'success' | 'warning' | 'danger' | 'neutral' }> = {
   active: { label: 'Activa', tone: 'success' },
@@ -42,7 +43,14 @@ function fmtBirthday(iso?: string): string | null {
 
 // CRM de alumnos: contacto, clases agendadas, membresía y registro de pagos.
 export default function MembersCRM() {
-  const { db, currentStudio, currentUser, studioUsers, membership, registerManualPlan, removeUserPackage, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember } = useStore();
+  const { db, currentStudio, currentUser, studioUsers, membership, registerManualPlan, removeUserPackage, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember, pendingMembership, settleMembershipPayment, waiveMembershipPending } = useStore();
+  // Etiqueta del adeudo de mensualidad según el periodo del paquete del alumno.
+  const pendingLabel = (userId: string): string | null => {
+    const up = pendingMembership(userId);
+    if (!up) return null;
+    const pk = db.packages.find((p) => p.id === up.packageId);
+    return `Pago pendiente · ${pk ? PERIOD_NOUN[periodOf(pk)] : 'mensualidad'}`;
+  };
   // El operador/recepción opera pero NO gestiona estado ni elimina miembros.
   const canManageMembers = currentUser?.role !== 'OPERATOR';
   const students = studioUsers('STUDENT');
@@ -222,6 +230,11 @@ export default function MembersCRM() {
                           Vence {fmtDate(m.expiresAt)}{m.creditsLeft > 0 ? ` · ${m.creditsLeft} clases` : ''}
                         </span>
                       )}
+                      {pendingLabel(s.id) && (
+                        <span className="mt-1 block w-fit rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                          💰 {pendingLabel(s.id)}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button onClick={() => setDetail(s)} className="text-brand font-medium mr-3">Ver</button>
@@ -271,6 +284,9 @@ export default function MembersCRM() {
               <p className="mt-1 text-xs text-ink-faint">
                 {last ? `Últ. pago: ${usd(last.amountUsd)} · ${METHOD_LABEL[last.method]} (${SOURCE_LABEL[last.registeredBy]})` : 'Sin pagos registrados'}
               </p>
+              {pendingLabel(s.id) && (
+                <p className="mt-1 w-fit rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">💰 {pendingLabel(s.id)}</p>
+              )}
               {pendingPenalty(s.id) > 0 && (
                 <p className="mt-1 text-xs font-semibold text-amber-700">Adeudo por no asistir: {usd(pendingPenalty(s.id))}</p>
               )}
@@ -312,6 +328,31 @@ export default function MembersCRM() {
                     </span>
                   )}
                 </div>
+
+                {/* Adeudo de mensualidad (pago pendiente): registrar el pago o condonar. */}
+                {(() => {
+                  const up = pendingMembership(detail.id);
+                  if (!up) return null;
+                  const pk = db.packages.find((p) => p.id === up.packageId);
+                  return (
+                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-sm font-semibold text-amber-800">💰 Pago pendiente de {pk ? PERIOD_NOUN[periodOf(pk)] : 'mensualidad'}</p>
+                      <p className="mt-0.5 text-xs text-amber-700">
+                        {pk ? `${pk.name} · ${usd(pk.priceUsd)}` : ''}
+                        {up.pendingDue ? ` · acordado el ${fmtDate(up.pendingDue)}` : ''} · acceso vence {fmtDate(up.expiresAt)}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs text-amber-800">Registrar pago:</span>
+                        {(['cash', 'card', 'transfer'] as PaymentMethod[]).map((mth) => (
+                          <Button key={mth} variant="secondary" onClick={() => { settleMembershipPayment(up.id, mth); setDetail({ ...detail }); }}>
+                            {METHOD_LABEL[mth]}
+                          </Button>
+                        ))}
+                        <Button variant="ghost" onClick={() => { waiveMembershipPending(up.id); setDetail({ ...detail }); }}>Condonar</Button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Planes/paquetes asignados: corregir un cobro mal capturado. */}
                 {(() => {
@@ -564,28 +605,61 @@ function RegisterPaymentModal({
 }: {
   initial: User;
   students: User[];
-  packages: { id: string; name: string; priceUsd: number }[];
+  packages: Package[];
   membership: (userId: string) => { state: MembershipState; planName: string | null; expiresAt: string | null };
   onClose: () => void;
-  onSubmit: (userId: string, packageId: string, method: PaymentMethod, opts?: { expiresAt?: string; recordPayment?: boolean }) => void;
+  onSubmit: (userId: string, packageId: string, method: PaymentMethod, opts?: { expiresAt?: string; recordPayment?: boolean; paymentPending?: boolean; pendingDue?: string }) => void;
 }) {
   const [userId, setUserId] = useState(initial.id);
   const [packageId, setPackageId] = useState(packages[0]?.id ?? '');
   const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [noCharge, setNoCharge] = useState(false); // "ya tiene su plan / pagó aparte"
+  // Modo de registro: cobrar ahora · pago pendiente (a crédito) · sin cobro.
+  const [mode, setMode] = useState<'charge' | 'pending' | 'free'>('charge');
   const [expiresAt, setExpiresAt] = useState(''); // vencimiento real (opcional)
+  const [pendingDue, setPendingDue] = useState(''); // fecha acordada de pago (opcional)
   const pkg = packages.find((p) => p.id === packageId);
 
-  // Membresía actual del alumno seleccionado: para avisar que se renueva/reemplaza
-  // (no se duplica).
+  // Membresía actual del alumno seleccionado.
   const m = membership(userId);
   const hasActive = m.state === 'active' || m.state === 'expiring';
+  const noun = pkg ? PERIOD_NOUN[periodOf(pkg)] : 'mensualidad';
+
+  // "Mantener día de corte": calcula el próximo corte desde el último vencimiento
+  // + el periodo del paquete, para no calcularlo a mano. Solo aplica si el
+  // miembro NO está activo (si lo está, el nuevo ciclo entra en cola y el corte
+  // se mantiene solo).
+  const keepCut = () => {
+    if (!pkg) return;
+    const days = PERIOD_DAYS[periodOf(pkg)];
+    if (m.expiresAt) {
+      const d = new Date(m.expiresAt);
+      const now = Date.now();
+      let guard = 0;
+      while (d.getTime() <= now && guard < 500) { d.setDate(d.getDate() + days); guard++; }
+      setExpiresAt(d.toISOString().slice(0, 10));
+    } else {
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      setExpiresAt(d.toISOString().slice(0, 10));
+    }
+  };
+
+  // Si el miembro está activo, el vencimiento manual se ignora (entra en cola).
+  const effExpires = !hasActive && expiresAt ? expiresAt : undefined;
+
+  const submit = () => {
+    const opts =
+      mode === 'charge' ? { recordPayment: true, expiresAt: effExpires }
+      : mode === 'pending' ? { recordPayment: false, paymentPending: true, pendingDue: pendingDue || undefined, expiresAt: effExpires }
+      : { recordPayment: false, expiresAt: effExpires };
+    onSubmit(userId, packageId, method, opts);
+  };
 
   return (
     <Modal onClose={onClose}>
       <h2 className="text-lg font-bold text-ink mb-1">Registrar pago / membresía</h2>
       <p className="text-sm text-ink-faint mb-4">
-        Asigna un plan al alumno y registra cómo pagó. Si ya tiene un plan activo, el nuevo
+        Asigna un plan al alumno. Si ya tiene un plan activo, el nuevo
         <strong> no lo borra</strong>: en gimnasio se forma <strong>en cola</strong> (empieza al terminar el actual);
         en estudio se suman las clases.
       </p>
@@ -600,7 +674,7 @@ function RegisterPaymentModal({
           <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-sm text-amber-800">
             Ya tiene <strong>{m.planName}</strong> activo
             {m.expiresAt ? <> hasta el <strong>{fmtDate(m.expiresAt)}</strong></> : ''}. El plan que registres
-            quedará <strong>en cola</strong> y empezará cuando ese termine (no lo reemplaza ni se suma).
+            quedará <strong>en cola</strong> y empezará cuando ese termine, <strong>manteniendo el día de corte</strong>.
           </div>
         )}
 
@@ -610,27 +684,41 @@ function RegisterPaymentModal({
           </select>
         </Field>
 
-        <button
-          type="button"
-          onClick={() => setNoCharge((v) => !v)}
-          className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${noCharge ? 'border-brand bg-brand-soft' : 'border-cream-dark bg-white'}`}
-        >
-          <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border ${noCharge ? 'bg-brand border-brand text-cream' : 'border-cream-dark'}`}>
-            {noCharge ? '✓' : ''}
-          </span>
-          <span>
-            <span className="block text-sm font-semibold text-ink">Solo registrar su membresía actual (sin cobro)</span>
-            <span className="block text-xs text-ink-faint">Úsalo para dar de alta el plan que el alumno YA tiene (pagó aparte). No registra un pago.</span>
-          </span>
-        </button>
+        {/* Modo de registro */}
+        <div>
+          <span className="mb-1 block text-sm font-medium text-ink-soft">¿Cómo se registra?</span>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { v: 'charge', t: 'Cobrar ahora', d: 'Registra el pago' },
+              { v: 'pending', t: 'Pago pendiente', d: 'Acceso a crédito' },
+              { v: 'free', t: 'Sin cobro', d: 'Ya pagó aparte' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => setMode(opt.v)}
+                className={`rounded-xl border px-2 py-2.5 text-center transition ${mode === opt.v ? 'border-brand bg-brand-soft text-brand' : 'border-cream-dark bg-white text-ink-soft'}`}
+              >
+                <span className="block text-sm font-semibold">{opt.t}</span>
+                <span className="block text-[11px] leading-tight text-ink-faint">{opt.d}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-        {noCharge && (
-          <Field label="Vence el (fecha real de su membresía)">
-            <input type="date" className="input" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
-          </Field>
+        {mode === 'pending' && (
+          <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 space-y-3">
+            <p className="text-sm text-amber-800">
+              Le das acceso ahora y el pago de la <strong>{noun}</strong> queda <strong>pendiente</strong>. Al alumno le
+              aparecerá un recordatorio hasta que registres el pago desde su ficha.
+            </p>
+            <Field label="Fecha acordada de pago (opcional)">
+              <input type="date" className="input" value={pendingDue} onChange={(e) => setPendingDue(e.target.value)} />
+            </Field>
+          </div>
         )}
 
-        {!noCharge && (
+        {mode === 'charge' && (
           <Field label="Forma de pago">
             <div className="flex flex-wrap gap-2">
               {(['cash', 'card', 'transfer', 'paypal'] as PaymentMethod[]).map((mth) => (
@@ -645,19 +733,31 @@ function RegisterPaymentModal({
             </div>
           </Field>
         )}
+
+        {/* Vencimiento / día de corte: solo cuando el miembro NO está activo
+            (si está activo, entra en cola y el corte se mantiene solo). */}
+        {!hasActive && (
+          <div>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <Field label="Vence el (día de corte)">
+                  <input type="date" className="input" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} />
+                </Field>
+              </div>
+              <Button type="button" variant="secondary" onClick={keepCut}>Mantener día de corte</Button>
+            </div>
+            <p className="mt-1 text-xs text-ink-faint">
+              "Mantener día de corte" calcula el próximo corte a partir del vencimiento anterior, para pagos tardíos o adelantados. Déjalo vacío para que corra desde hoy por la vigencia del paquete.
+            </p>
+          </div>
+        )}
       </div>
       <div className="mt-6 flex items-center justify-between">
-        <span className="text-lg font-bold text-brand">{noCharge ? '' : pkg ? usd(pkg.priceUsd) : ''}</span>
+        <span className="text-lg font-bold text-brand">{mode === 'charge' && pkg ? usd(pkg.priceUsd) : ''}</span>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button
-            disabled={!packageId}
-            onClick={() => onSubmit(userId, packageId, method, {
-              recordPayment: !noCharge,
-              expiresAt: noCharge && expiresAt ? expiresAt : undefined,
-            })}
-          >
-            {noCharge ? 'Registrar membresía' : 'Registrar y asignar plan'}
+          <Button disabled={!packageId} onClick={submit}>
+            {mode === 'charge' ? 'Registrar y asignar plan' : mode === 'pending' ? 'Dar acceso (pago pendiente)' : 'Registrar membresía'}
           </Button>
         </div>
       </div>
