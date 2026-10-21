@@ -282,6 +282,7 @@ export interface User {
   // (vetado). Los no-activos se ocultan de las listas y no pueden usar la app.
   memberStatus?: 'active' | 'inactive' | 'banned';
   providerServiceId?: string; // (rol PROVIDER) id del servicio que atiende
+  managedBy?: string; // (subcuenta/perfil vinculado) id del titular que lo gestiona
 }
 
 // Invitado a una clase (sin cuenta): clase de prueba o acompañante (2x1). Ocupa

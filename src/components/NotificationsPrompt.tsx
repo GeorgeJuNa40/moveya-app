@@ -10,7 +10,7 @@ const KEY = 'moveya_push_asked_at';
 const SNOOZE_MS = 3 * 24 * 3600 * 1000; // si dice "ahora no", re-pregunta en 3 días
 
 export default function NotificationsPrompt() {
-  const { currentUser } = useStore();
+  const { currentUser, accountUser } = useStore();
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -29,7 +29,8 @@ export default function NotificationsPrompt() {
   const enable = async () => {
     setBusy(true);
     try {
-      await enablePush(currentUser.id, currentUser.studioId);
+      const acc = accountUser ?? currentUser; // notificaciones a la cuenta (titular)
+      await enablePush(acc.id, acc.studioId);
     } finally {
       localStorage.setItem(KEY, String(Date.now()));
       setBusy(false);

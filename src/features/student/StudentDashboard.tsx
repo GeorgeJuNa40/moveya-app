@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useStore, isUsablePackage, isQueuedPackage } from '../../lib/store';
 import { Card, Button, Badge } from '../../components/ui';
 import { PERIOD_NOUN, periodOf } from '../../lib/periods';
+import ProfileSwitcher from './ProfileSwitcher';
 import { fmtDay, fmtTime, fmtDate, daysUntil, usd } from '../../lib/format';
 import { fetchLatestAnnouncement, type Announcement } from '../../lib/announcements';
 
@@ -124,6 +125,9 @@ export default function StudentDashboard() {
         <p className="text-sm text-ink-faint">Hola de nuevo ✦</p>
         <h1 className="text-3xl font-black tracking-tight text-ink">{firstName}</h1>
       </div>
+
+      {/* Selector de perfil (subcuentas: titular + familiares) */}
+      <ProfileSwitcher variant="compact" />
 
       {/* Recordatorio de pago pendiente (persistente hasta que el estudio lo registre) */}
       {pendingUp && (

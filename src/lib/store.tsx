@@ -181,6 +181,13 @@ interface StoreValue {
   // escrito al registrarse). El `email` es solo el de contacto en la ficha, NO
   // cambia su correo de acceso (login).
   updateMemberProfile: (userId: string, patch: { fullName?: string; phone?: string; email?: string }) => void;
+  // Subcuentas / perfiles vinculados (familiares que gestiona el titular).
+  accountUser: User | null; // la cuenta con la que se inició sesión (titular)
+  activeProfileId: string | null; // perfil activo (null = titular)
+  linkedProfiles: User[]; // familiares del titular
+  switchProfile: (userId: string) => void; // cambia el perfil activo
+  addLinkedProfile: (name: string, birthDate?: string) => Promise<void>; // agrega un familiar
+  updateLinkedProfile: (userId: string, patch: { fullName?: string; phone?: string }) => Promise<void>;
   // Estudio — servicios
   addService: (name: string, description: string, whatsapp?: string) => void;
   updateService: (id: string, patch: Partial<OptionalService>) => void;
@@ -300,10 +307,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(t);
   }, [authLoading]);
 
-  const currentUser = useMemo(
+  // Cuenta real con la que se inició sesión (el titular).
+  const accountUser = useMemo(
     () => db.users.find((u) => u.id === currentUserId) ?? null,
     [db.users, currentUserId],
   );
+  // Perfil ACTIVO: el titular o uno de sus familiares (subcuentas). Toda la app
+  // del alumno (reservar, membresía, recompensas) opera sobre este perfil.
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  // Familiares (perfiles vinculados) que gestiona el titular.
+  const linkedProfiles = useMemo(
+    () => (accountUser ? db.users.filter((u) => u.managedBy === accountUser.id) : []),
+    [db.users, accountUser],
+  );
+  // El perfil activo debe ser el titular o un familiar suyo vigente; si no, cae
+  // al titular (p. ej. si se quitó el familiar o al iniciar sesión).
+  const currentUser = useMemo(() => {
+    if (!accountUser) return null;
+    if (!activeProfileId || activeProfileId === accountUser.id) return accountUser;
+    const p = db.users.find((u) => u.id === activeProfileId && u.managedBy === accountUser.id);
+    return p ?? accountUser;
+  }, [db.users, accountUser, activeProfileId]);
   const currentStudio = useMemo(
     () => db.studios.find((s) => s.id === currentUser?.studioId) ?? null,
     [db.studios, currentUser],
@@ -395,19 +419,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const meta = session?.user?.user_metadata as
       | { phone?: string; country?: string; currency?: string }
       | undefined;
-    if (!meta || !currentUser) return;
+    if (!meta || !accountUser) return;
 
-    if (meta.phone && !currentUser.phone) {
+    if (meta.phone && !accountUser.phone) {
       const phone = String(meta.phone);
       setDb((prev) => ({
         ...prev,
-        users: prev.users.map((u) => (u.id === currentUser.id ? { ...u, phone } : u)),
+        users: prev.users.map((u) => (u.id === accountUser.id ? { ...u, phone } : u)),
       }));
-      void dbUpdate('users', currentUser.id, { phone });
+      void dbUpdate('users', accountUser.id, { phone });
     }
 
     if (
-      currentUser.role === 'STUDIO_ADMIN' &&
+      accountUser.role === 'STUDIO_ADMIN' &&
       currentStudio &&
       meta.currency &&
       !currentStudio.branding.currencyCode
@@ -418,7 +442,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser?.id, currentStudio?.id, session]);
+  }, [accountUser?.id, currentStudio?.id, session]);
+
+  // Al cambiar de cuenta (login/logout) se vuelve al perfil del titular.
+  useEffect(() => { setActiveProfileId(null); }, [currentUserId]);
 
   // Respaldo local de reserva (si la RPC book_session aún no está instalada).
   // Valida cupo, créditos y vigencia del paquete en el cliente.
@@ -500,6 +527,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     db,
     currentUser,
     currentStudio,
+    accountUser,
+    activeProfileId,
+    linkedProfiles,
     authLoading,
     hasSession: !!currentUserId,
     reloadData: () => setReloadTick((t) => t + 1),
@@ -635,7 +665,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     async bookSession(sessionId, spot) {
       if (!currentUser) return;
       const uid = currentUser.id;
-      const { data, error } = await supabase.rpc('book_session', { p_session_id: sessionId, p_spot: spot ?? null });
+      // p_user = perfil activo (titular o familiar). El servidor valida que el
+      // titular gestione a ese familiar.
+      const { data, error } = await supabase.rpc('book_session', { p_session_id: sessionId, p_spot: spot ?? null, p_user: uid });
       if (error) {
         const msg = error.message || '';
         if (error.code === 'PGRST202' || /Could not find the function/i.test(msg)) {
@@ -716,26 +748,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // Lista de espera: el alumno se une cuando la clase está llena (sin crédito).
     async joinWaitlist(sessionId) {
       if (!currentUser) return;
-      const uid = currentUser.id;
+      const uid = currentUser.id; // perfil activo (titular o familiar)
       const existing = db.bookings.find((b) => b.userId === uid && b.sessionId === sessionId && b.status !== 'CANCELED');
       if (existing) return; // ya reservada o ya en espera
-      const nb: Booking = {
-        id: newId(), userId: uid, sessionId, userPackageId: null,
-        status: 'WAITLIST', createdAt: new Date().toISOString(),
-      };
-      setDb((prev) => ({ ...prev, bookings: [...prev.bookings, nb] }));
-      const { error } = await supabase.from('bookings').insert(rowBooking(nb));
-      if (error) {
-        setDb((prev) => ({ ...prev, bookings: prev.bookings.filter((b) => b.id !== nb.id) }));
-        notifyError('lista de espera', error.message);
-      }
+      // Vía RPC (SECURITY DEFINER): funciona para el alumno y para sus familiares.
+      const { data, error } = await supabase.rpc('join_waitlist', { p_session_id: sessionId, p_user: uid });
+      if (error) { notifyError('lista de espera', error.message); return; }
+      const res = data as { booking_id?: string } | null;
+      if (!res?.booking_id) return;
+      const id = res.booking_id;
+      setDb((prev) => {
+        const exists = prev.bookings.some((b) => b.id === id);
+        const nb: Booking = { id, userId: uid, sessionId, userPackageId: null, status: 'WAITLIST', createdAt: new Date().toISOString() };
+        return {
+          ...prev,
+          bookings: exists
+            ? prev.bookings.map((b) => (b.id === id ? { ...b, status: 'WAITLIST', userId: uid } : b))
+            : [...prev.bookings, nb],
+        };
+      });
     },
     // Salir de la lista de espera (no devuelve crédito porque no se consumió).
     async leaveWaitlist(bookingId) {
       const b = db.bookings.find((x) => x.id === bookingId);
       if (!b || b.status !== 'WAITLIST') return;
       setDb((prev) => ({ ...prev, bookings: prev.bookings.map((x) => (x.id === bookingId ? { ...x, status: 'CANCELED' } : x)) }));
-      void dbUpdate('bookings', bookingId, { status: 'CANCELED' });
+      const { error } = await supabase.rpc('leave_waitlist', { p_booking_id: bookingId });
+      if (error) notifyError('lista de espera', error.message);
     },
 
     // El coach marca si el alumno asistió. Al asistir gana 1 estrella (recompensa);
@@ -926,7 +965,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         rewardId: reward.id,
       });
 
-      const { data, error } = await supabase.rpc('redeem_reward', { p_reward_id: rewardId });
+      const { data, error } = await supabase.rpc('redeem_reward', { p_reward_id: rewardId, p_user: uid });
       if (error) {
         const msg = error.message || '';
         if (error.code === 'PGRST202' || /Could not find the function/i.test(msg)) {
@@ -1181,6 +1220,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.email !== undefined) row.email = patch.email;
       if (Object.keys(row).length) void dbUpdate('users', userId, row);
     },
+    async addLinkedProfile(name, birthDate) {
+      if (!accountUser) return;
+      const clean = name.trim();
+      if (!clean) return;
+      const initials = clean.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+      const { data, error } = await supabase.rpc('create_managed_member', {
+        p_name: clean, p_birthdate: birthDate || null, p_initials: initials,
+      });
+      if (error) { notifyError('familiar', error.message); return; }
+      const id = data as string;
+      if (!id) return;
+      const u: User = {
+        id, studioId: accountUser.studioId, role: 'STUDENT', fullName: clean,
+        email: `fam.${id}@no-login.moveya`, phone: '', avatarInitials: initials,
+        createdAt: new Date().toISOString(), birthDate: birthDate || undefined,
+        managedBy: accountUser.id, memberStatus: 'active',
+      };
+      setDb((prev) => ({ ...prev, users: [...prev.users, u] }));
+      setActiveProfileId(id); // entra al perfil recién creado
+    },
+    async updateLinkedProfile(userId, patch) {
+      const { error } = await supabase.rpc('update_managed_member', {
+        p_user: userId, p_name: patch.fullName ?? null, p_phone: patch.phone ?? null,
+      });
+      if (error) { notifyError('familiar', error.message); return; }
+      setDb((prev) => ({
+        ...prev,
+        users: prev.users.map((u) =>
+          u.id === userId ? { ...u, fullName: patch.fullName ?? u.fullName, phone: patch.phone ?? u.phone } : u,
+        ),
+      }));
+    },
+    switchProfile(userId) {
+      setActiveProfileId(userId === accountUser?.id ? null : userId);
+    },
     setStudentExternalCoach(userId, coachId) {
       setDb((prev) => ({
         ...prev,
@@ -1209,8 +1283,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       void dbUpdate('users', userId, { avatar_url: avatarUrl });
     },
     updateMyProfile(patch) {
-      if (!currentUser) return;
-      const uid = currentUser.id;
+      // Siempre edita al TITULAR (la cuenta con la que se inició sesión), aunque
+      // haya un familiar como perfil activo.
+      if (!accountUser) return;
+      const uid = accountUser.id;
       setDb((prev) => ({
         ...prev,
         users: prev.users.map((u) => {

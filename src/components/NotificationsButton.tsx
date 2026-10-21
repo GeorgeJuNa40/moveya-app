@@ -12,7 +12,7 @@ import {
 // Botón para activar/desactivar las notificaciones push (avisos que llegan como
 // los de WhatsApp/Facebook). Se muestra en la barra lateral.
 export default function NotificationsButton({ className = '' }: { className?: string }) {
-  const { currentUser } = useStore();
+  const { currentUser, accountUser } = useStore();
   const [active, setActive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [denied, setDenied] = useState(false);
@@ -32,7 +32,8 @@ export default function NotificationsButton({ className = '' }: { className?: st
         await disablePush();
         setActive(false);
       } else {
-        const ok = await enablePush(currentUser.id, currentUser.studioId);
+        const acc = accountUser ?? currentUser; // las notificaciones van a la cuenta (titular)
+        const ok = await enablePush(acc.id, acc.studioId);
         setActive(ok);
         setDenied(pushPermission() === 'denied');
       }

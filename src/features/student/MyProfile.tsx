@@ -3,14 +3,15 @@ import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button } from '../../components/ui';
 import Avatar from '../../components/Avatar';
 import ImageUpload from '../../components/ImageUpload';
+import ProfileSwitcher from './ProfileSwitcher';
 import { notifySuccess, notifyError } from '../../lib/notify';
 
 // Perfil del alumno: puede corregir su nombre y teléfono, cambiar su foto y
 // (si lo necesita) su contraseña. El correo de acceso se muestra, pero no se
 // edita aquí para no romper su inicio de sesión.
 export default function MyProfile() {
-  const { currentUser, updateMyProfile, updateUserAvatar, updatePassword } = useStore();
-  const u = currentUser!;
+  const { accountUser, updateMyProfile, updateUserAvatar, updatePassword } = useStore();
+  const u = accountUser!;
 
   const [name, setName] = useState(u.fullName);
   const [phone, setPhone] = useState(u.phone);
@@ -48,6 +49,9 @@ export default function MyProfile() {
       <PageHeader title="Mi perfil" subtitle="Tus datos y tu cuenta" />
 
       <div className="mx-auto max-w-xl space-y-6">
+        {/* Familiares (subcuentas): agregar, editar y cambiar de perfil */}
+        <ProfileSwitcher variant="full" />
+
         <Card className="p-6 space-y-4">
           <div className="flex items-center gap-3">
             <Avatar url={u.avatarUrl} initials={u.avatarInitials} className="h-14 w-14 text-lg" />
