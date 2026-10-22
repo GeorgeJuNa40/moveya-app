@@ -114,6 +114,19 @@ Deno.serve(async (req) => {
     // Origen al que regresará Stripe (el mismo del usuario, o APP_URL de reserva).
     const base = safeBase(body.origin) || APP_URL;
 
+    // Subcuentas: si el titular paga por un FAMILIAR (forUserId), el paquete se
+    // asigna a ese familiar — validando en el servidor que de verdad lo gestione
+    // (managed_by = titular, mismo estudio). Si no lo gestiona, se asigna al titular.
+    const forUserId = body.forUserId ? String(body.forUserId) : '';
+    let buyerId = me.id;
+    if (forUserId && forUserId !== me.id) {
+      const { data: fam } = await supabase
+        .from('users').select('id')
+        .eq('id', forUserId).eq('managed_by', me.id).eq('studio_id', me.studio_id)
+        .maybeSingle();
+      if (fam) buyerId = forUserId;
+    }
+
     if (kind === 'package') {
       const { data: pkg } = await supabase
         .from('packages')
@@ -171,7 +184,7 @@ Deno.serve(async (req) => {
           cancel_url: `${base}/?pago=cancelado#/app/packages`,
           metadata: {
             kind: 'package',
-            user_id: me.id,
+            user_id: buyerId,
             studio_id: me.studio_id,
             package_id: pkg.id,
           },
@@ -226,14 +239,14 @@ Deno.serve(async (req) => {
           ],
           // Comisión de Move yA como % de cada cobro mensual (si está configurada).
           subscription_data: {
-            metadata: { kind: 'membership_sub', user_id: me.id, studio_id: me.studio_id, package_id: pkg.id },
+            metadata: { kind: 'membership_sub', user_id: buyerId, studio_id: me.studio_id, package_id: pkg.id },
             ...(FEE_PERCENT > 0 ? { application_fee_percent: FEE_PERCENT } : {}),
           },
           success_url: `${base}/?pago=exito#/app/packages`,
           cancel_url: `${base}/?pago=cancelado#/app/packages`,
           metadata: {
             kind: 'membership_sub',
-            user_id: me.id,
+            user_id: buyerId,
             studio_id: me.studio_id,
             package_id: pkg.id,
           },
