@@ -60,11 +60,26 @@ sombras suaves, tarjetas `rounded-2xl`. White-label por estudio vía variables C
   `ANTHROPIC_API_KEY`, claves VAPID.
 - No incluir el identificador del modelo en artefactos del repo.
 
-## Pendientes conocidos (al 7-ago-2026)
+## Pendientes conocidos (al 22-oct-2026)
 - **Usuario:** re-correr `birthdate-setup.sql` en Supabase (promo Premium en registros nuevos).
 - **Usuario:** verificación de negocio en Meta (para que el bot reciba mensajes reales).
+  Según capturas de oct-2026 ya fue aprobada; falta confirmar que el bot recibe mensajes reales.
 - **Usuario:** al llegar primer cliente Premium: cargar saldo Anthropic, poner
   `ANTHROPIC_API_KEY`, correr `20260806_whatsapp_usage.sql`, activar `aiActive`.
-- **Código (ver auditoría):** el webhook de Stripe solo maneja `checkout.session.completed`
-  → NO renueva acceso en cobros mensuales ni refleja cancelaciones/impagos. Las tablas
-  de créditos/estrellas permiten escritura directa del alumno (deberían ser RPC + SELECT).
+- **Usuario (hardening pendiente de pegar):** correr `security-hardening.sql` en el SQL
+  Editor — elimina las firmas viejas duplicadas de `book_session`/`redeem_reward` (el MCP
+  bloquea `DROP`, por eso no se aplicó solo). El resto del archivo (search_path + revoke
+  anon) YA está aplicado en vivo.
+- **Usuario (1 clic):** activar "Leaked password protection" (HaveIBeenPwned) en
+  Supabase → Authentication → Policies.
+
+## Resuelto (histórico de auditoría)
+- **Webhook de Stripe:** ya maneja renovaciones/impagos/cancelaciones (`invoice.paid`,
+  `invoice.payment_failed`, `customer.subscription.deleted`), tanto suscripción del estudio
+  como membresías domiciliadas. (stripe-webhook v49, vivo).
+- **Escritura directa del alumno:** cerrada. `harden-writes.sql` dejó al alumno en SOLO
+  LECTURA en `user_packages`/`bookings`/`star_entries`/`payments`; sus acciones pasan por
+  RPC `SECURITY DEFINER` (`book_session`, `cancel_booking`, `redeem_reward`). Vivo.
+- **Hardening oct-2026:** `security-hardening.sql` — `search_path` fijo en `lock_moveya_picks`
+  y revocado `anon` de las RPC de acción (conservando públicas `get_public_studio` y
+  `founders_status`). Aplicado en vivo salvo los `DROP` de limpieza (ver pendiente arriba).
