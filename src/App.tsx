@@ -332,20 +332,20 @@ export default function App() {
       <Route path="/admin/calendar" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><CalendarAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/classes" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><ClassesManagement /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/packages" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PackageManagement /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/coaches" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><CoachesAdmin /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/rewards" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="rewards"><RewardsAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/services" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="services"><ServicesConfig /></PlanGate></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/whatsapp" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappHub /></PlanGate></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/coaches" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN', 'OPERATOR']}><SubscriptionGate><CoachesAdmin /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/rewards" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PlanGate capability="rewards"><RewardsAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/services" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PlanGate capability="services"><ServicesConfig /></PlanGate></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/whatsapp" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappHub /></PlanGate></SubscriptionGate></RequireRole>} />
       {/* Compatibilidad: el link viejo de la bandeja abre el hub de WhatsApp. */}
       <Route path="/admin/inbox" element={<Navigate to="/admin/whatsapp" replace />} />
-      <Route path="/admin/access" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><AccessControl /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/access" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN', 'OPERATOR']}><SubscriptionGate><AccessControl /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/store" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PlanGate capability="store"><StoreAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/routines" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><RoutinesAdmin /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/routines" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN', 'OPERATOR']}><SubscriptionGate><RoutinesAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/reports" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><PlanGate capability="reports"><Reports /></PlanGate></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/reminders" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Reminders /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/reminders" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><Reminders /></SubscriptionGate></RequireRole>} />
       {/* Suscripción siempre accesible (allow) para poder regularizar el pago. */}
       <Route path="/admin/subscription" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate allow><SubscriptionScreen /></SubscriptionGate></RequireRole>} />
-      <Route path="/admin/suggestions" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN']}><SubscriptionGate><SuggestionsAdmin /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/suggestions" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN', 'OPERATOR']}><SubscriptionGate><SuggestionsAdmin /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/settings" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate><Settings /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/profile" element={<RequireRole role="STUDIO_ADMIN"><SubscriptionGate allow><Profile /></SubscriptionGate></RequireRole>} />
 

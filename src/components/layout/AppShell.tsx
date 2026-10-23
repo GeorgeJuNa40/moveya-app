@@ -46,14 +46,24 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { to: '/admin/coaches', label: 'Coaches' },
     { to: '/admin/suggestions', label: 'Sugerencias' },
   ],
-  // Operador / recepción: solo lo elemental para operar el día a día. Sin
-  // dashboard de ingresos, reportes, configuración ni facturación.
+  // Operador / recepción: lleva casi toda la operación del negocio. Ve miembros,
+  // agenda, clases, acceso, paquetes, coaches, recompensas, servicios, rutinas,
+  // tienda, WhatsApp, recordatorios y sugerencias. NO ve lo sensible de dinero:
+  // dashboard de ingresos, reportes, suscripción/facturación ni configuración/perfil.
   OPERATOR: [
     { to: '/admin/members', label: 'Miembros (CRM)', short: 'Miembros' },
     { to: '/admin/calendar', label: 'Calendario', short: 'Agenda' },
     { to: '/admin/classes', label: 'Clases' },
+    { to: '/admin/access', label: 'Control de acceso', short: 'Acceso' },
     { to: '/admin/packages', label: 'Paquetes' },
+    { to: '/admin/coaches', label: 'Coaches' },
+    { to: '/admin/rewards', label: 'Recompensas', cap: 'rewards' },
+    { to: '/admin/services', label: 'Servicios', cap: 'services' },
+    { to: '/admin/routines', label: 'Rutinas' },
     { to: '/admin/store', label: 'Tienda', cap: 'store' },
+    { to: '/admin/whatsapp', label: 'WhatsApp', cap: 'whatsapp' },
+    { to: '/admin/reminders', label: 'Recordatorios' },
+    { to: '/admin/suggestions', label: 'Sugerencias' },
   ],
   // Proveedor de servicio: solo su portal de citas.
   PROVIDER: [
