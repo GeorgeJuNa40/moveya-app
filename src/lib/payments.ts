@@ -112,9 +112,15 @@ export async function finishMpOnboarding(code: string): Promise<boolean> {
   catch (e) { notifyError('Mercado Pago', String((e as Error)?.message ?? e)); return false; }
 }
 
-export async function getMpConnectStatus(): Promise<{ connected: boolean }> {
-  try { const d = await invokeMpConnect({ action: 'status' }); return { connected: Boolean(d.connected) }; }
-  catch { return { connected: false }; }
+// Identidad (no secreta) de la cuenta de MP conectada del estudio.
+export interface MpAccountInfo { nickname?: string; email?: string; id?: string }
+
+export async function getMpConnectStatus(): Promise<{ connected: boolean; account?: MpAccountInfo | null }> {
+  try {
+    const d = await invokeMpConnect({ action: 'status' });
+    return { connected: Boolean(d.connected), account: (d.account as MpAccountInfo | null) ?? null };
+  }
+  catch { return { connected: false, account: null }; }
 }
 
 export async function disconnectMp(): Promise<boolean> {
