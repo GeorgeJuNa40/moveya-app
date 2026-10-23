@@ -109,9 +109,34 @@ Deno.serve(async (req) => {
     }
 
     // ---- Estado de conexión ----
+    // Además de connected, devolvemos la IDENTIDAD de la cuenta conectada
+    // (nickname + correo) consultando /users/me con el token guardado. Así el
+    // estudio ve EN LA APP de quién es la cuenta de MP conectada, sin adivinar.
+    // El token nunca sale de aquí: solo exponemos nickname/correo (no secretos).
     if (action === 'status') {
-      const { data } = await admin.from('mp_accounts').select('connected').eq('studio_id', me.studio_id).maybeSingle();
-      return json({ connected: Boolean(data?.connected) });
+      const { data } = await admin
+        .from('mp_accounts').select('connected, access_token, mp_user_id')
+        .eq('studio_id', me.studio_id).maybeSingle();
+      const connected = Boolean(data?.connected);
+      let account: { nickname?: string; email?: string; id?: string } | null = null;
+      if (connected && data?.access_token) {
+        try {
+          const r = await fetch('https://api.mercadopago.com/users/me', {
+            headers: { Authorization: `Bearer ${data.access_token}` },
+          });
+          if (r.ok) {
+            const u = await r.json();
+            account = {
+              nickname: u?.nickname ?? undefined,
+              email: u?.email ?? undefined,
+              id: String(u?.id ?? data.mp_user_id ?? ''),
+            };
+          }
+        } catch {
+          /* si /users/me falla, solo no mostramos el detalle (connected sigue válido) */
+        }
+      }
+      return json({ connected, account });
     }
 
     // ---- Desconectar ----

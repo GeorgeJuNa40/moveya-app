@@ -18,9 +18,25 @@ async function mpGet(path: string, token: string) {
   return { ok: res.ok, data: await res.json().catch(() => ({})) };
 }
 
-async function studioToken(studioId: string): Promise<string | null> {
-  const { data } = await admin.from('mp_accounts').select('access_token').eq('studio_id', studioId).maybeSingle();
-  return data?.access_token ?? null;
+// Lee un recurso de MP (pago o preapproval) probando primero el token de la
+// PLATAFORMA (cobros que cobra la plataforma: SaaS, promo) y, si no lo puede
+// leer, el token de CADA estudio conectado. Un pago de marketplace pertenece a
+// la cuenta del vendedor (el estudio), así que la plataforma no puede leerlo:
+// hay que usar el token de ese estudio. El token de un estudio solo puede leer
+// SUS propios recursos (los ajenos devuelven 404), así que esto no cruza datos.
+async function readWithAnyToken(path: string): Promise<{ ok: boolean; data: Record<string, unknown> }> {
+  const first = await mpGet(path, PLATFORM_TOKEN);
+  if (first.ok && first.data?.status) return first;
+  const { data: accts } = await admin
+    .from('mp_accounts')
+    .select('access_token')
+    .eq('connected', true)
+    .not('access_token', 'is', null);
+  for (const a of accts ?? []) {
+    const r = await mpGet(path, a.access_token as string);
+    if (r.ok && r.data?.status) return r;
+  }
+  return first; // devuelve el primer intento (fallido) para no romper el flujo
 }
 
 type Ref = { kind?: string; user_id?: string; studio_id?: string; package_id?: string; order_id?: string; plan?: string; founder?: boolean };
@@ -36,13 +52,9 @@ Deno.serve(async (req) => {
     if (!id) return new Response('ok', { status: 200 });
 
     if (type === 'payment') {
-      let { ok, data: pay } = await mpGet(`/v1/payments/${id}`, PLATFORM_TOKEN);
-      let ref = parseRef(pay?.external_reference);
-      if ((!ok || !pay?.status) && ref.studio_id) {
-        const t = await studioToken(ref.studio_id);
-        if (t) ({ ok, data: pay } = await mpGet(`/v1/payments/${id}`, t));
-      }
-      const preId = pay?.metadata?.preapproval_id ?? pay?.preapproval_id ?? null;
+      const { ok, data: pay } = await readWithAnyToken(`/v1/payments/${id}`);
+      const ref = parseRef(pay?.external_reference);
+      const preId = (pay?.metadata as Record<string, unknown>)?.preapproval_id ?? pay?.preapproval_id ?? null;
       console.log('mp-wh payment:', JSON.stringify({ id, status: pay?.status, kind: ref.kind, studio: ref.studio_id, preId }));
       if (!ok || pay?.status !== 'approved') return new Response('ok', { status: 200 });
 
@@ -58,7 +70,7 @@ Deno.serve(async (req) => {
         await applySaaS(ref, String(preId ?? id), true);
       } else if (preId) {
         // El pago viene ligado a un preapproval: lo consultamos para su referencia.
-        const { ok: pok, data: pre } = await mpGet(`/preapproval/${preId}`, PLATFORM_TOKEN);
+        const { ok: pok, data: pre } = await readWithAnyToken(`/preapproval/${preId}`);
         if (pok) {
           const pref = parseRef(pre?.external_reference);
           if (pref.kind === 'subscription' && pref.studio_id) await applySaaS(pref, String(preId), pre?.status === 'authorized' || pay?.status === 'approved');
@@ -69,7 +81,7 @@ Deno.serve(async (req) => {
     }
 
     if (type === 'preapproval' || type === 'subscription_preapproval') {
-      const { ok, data: pre } = await mpGet(`/preapproval/${id}`, PLATFORM_TOKEN);
+      const { ok, data: pre } = await readWithAnyToken(`/preapproval/${id}`);
       if (!ok) return new Response('ok', { status: 200 });
       const ref = parseRef(pre?.external_reference);
       const active = pre?.status === 'authorized';
