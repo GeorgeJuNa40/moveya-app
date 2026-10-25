@@ -65,6 +65,7 @@ const CalendarAdmin = lazyWithReload(() => import('./features/admin/CalendarAdmi
 const ClassesManagement = lazyWithReload(() => import('./features/admin/ClassesManagement'));
 const PackageManagement = lazyWithReload(() => import('./features/admin/PackageManagement'));
 const CoachesAdmin = lazyWithReload(() => import('./features/admin/CoachesAdmin'));
+const CoachClasses = lazyWithReload(() => import('./features/admin/CoachClasses'));
 const RewardsAdmin = lazyWithReload(() => import('./features/admin/RewardsAdmin'));
 const ServicesConfig = lazyWithReload(() => import('./features/admin/ServicesConfig'));
 const WhatsappHub = lazyWithReload(() => import('./features/admin/WhatsappHub'));
@@ -333,6 +334,7 @@ export default function App() {
       <Route path="/admin/classes" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><ClassesManagement /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/packages" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PackageManagement /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/coaches" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN', 'OPERATOR']}><SubscriptionGate><CoachesAdmin /></SubscriptionGate></RequireRole>} />
+      <Route path="/admin/coach-classes" element={<RequireRole role={['STUDIO_ADMIN', 'BRANCH_ADMIN', 'OPERATOR']}><SubscriptionGate><CoachClasses /></SubscriptionGate></RequireRole>} />
       <Route path="/admin/rewards" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PlanGate capability="rewards"><RewardsAdmin /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/services" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PlanGate capability="services"><ServicesConfig /></PlanGate></SubscriptionGate></RequireRole>} />
       <Route path="/admin/whatsapp" element={<RequireRole role={['STUDIO_ADMIN', 'OPERATOR']}><SubscriptionGate><PlanGate capability="whatsapp"><WhatsappHub /></PlanGate></SubscriptionGate></RequireRole>} />
