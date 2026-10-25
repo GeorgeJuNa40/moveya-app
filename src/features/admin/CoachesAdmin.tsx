@@ -5,7 +5,7 @@ import { PageHeader, Card, Badge, Button, EmptyState, Modal } from '../../compon
 import Avatar from '../../components/Avatar';
 import ImageUpload from '../../components/ImageUpload';
 import InviteCard from './InviteCard';
-import type { CoachStatus, CoachType, User } from '../../lib/types';
+import type { CoachPay, CoachStatus, CoachType, User } from '../../lib/types';
 
 const STATUS_META: Record<CoachStatus, { label: string; tone: 'success' | 'warning' | 'danger' }> = {
   APPROVED: { label: 'Aprobado', tone: 'success' },
@@ -20,6 +20,18 @@ type Draft = {
   id: string; fullName: string; email: string; phone: string;
   bio: string; specialties: string; yearsExp: number; avatarUrl?: string;
   coachType: CoachType; externalFeeNote: string; branchId: string;
+  payMode: CoachPay['mode']; payRate: string; payRateFull: string; payPeriod: NonNullable<CoachPay['period']>;
+};
+
+const PAY_MODES: { id: CoachPay['mode']; label: string }[] = [
+  { id: 'por_clase', label: 'Por clase' },
+  { id: 'por_asistente', label: 'Por asistente' },
+  { id: 'fijo', label: 'Sueldo fijo' },
+];
+const payRateLabel: Record<CoachPay['mode'], string> = {
+  por_clase: 'Tarifa por clase (MXN)',
+  por_asistente: 'Tarifa por asistente (MXN)',
+  fijo: 'Sueldo base (MXN)',
 };
 
 export default function CoachesAdmin() {
@@ -62,6 +74,10 @@ export default function CoachesAdmin() {
       yearsExp: c.coachProfile?.yearsExp ?? 1, avatarUrl: c.avatarUrl,
       coachType: c.coachType ?? 'fijo', externalFeeNote: c.externalFeeNote ?? '',
       branchId: c.branchId ?? '',
+      payMode: c.coachPay?.mode ?? 'por_clase',
+      payRate: c.coachPay?.rate != null ? String(c.coachPay.rate) : '',
+      payRateFull: c.coachPay?.rateFull != null ? String(c.coachPay.rateFull) : '',
+      payPeriod: c.coachPay?.period ?? 'mes',
     });
   };
 
@@ -72,6 +88,14 @@ export default function CoachesAdmin() {
       return setErr('El correo no tiene un formato válido.');
     }
     const existing = coaches.find((c) => c.id === draft.id);
+    const rate = Math.max(0, Number(draft.payRate) || 0);
+    const rateFull = draft.payRateFull.trim() ? Math.max(0, Number(draft.payRateFull) || 0) : undefined;
+    const coachPay: CoachPay = {
+      mode: draft.payMode,
+      rate,
+      ...(draft.payMode === 'por_clase' && rateFull !== undefined ? { rateFull } : {}),
+      ...(draft.payMode === 'fijo' ? { period: draft.payPeriod } : {}),
+    };
     const coach: User = {
       id: draft.id,
       studioId: currentStudio!.id,
@@ -86,6 +110,7 @@ export default function CoachesAdmin() {
       coachType: isGymish ? draft.coachType : existing?.coachType,
       externalFeeNote: isGymish && draft.coachType === 'externo' ? draft.externalFeeNote.trim() : existing?.externalFeeNote,
       branchId: branches.length ? (draft.branchId || undefined) : existing?.branchId,
+      coachPay,
       coachProfile: {
         bio: draft.bio,
         specialties: draft.specialties.split(',').map((s) => s.trim()).filter(Boolean),
@@ -198,6 +223,63 @@ export default function CoachesAdmin() {
               <Field label="Correo"><input className="input" value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} /></Field>
               <Field label="Especialidades (separadas por coma)"><input className="input" value={draft.specialties} onChange={(e) => setDraft({ ...draft, specialties: e.target.value })} /></Field>
               <Field label="Biografía"><textarea rows={3} className="input" value={draft.bio} onChange={(e) => setDraft({ ...draft, bio: e.target.value })} /></Field>
+
+              {/* Pago al coach (nómina por clases dadas) — aplica a estudio y gym */}
+              <div className="rounded-xl bg-cream-dark/40 p-3">
+                <p className="mb-2 text-sm font-semibold text-ink">💳 Pago al coach (para nómina)</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {PAY_MODES.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setDraft({ ...draft, payMode: m.id })}
+                      className={`rounded-xl border px-2 py-2 text-xs font-medium transition ${
+                        draft.payMode === m.id
+                          ? 'border-mint-dark bg-mint-soft/40 text-ink'
+                          : 'border-cream-dark bg-white text-ink-faint'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <Field label={payRateLabel[draft.payMode]}>
+                    <input
+                      type="number" min="0" step="0.01" className="input"
+                      value={draft.payRate}
+                      onChange={(e) => setDraft({ ...draft, payRate: e.target.value })}
+                      placeholder="0"
+                    />
+                  </Field>
+                  {draft.payMode === 'por_clase' && (
+                    <Field label="Tarifa si está llena (opcional)">
+                      <input
+                        type="number" min="0" step="0.01" className="input"
+                        value={draft.payRateFull}
+                        onChange={(e) => setDraft({ ...draft, payRateFull: e.target.value })}
+                        placeholder="igual que la normal"
+                      />
+                    </Field>
+                  )}
+                  {draft.payMode === 'fijo' && (
+                    <Field label="Cada">
+                      <select
+                        className="input"
+                        value={draft.payPeriod}
+                        onChange={(e) => setDraft({ ...draft, payPeriod: e.target.value as NonNullable<CoachPay['period']> })}
+                      >
+                        <option value="mes">Mes</option>
+                        <option value="quincena">Quincena</option>
+                      </select>
+                    </Field>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-ink-faint">
+                  Esto solo <b>sugiere</b> el pago de cada clase; el monto final siempre lo podrás editar al confirmar la clase.
+                </p>
+              </div>
+
               {isGymish && (
                 <Field label="Tipo de coach">
                   <div className="grid grid-cols-2 gap-2">

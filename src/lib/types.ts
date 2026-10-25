@@ -260,6 +260,20 @@ export interface StoreOrder {
 //               El gym define libremente cómo le cobra (ver externalFeeNote).
 export type CoachType = 'fijo' | 'externo';
 
+// Config de pago de un coach (sirve para calcular su nómina por clases dadas).
+//  - 'por_clase':    tarifa fija por cada clase impartida. 'rateFull' (opcional)
+//                    es la tarifa cuando la clase queda LLENA (asistentes = cupo).
+//  - 'por_asistente': tarifa por cada persona que asistió.
+//  - 'fijo':         sueldo fijo por periodo ('period'); sus clases son control,
+//                    no suman por clase (lo extra se ajusta a mano en la ocurrencia).
+// El monto de cada clase siempre es EDITABLE por el admin; esto solo lo sugiere.
+export interface CoachPay {
+  mode: 'por_clase' | 'por_asistente' | 'fijo';
+  rate: number; // por clase / por asistente / base por periodo (según 'mode')
+  rateFull?: number; // solo 'por_clase': tarifa si la clase está llena (vacío = igual que rate)
+  period?: 'mes' | 'quincena'; // solo 'fijo': cada cuánto se paga la base
+}
+
 export interface User {
   id: string;
   studioId: string;
@@ -275,6 +289,7 @@ export interface User {
   coachStatus?: CoachStatus; // solo coaches
   coachType?: CoachType; // solo coaches (gym/mixto): de planta o externo. Def. 'fijo'
   externalFeeNote?: string; // coach externo: cómo le cobra el gym (texto libre)
+  coachPay?: CoachPay; // solo coaches: config de pago por clases dadas (nómina)
   externalCoachId?: string; // alumno: coach externo al que pertenece (sus clientes)
   branchId?: string; // sucursal a la que pertenece (multi-sucursal); vacío = sede principal
   source?: 'trial' | 'companion'; // de dónde llegó: clase de prueba / invitado 2x1
