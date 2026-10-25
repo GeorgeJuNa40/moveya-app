@@ -1,0 +1,14 @@
+-- ============================================================================
+-- Move yA — Config de pago por coach (nómina por clases dadas) · Fase 1
+-- ----------------------------------------------------------------------------
+-- Agrega en users una columna JSONB con la forma de pago de cada coach:
+--   { "mode": "por_clase" | "por_asistente" | "fijo",
+--     "rate": number,            -- por clase / por asistente / base por periodo
+--     "rateFull": number|null,   -- (por_clase) tarifa si la clase está llena
+--     "period": "mes" | "quincena" }  -- (fijo) cada cuánto se paga la base
+-- El monto final de cada clase SIEMPRE es editable por el admin; esto solo lo
+-- sugiere. Las ocurrencias de clase y su doble confirmación llegan en la Fase 2.
+--
+-- Cómo usarlo: Supabase → SQL Editor → pega TODO → Run. Seguro re-ejecutarlo.
+-- ============================================================================
+alter table public.users add column if not exists coach_pay jsonb;
