@@ -74,6 +74,17 @@ export async function fetchClassLogs(studioId: string, fromDate: string, toDate:
   return (data ?? []).map(mapClassLog);
 }
 
+// Genera las ocurrencias PENDIENTES que falten en el rango (clases ya pasadas
+// que nadie confirmó). Solo admin. Idempotente. Devuelve cuántas creó.
+export async function ensureClassLogs(fromDate: string, toDate: string): Promise<number> {
+  const { data, error } = await supabase.rpc('ensure_class_logs', { p_from: fromDate, p_to: toDate });
+  if (error) {
+    console.error('ensureClassLogs', error);
+    return 0;
+  }
+  return typeof data === 'number' ? data : 0;
+}
+
 // El COACH confirma que dio una clase (y deja los asistentes).
 export async function coachConfirmClass(sessionId: string, occurredOn: string, attendees: number): Promise<boolean> {
   const { error } = await supabase.rpc('coach_confirm_class', {
