@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Badge, Button, StatCard } from '../../components/ui';
 import Avatar from '../../components/Avatar';
+import StaffBookModal from './StaffBookModal';
 import { fmtDay, fmtTime, fmtDate, usd } from '../../lib/format';
 import { PERIOD_NOUN, PERIOD_DAYS, periodOf } from '../../lib/periods';
 import type { MembershipState, Package, Payment, PaymentMethod, User } from '../../lib/types';
@@ -67,6 +68,7 @@ export default function MembersCRM() {
   const [query, setQuery] = useState('');
   const [detail, setDetail] = useState<User | null>(null);
   const [payFor, setPayFor] = useState<User | null>(null);
+  const [bookFor, setBookFor] = useState<{ student: User; headline?: string } | null>(null);
   const [adding, setAdding] = useState(false);
   // Vista: miembros activos o dados de baja/vetados.
   const [view, setView] = useState<'active' | 'inactive'>('active');
@@ -554,6 +556,7 @@ export default function MembersCRM() {
 
                 <div className="flex justify-end gap-2">
                   <Button variant="ghost" onClick={() => setDetail(null)}>Cerrar</Button>
+                  <Button variant="secondary" onClick={() => { setBookFor({ student: detail }); setDetail(null); }}>Reservar clase</Button>
                   <Button onClick={() => { setPayFor(detail); setDetail(null); }}>Registrar pago</Button>
                 </div>
               </>
@@ -573,7 +576,19 @@ export default function MembersCRM() {
           onSubmit={(userId, packageId, method, opts) => {
             registerManualPlan(userId, packageId, method, opts);
             setPayFor(null);
+            // Atajo: tras el registro manual, ofrecer reservarle una clase.
+            const stu = students.find((s) => s.id === userId);
+            if (stu) setBookFor({ student: stu, headline: `Pago registrado ✓ para ${stu.fullName}. ¿Le reservas una clase ahora? (opcional)` });
           }}
+        />
+      )}
+
+      {/* Reserva manual del staff por un alumno (ficha o atajo tras registrar pago) */}
+      {bookFor && (
+        <StaffBookModal
+          student={bookFor.student}
+          headline={bookFor.headline}
+          onClose={() => setBookFor(null)}
         />
       )}
 

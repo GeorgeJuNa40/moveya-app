@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../../lib/store';
-import { PageHeader, Card, Badge, Button, StatCard, EmptyState } from '../../components/ui';
+import { PageHeader, Card, Button, StatCard, EmptyState } from '../../components/ui';
 import { usd } from '../../lib/format';
 import {
-  fetchClassLogs, staffConfirmClass, setClassAmount, logStatus, type ClassLog,
+  fetchClassLogs, ensureClassLogs, staffConfirmClass, setClassAmount, logStatus, type ClassLog,
 } from '../../lib/coachClasses';
 import { notifySuccess } from '../../lib/notify';
 import type { CoachPay } from '../../lib/types';
@@ -41,8 +41,14 @@ export default function CoachClasses() {
   const [logs, setLogs] = useState<ClassLog[]>([]);
   const [draftAmt, setDraftAmt] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
-  const reload = () => void fetchClassLogs(studioId, month.start, month.end).then(setLogs);
+  // Genera las pendientes que falten (clases olvidadas) y luego carga todo.
+  const reload = () => {
+    void ensureClassLogs(month.start, month.end)
+      .then(() => fetchClassLogs(studioId, month.start, month.end))
+      .then(setLogs);
+  };
   useEffect(reload, [studioId, month.start, month.end]);
 
   // Agrupa por coach.
@@ -81,9 +87,62 @@ export default function CoachClasses() {
     setBusy(null);
   };
 
+  // PDF de nómina del mes (letra >= 14pt, paleta de marca).
+  const downloadPdf = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      const PW = doc.internal.pageSize.getWidth();
+      const RIGHT = PW - 15;
+      const SAGE: [number, number, number] = [74, 93, 85];
+      const INK: [number, number, number] = [33, 33, 33];
+      let y = 20;
+      const nl = (h = 7) => { y += h; if (y > 278) { doc.addPage(); y = 20; } };
+
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(22); doc.setTextColor(...SAGE);
+      doc.text(currentStudio!.name, 15, y); nl(9);
+      doc.setFontSize(16); doc.setTextColor(...INK);
+      doc.text('Nómina de coaches — clases dadas', 15, y); nl(7);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(14); doc.setTextColor(110, 122, 115);
+      doc.text(`Periodo: ${month.label}`, 15, y); nl(6);
+      doc.text(`Generado: ${new Date().toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })}`, 15, y); nl(10);
+
+      for (const g of groups) {
+        const coach = coachById.get(g.coachId);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(...SAGE);
+        doc.text(coach?.fullName ?? 'Coach', 15, y); nl(7);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(14); doc.setTextColor(...INK);
+        for (const l of g.confirmed.slice().sort((a, b) => a.occurredOn.localeCompare(b.occurredOn))) {
+          doc.text(`${l.occurredOn}  ${l.title || 'Clase'} (${l.attendees} asist.)`, 18, y);
+          doc.text(usd(l.amount), RIGHT, y, { align: 'right' }); nl(6);
+        }
+        if (g.confirmed.length === 0) { doc.setTextColor(140, 140, 140); doc.text('Sin clases confirmadas este mes', 18, y); doc.setTextColor(...INK); nl(6); }
+        if (g.base > 0) { doc.text('Sueldo fijo', 18, y); doc.text(usd(g.base), RIGHT, y, { align: 'right' }); nl(6); }
+        doc.setFont('helvetica', 'bold'); doc.setTextColor(...SAGE);
+        doc.text('Subtotal coach', 18, y); doc.text(usd(g.total), RIGHT, y, { align: 'right' }); nl(9);
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(...INK);
+      }
+
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(...SAGE);
+      doc.text('Total a pagar', 15, y); doc.text(usd(grandTotal), RIGHT, y, { align: 'right' }); nl(9);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(14); doc.setTextColor(140, 140, 140);
+      doc.text('Solo cuentan clases con doble confirmación (coach ✓ + estudio ✓).', 15, y);
+
+      doc.save(`nomina-coaches-${currentStudio!.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${month.key}.pdf`);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <>
-      <PageHeader title="Clases por coach" subtitle="Confirma las clases dadas y revisa cuánto pagar a cada coach" />
+      <PageHeader
+        title="Clases por coach"
+        subtitle="Confirma las clases dadas y revisa cuánto pagar a cada coach"
+        action={<Button variant="secondary" disabled={downloading || groups.length === 0} onClick={downloadPdf}>{downloading ? 'Generando…' : '⬇ Descargar nómina'}</Button>}
+      />
 
       {/* Selector de mes */}
       <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
@@ -135,7 +194,7 @@ export default function CoachClasses() {
 
                 <div className="divide-y divide-cream-dark">
                   {g.list.map((l) => {
-                    const done = logStatus(l) === 'confirmada';
+                    const staffDone = !!l.staffConfirmedAt;
                     return (
                       <div key={l.id} className="flex flex-wrap items-center gap-2 py-2.5">
                         <div className="min-w-0 flex-1">
@@ -144,7 +203,10 @@ export default function CoachClasses() {
                             {l.occurredOn} · {l.attendees}/{l.capacity || '—'} {l.isFull ? '· llena' : ''}
                           </p>
                         </div>
-                        <Badge tone={done ? 'success' : 'warning'}>{done ? 'Confirmada' : 'Pendiente'}</Badge>
+                        <div className="flex items-center gap-2 text-[11px] font-semibold">
+                          <span className={l.coachConfirmedAt ? 'text-green-700' : 'text-amber-700'}>Coach {l.coachConfirmedAt ? '✓' : '—'}</span>
+                          <span className={l.staffConfirmedAt ? 'text-green-700' : 'text-amber-700'}>Estudio {l.staffConfirmedAt ? '✓' : '—'}</span>
+                        </div>
                         <div className="flex items-center gap-1">
                           <span className="text-sm text-ink-faint">$</span>
                           <input
@@ -154,7 +216,7 @@ export default function CoachClasses() {
                             onChange={(e) => setDraftAmt((p) => ({ ...p, [l.id]: e.target.value }))}
                           />
                         </div>
-                        {done ? (
+                        {staffDone ? (
                           <Button variant="ghost" disabled={busy === l.id} onClick={() => saveAmount(l)}>Guardar monto</Button>
                         ) : (
                           <Button disabled={busy === l.id} onClick={() => confirm(l)}>Confirmar ✓</Button>
