@@ -82,6 +82,7 @@ const Profile = lazyWithReload(() => import('./features/admin/Profile'));
 const CoachDashboard = lazyWithReload(() => import('./features/coach/CoachDashboard'));
 const ProviderDashboard = lazyWithReload(() => import('./features/provider/ProviderDashboard'));
 const CoachCalendar = lazyWithReload(() => import('./features/coach/CoachCalendar'));
+const CoachClassesConfirm = lazyWithReload(() => import('./features/coach/CoachClassesConfirm'));
 const CoachProfile = lazyWithReload(() => import('./features/coach/CoachProfile'));
 
 const StudentDashboard = lazyWithReload(() => import('./features/student/StudentDashboard'));
@@ -356,6 +357,7 @@ export default function App() {
 
       <Route path="/coach" element={<RequireRole role="COACH"><CoachGate><CoachDashboard /></CoachGate></RequireRole>} />
       <Route path="/coach/calendar" element={<RequireRole role="COACH"><CoachGate><CoachCalendar /></CoachGate></RequireRole>} />
+      <Route path="/coach/classes" element={<RequireRole role="COACH"><CoachGate><CoachClassesConfirm /></CoachGate></RequireRole>} />
       <Route path="/coach/profile" element={<RequireRole role="COACH"><CoachGate><CoachProfile /></CoachGate></RequireRole>} />
       <Route path="/coach/routines" element={<RequireRole role="COACH"><CoachGate><RoutinesAdmin /></CoachGate></RequireRole>} />
       <Route path="/coach/store" element={<RequireRole role="COACH"><CoachGate><Store /></CoachGate></RequireRole>} />

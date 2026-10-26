@@ -75,6 +75,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   COACH: [
     { to: '/coach', label: 'Inicio' },
     { to: '/coach/calendar', label: 'Mi Calendario', short: 'Agenda' },
+    { to: '/coach/classes', label: 'Clases por confirmar', short: 'Mi pago' },
     { to: '/coach/store', label: 'Tienda', cap: 'store' },
     { to: '/coach/profile', label: 'Mi Perfil', short: 'Perfil' },
   ],
