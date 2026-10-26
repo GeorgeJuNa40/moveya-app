@@ -1,14 +1,29 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PageHeader, Card, Badge, Button } from '../../components/ui';
 import WeekCalendar from '../../components/WeekCalendar';
 import { useStore } from '../../lib/store';
 import { fmtTime } from '../../lib/format';
+import { fetchClassLogs, coachConfirmClass, localDate, logStatus, type ClassLog } from '../../lib/coachClasses';
+import { notifySuccess } from '../../lib/notify';
 import type { ClassSession } from '../../lib/types';
 
 // Coach: calendario restringido a sus clases + pase de lista (check-in).
 export default function CoachCalendar() {
   const { db, currentUser, markAttendance, isNewStudent } = useStore();
   const [rosterId, setRosterId] = useState<string | null>(null);
+  const [logs, setLogs] = useState<ClassLog[]>([]);
+  const [busyConfirm, setBusyConfirm] = useState(false);
+
+  // Carga las confirmaciones de clase (nómina) de un rango amplio alrededor de hoy.
+  const reloadLogs = () => {
+    const sid = currentUser?.studioId;
+    if (!sid) return;
+    const from = localDate(new Date(Date.now() - 45 * 86400000).toISOString());
+    const to = localDate(new Date(Date.now() + 8 * 86400000).toISOString());
+    void fetchClassLogs(sid, from, to).then(setLogs);
+  };
+  useEffect(reloadLogs, [currentUser?.studioId]);
+  const logFor = (s: ClassSession) => logs.find((l) => l.sessionId === s.id && l.occurredOn === localDate(s.startsAt));
 
   // Volvemos a buscar la sesión en el estado para que el pase de lista se
   // actualice en vivo al marcar asistencia.
@@ -93,6 +108,37 @@ export default function CoachCalendar() {
                 </div>
               ))}
             </div>
+
+            {/* Confirmación de clase dada (para la nómina del coach) */}
+            {(() => {
+              const att = db.bookings.filter((b) => b.sessionId === rosterFor.id && b.status === 'ATTENDED').length;
+              const log = logFor(rosterFor);
+              const confirmedByCoach = !!log?.coachConfirmedAt;
+              const done = log && logStatus(log) === 'confirmada';
+              return (
+                <div className="mt-4 rounded-xl bg-cream-dark/40 p-3">
+                  <p className="mb-2 text-xs text-ink-faint">
+                    Para tu nómina: confirma que diste esta clase. Se registran <b>{att}</b> asistente(s).
+                  </p>
+                  <Button
+                    disabled={busyConfirm}
+                    onClick={async () => {
+                      setBusyConfirm(true);
+                      const ok = await coachConfirmClass(rosterFor.id, localDate(rosterFor.startsAt), att);
+                      if (ok) { notifySuccess(confirmedByCoach ? 'Confirmación actualizada' : 'Clase confirmada ✓'); reloadLogs(); }
+                      setBusyConfirm(false);
+                    }}
+                  >
+                    {confirmedByCoach ? 'Actualizar confirmación' : 'Confirmar clase dada ✓'}
+                  </Button>
+                  {confirmedByCoach && (
+                    <p className={`mt-2 text-xs font-medium ${done ? 'text-green-700' : 'text-amber-700'}`}>
+                      {done ? '✓ Confirmada también por el estudio' : 'Tú ya confirmaste · falta la confirmación del estudio'}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="mt-5 text-right">
               <Button variant="ghost" onClick={() => setRosterId(null)}>
