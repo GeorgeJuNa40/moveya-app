@@ -74,8 +74,8 @@ export default function CoachDashboard() {
           </div>
         </div>
         <p className="mt-3 text-xs text-ink-faint">
-          Solo cuentan las clases con <b>doble confirmación</b> (tú ✓ + estudio ✓). Confirma tus clases en
-          <Link to="/coach/calendar" className="text-brand font-medium"> tu calendario</Link>.
+          Solo cuentan las clases con <b>doble confirmación</b> (tú ✓ + estudio ✓). Confirma tus clases (incluye semanas pasadas) en
+          <Link to="/coach/classes" className="text-brand font-medium"> Clases por confirmar</Link>.
         </p>
       </Card>
 
