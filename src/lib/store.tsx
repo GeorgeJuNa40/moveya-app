@@ -111,6 +111,8 @@ interface StoreValue {
   availableCredits: (userId: string) => number; // créditos usables (activos, con vigencia)
   // Alumno
   bookSession: (sessionId: string, spot?: string) => void;
+  // Reserva del STAFF por un alumno de su estudio (el servidor valida rol + estudio).
+  staffBookSession: (sessionId: string, studentId: string, spot?: string) => Promise<boolean>;
   joinWaitlist: (sessionId: string) => void;
   leaveWaitlist: (bookingId: string) => void;
   cancelBooking: (bookingId: string) => void;
@@ -704,6 +706,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           ),
         };
       });
+    },
+    // Reserva del STAFF a nombre de un alumno (admin/gerente/recepción). Usa la
+    // misma book_session (ya permite al staff reservar por alumnos de su estudio).
+    async staffBookSession(sessionId, studentId, spot) {
+      const { data, error } = await supabase.rpc('book_session', { p_session_id: sessionId, p_spot: spot ?? null, p_user: studentId });
+      if (error) {
+        notifyError('reservar', bookingErrorMessage(error.message || ''));
+        return false;
+      }
+      const res = data as { booking_id: string; user_package_id: string; spot?: string | null } | null;
+      if (!res) return false;
+      setDb((prev) => {
+        const exists = prev.bookings.some((b) => b.id === res.booking_id);
+        const nb: Booking = {
+          id: res.booking_id, userId: studentId, sessionId, userPackageId: res.user_package_id,
+          status: 'RESERVED', createdAt: new Date().toISOString(), spot: res.spot ?? undefined,
+        };
+        return {
+          ...prev,
+          bookings: exists
+            ? prev.bookings.map((b) => (b.id === res.booking_id
+                ? { ...b, status: 'RESERVED', userId: studentId, userPackageId: res.user_package_id, spot: res.spot ?? undefined }
+                : b))
+            : [...prev.bookings, nb],
+          userPackages: prev.userPackages.map((p) =>
+            p.id === res.user_package_id ? { ...p, creditsUsed: p.creditsUsed + 1 } : p,
+          ),
+        };
+      });
+      return true;
     },
     // Cancela una reserva y DEVUELVE el crédito de forma atómica en el servidor
     // (RPC cancel_booking). Si esa función aún no está instalada, usa el respaldo
