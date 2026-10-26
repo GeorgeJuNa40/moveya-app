@@ -118,13 +118,13 @@ export default function CoachCalendar() {
               return (
                 <div className="mt-4 rounded-xl bg-cream-dark/40 p-3">
                   <p className="mb-2 text-xs text-ink-faint">
-                    Para tu nómina: confirma que diste esta clase. Se registran <b>{att}</b> asistente(s).
+                    Para tu nómina: confirma que diste esta clase. Se registran <b>{att}</b> asistente(s) (los del pase de lista).
                   </p>
                   <Button
                     disabled={busyConfirm}
                     onClick={async () => {
                       setBusyConfirm(true);
-                      const ok = await coachConfirmClass(rosterFor.id, localDate(rosterFor.startsAt), att);
+                      const ok = await coachConfirmClass(rosterFor.id, localDate(rosterFor.startsAt));
                       if (ok) { notifySuccess(confirmedByCoach ? 'Confirmación actualizada' : 'Clase confirmada ✓'); reloadLogs(); }
                       setBusyConfirm(false);
                     }}

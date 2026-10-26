@@ -31,7 +31,6 @@ export default function CoachClassesConfirm() {
   const month = months.find((m) => m.key === monthKey) ?? months[0];
 
   const [logs, setLogs] = useState<ClassLog[]>([]);
-  const [draftAtt, setDraftAtt] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -47,19 +46,17 @@ export default function CoachClassesConfirm() {
   const pendingCount = logs.filter((l) => !l.coachConfirmedAt).length;
   const payConfirmed = logs.filter((l) => logStatus(l) === 'confirmada').reduce((a, l) => a + l.amount, 0);
 
-  const attValue = (l: ClassLog) => (l.id in draftAtt ? draftAtt[l.id] : String(l.attendees));
   const confirm = async (l: ClassLog) => {
     if (!l.sessionId) return;
     setBusy(l.id);
-    const att = Math.max(0, Number(attValue(l)) || 0);
-    const ok = await coachConfirmClass(l.sessionId, l.occurredOn, att);
+    const ok = await coachConfirmClass(l.sessionId, l.occurredOn);
     if (ok) { notifySuccess('Clase confirmada ✓'); reload(); }
     setBusy(null);
   };
 
   return (
     <>
-      <PageHeader title="Clases por confirmar" subtitle="Confirma las clases que diste para tu pago — incluye semanas pasadas" />
+      <PageHeader title="Clases por confirmar" subtitle="Marca tu pase de lista y confirma la clase — los asistentes se toman solos de ahí. Incluye semanas pasadas." />
 
       <div className="mb-6 flex gap-2 overflow-x-auto pb-1">
         {months.map((m) => (
@@ -100,17 +97,9 @@ export default function CoachClassesConfirm() {
                     <span className={coachOk ? 'text-green-700' : 'text-amber-700'}>Tú {coachOk ? '✓' : '—'}</span>
                     <span className={studioOk ? 'text-green-700' : 'text-amber-700'}>Estudio {studioOk ? '✓' : '—'}</span>
                   </div>
-                  <label className="flex items-center gap-1 text-xs text-ink-faint">
-                    asist.
-                    <input
-                      type="number" min="0"
-                      className="w-16 rounded-lg border border-cream-dark px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-[var(--brand-primary)]"
-                      value={attValue(l)}
-                      onChange={(e) => setDraftAtt((p) => ({ ...p, [l.id]: e.target.value }))}
-                    />
-                  </label>
+                  {coachOk && <span className="text-xs text-ink-faint">{l.attendees} asist.</span>}
                   <Button disabled={busy === l.id} onClick={() => confirm(l)}>
-                    {coachOk ? 'Actualizar' : 'Confirmar ✓'}
+                    {coachOk ? 'Actualizar' : 'Confirmar clase dada ✓'}
                   </Button>
                 </div>
               );

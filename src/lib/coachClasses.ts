@@ -85,12 +85,12 @@ export async function ensureClassLogs(fromDate: string, toDate: string): Promise
   return typeof data === 'number' ? data : 0;
 }
 
-// El COACH confirma que dio una clase (y deja los asistentes).
-export async function coachConfirmClass(sessionId: string, occurredOn: string, attendees: number): Promise<boolean> {
+// El COACH confirma que dio una clase. Los asistentes se calculan solos en el
+// servidor desde el pase de lista (bookings ATTENDED); el coach no teclea nada.
+export async function coachConfirmClass(sessionId: string, occurredOn: string): Promise<boolean> {
   const { error } = await supabase.rpc('coach_confirm_class', {
     p_session_id: sessionId,
     p_occurred_on: occurredOn,
-    p_attendees: Math.max(0, attendees | 0),
   });
   if (error) {
     notifyError('confirmar clase', error.message || 'No se pudo confirmar');
