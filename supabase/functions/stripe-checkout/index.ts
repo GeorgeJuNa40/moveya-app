@@ -42,14 +42,14 @@ function safeBase(origin: unknown): string {
 }
 
 // Precios de los planes del estudio (en centavos de USD). Deben coincidir con plans.ts.
-const PLAN_PRICES: Record<string, number> = { inicio: 2499, pro: 4999, premium: 9999 };
+const PLAN_PRICES: Record<string, number> = { inicio: 2999, pro: 5499, premium: 11499 };
 // Precios ANUALES (2 meses gratis). Deben coincidir con plans.ts (priceUsdYear).
-const PLAN_PRICES_YEAR: Record<string, number> = { inicio: 24900, pro: 49900, premium: 99900 };
+const PLAN_PRICES_YEAR: Record<string, number> = { inicio: 29900, pro: 54900, premium: 114900 };
 // Precios HEREDADOS (grandfather): estudios con subscription.legacyPricing = true
 // conservan los precios previos al ajuste. Deben coincidir con LEGACY_* de plans.ts.
 const PLAN_PRICES_LEGACY: Record<string, number> = { inicio: 2499, pro: 4499, premium: 8499 };
 const PLAN_PRICES_YEAR_LEGACY: Record<string, number> = { inicio: 24900, pro: 44900, premium: 79900 };
-const FOUNDER_PRO_BASE = 4999;        // base del Fundador (Pro actual)
+const FOUNDER_PRO_BASE = 5499;        // base del Fundador (Pro actual)
 const FOUNDER_PRO_BASE_LEGACY = 4499; // base del Fundador heredado (Pro anterior)
 
 // -------- Comisión de plataforma (Move yA) sobre los pagos en línea de alumnos
