@@ -260,7 +260,7 @@ export default function Landing() {
           <Shot src="/landing/disc-2.jpg" alt="Clase de Pilates reformer en grupo" className="g-wide" />
           <Shot src="/landing/box-1.jpg" alt="Entrenamiento de boxeo en gimnasio" className="g-cell" />
           <Shot src="/landing/disc-3.jpg" alt="Clase de Pilates en colchoneta" className="g-cell" />
-          <Shot src="/landing/box-2.jpg" alt="Clase de boxeo funcional" className="g-cell" />
+          <Shot src="/landing/gym-squat.jpg" alt="Entrenamiento con pesas en gimnasio" className="g-cell" />
         </div>
       </section>
 
@@ -280,7 +280,7 @@ export default function Landing() {
       <section>
         <div className="wrap game">
           <div className="game-media reveal-img">
-            <Shot src="/landing/game.jpg" alt="Alumnas en clase de pilates" />
+            <Shot src="/landing/gym-jump.jpg" alt="Entrenamiento funcional en gimnasio" />
           </div>
           <div className="game-copy reveal">
             <h2>Gamificación que llena clases</h2>
@@ -530,7 +530,7 @@ const CSS = `
 .mya-land .kpi span{font-size:12px;color:var(--muted)}
 .mya-land .starcard{display:flex;gap:22px;align-items:center;margin-top:24px;background:linear-gradient(160deg,rgba(136,184,183,.14),rgba(255,255,255,.5));border:1px solid var(--line);border-radius:24px;padding:22px}
 .mya-land .ring{width:132px;height:132px;border-radius:50%;flex:none;display:grid;place-items:center;background:conic-gradient(var(--mint) calc(var(--p)*1%),rgba(74,93,85,.12) 0);transition:--p .5s}
-.mya-land .ring .rin{width:104px;height:104px;border-radius:50%;background:var(--cream);display:grid;place-items:center}
+.mya-land .ring .rin{width:104px;height:104px;border-radius:50%;background:var(--cream);display:grid;place-items:center;text-align:center}
 .mya-land .ring .n{font-family:var(--serif);font-size:32px;font-weight:600;color:var(--sage)}
 .mya-land .ring small{font-size:11px;color:var(--muted)}
 .mya-land .starside{min-width:0}
@@ -609,7 +609,7 @@ const CSS = `
   .mya-land .hero-visual{margin-top:20px;max-width:460px;margin-left:auto;margin-right:auto;width:100%}
   .mya-land .sub{max-width:100%}
   .mya-land .game{grid-template-columns:1fr;gap:26px}
-  .mya-land .game-media{order:2;max-height:420px;aspect-ratio:16/11}
+  .mya-land .game-media{order:2;max-height:460px;aspect-ratio:4/5}
   .mya-land .grid3,.mya-land .steps,.mya-land .prices{grid-template-columns:1fr}
   .mya-land .price-feat .feat-grid{grid-template-columns:1fr;gap:18px}
   .mya-land .price-feat ul{grid-template-columns:1fr}
