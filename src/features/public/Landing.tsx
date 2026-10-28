@@ -253,13 +253,14 @@ export default function Landing() {
           <p className="lead">Si en tu espacio se dan clases con horario y cupo, Move yA es para ti.</p>
           <div className="disc">
             <span><b>Pilates</b> (reformer, mat, todos)</span>
-            <span>Yoga</span><span>Barre</span><span>Gimnasios boutique</span><span>Disciplinas de bienestar</span>
+            <span>Yoga</span><span>Barre</span><span>Boxeo</span><span>Funcional</span><span>Gimnasios boutique</span><span>Disciplinas de bienestar</span>
           </div>
         </div>
         <div className="wrap gallery">
-          <Shot src="/landing/disc-1.jpg" alt="Clase grupal en colchoneta" className="g-wide" />
-          <Shot src="/landing/disc-2.jpg" alt="Pilates reformer con aro" className="g-tall" />
-          <Shot src="/landing/disc-3.jpg" alt="Clase de pilates mat" className="g-tall" />
+          <Shot src="/landing/disc-2.jpg" alt="Clase de Pilates reformer en grupo" className="g-wide" />
+          <Shot src="/landing/box-1.jpg" alt="Entrenamiento de boxeo en gimnasio" className="g-cell" />
+          <Shot src="/landing/disc-3.jpg" alt="Clase de Pilates en colchoneta" className="g-cell" />
+          <Shot src="/landing/box-2.jpg" alt="Clase de boxeo funcional" className="g-cell" />
         </div>
       </section>
 
@@ -507,10 +508,10 @@ const CSS = `
 .mya-land .disc b{color:var(--clay);font-weight:700}
 
 /* Galería de disciplinas */
-.mya-land .gallery{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:40px}
+.mya-land .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:40px}
 .mya-land .gallery .shot{border-radius:22px;height:auto}
-.mya-land .gallery .g-wide{grid-column:1 / -1;aspect-ratio:16/7;max-height:420px}
-.mya-land .gallery .g-tall{aspect-ratio:3/4;max-height:460px}
+.mya-land .gallery .g-wide{grid-column:1 / -1;aspect-ratio:16/9;max-height:460px}
+.mya-land .gallery .g-cell{aspect-ratio:3/2}
 
 .mya-land .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:46px}
 .mya-land .feat{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:26px;transition:transform .25s,border-color .25s,box-shadow .25s,opacity .8s,translate .8s;min-width:0;box-shadow:0 16px 40px -30px rgba(43,58,50,.5)}
@@ -614,7 +615,7 @@ const CSS = `
   .mya-land .price-feat ul{grid-template-columns:1fr}
   .mya-land .price-feat .amt{font-size:48px}
   .mya-land .prices-rest{max-width:460px}
-  .mya-land .gallery{gap:14px}
+  .mya-land .gallery{gap:14px;grid-template-columns:1fr 1fr}
   /* En pantallas chicas la imagen horizontal se ve COMPLETA (sin recorte). */
   .mya-land .gallery .g-wide{aspect-ratio:auto;max-height:none}
   .mya-land .gallery .g-wide img{height:auto;object-fit:contain;animation:none}
@@ -633,7 +634,7 @@ const CSS = `
   .mya-land .fcard-bot{left:-6px}
   .mya-land section{padding:54px 0}
   .mya-land .starcard{flex-direction:column;text-align:center}
-  .mya-land .gallery{grid-template-columns:1fr 1fr}
+  .mya-land .gallery{grid-template-columns:1fr}
   .mya-land .billtoggle button{padding:8px 14px;font-size:13px}
   .mya-land .billtoggle .save{font-size:9.5px;padding:2px 6px}
 }

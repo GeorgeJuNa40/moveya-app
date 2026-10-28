@@ -52,7 +52,7 @@ export const PROMO_PLAN: PlanId = 'premium'; // plan que se habilita durante la 
 // entregas solo a tus invitados; el servidor además limita a 10 en total.
 export const FOUNDER_CODE = 'FUNDADOR10';
 export const FOUNDER_BOT_USD = 10;
-export const FOUNDER_PRICE_USD = 49.99 + FOUNDER_BOT_USD; // Pro + bot = 59.99
+export const FOUNDER_PRICE_USD = 54.99 + FOUNDER_BOT_USD; // Pro + bot = 64.99
 // Equivalente en pesos (Mercado Pago): Pro MXN + bot. Ajustable.
 export const FOUNDER_BOT_MXN = 200;
 export const FOUNDER_PRICE_MXN = 999 + FOUNDER_BOT_MXN; // Pro MXN + bot = 1199
@@ -123,8 +123,8 @@ export const PLANS: Plan[] = [
   {
     id: 'inicio',
     name: 'Inicio',
-    priceUsd: 24.99,
-    priceUsdYear: 249,
+    priceUsd: 29.99,
+    priceUsdYear: 299,
     priceMxn: 499,
     priceMxnYear: 4990,
     tagline: 'Para estudios, gimnasios y mixtos que empiezan',
@@ -141,8 +141,8 @@ export const PLANS: Plan[] = [
   {
     id: 'pro',
     name: 'Pro',
-    priceUsd: 49.99,
-    priceUsdYear: 499,
+    priceUsd: 54.99,
+    priceUsdYear: 549,
     priceMxn: 999,
     priceMxnYear: 9990,
     tagline: 'El favorito de los negocios en marcha',
@@ -159,8 +159,8 @@ export const PLANS: Plan[] = [
   {
     id: 'premium',
     name: 'Premium',
-    priceUsd: 99.99,
-    priceUsdYear: 999,
+    priceUsd: 114.99,
+    priceUsdYear: 1149,
     priceMxn: 1999,
     priceMxnYear: 19990,
     tagline: 'Para negocios en pleno crecimiento',

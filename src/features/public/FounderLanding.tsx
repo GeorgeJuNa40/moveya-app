@@ -90,6 +90,16 @@ export default function FounderLanding() {
         )}
       </section>
 
+      {/* Imagen de impacto */}
+      <section className="mx-auto mt-10 max-w-3xl px-5">
+        <img
+          src="/landing/box-1.jpg"
+          alt="Entrenamiento en gimnasio"
+          loading="lazy"
+          className="h-64 w-full rounded-3xl object-cover shadow-zen sm:h-80"
+        />
+      </section>
+
       {/* Oferta */}
       <section className="mx-auto mt-10 max-w-md px-5">
         <div className="overflow-hidden rounded-3xl shadow-zen">
@@ -140,6 +150,15 @@ export default function FounderLanding() {
               <p className="mt-1 text-sm text-ink-soft">{s.d}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Para todas las disciplinas */}
+      <section className="mx-auto mt-14 max-w-4xl px-5">
+        <div className="grid grid-cols-3 gap-3">
+          <img src="/landing/disc-2.jpg" alt="Clase de Pilates" loading="lazy" className="aspect-[3/2] w-full rounded-2xl object-cover" />
+          <img src="/landing/box-2.jpg" alt="Clase de boxeo" loading="lazy" className="aspect-[3/2] w-full rounded-2xl object-cover" />
+          <img src="/landing/box-3.jpg" alt="Gimnasio boutique" loading="lazy" className="aspect-[3/2] w-full rounded-2xl object-cover" />
         </div>
       </section>
 
