@@ -160,10 +160,13 @@ async function applyStoreOrder(m: Record<string, string>, s: Stripe.Checkout.Ses
   const { data: order } = await admin.from('store_orders').select('*').eq('id', m.order_id).single();
   if (!order) return;
 
-  await admin
-    .from('store_orders')
-    .update({ status: 'fulfilled', provider: 'stripe', paid_ref: s.id, fulfilled_at: new Date().toISOString() })
-    .eq('id', order.id);
+  // Entrega atómica: marca entregado, DESCUENTA STOCK y registra cada venta en
+  // product_sales (sold_by='online'). Idempotente por el estado del pedido.
+  await admin.rpc('fulfill_store_order', {
+    p_order_id: order.id,
+    p_provider: 'stripe',
+    p_paid_ref: s.id,
+  });
 
   await admin.from('payments').insert({
     id: crypto.randomUUID(),

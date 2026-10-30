@@ -67,7 +67,10 @@ export default function Reports() {
   // Entradas (pagos + ventas de tienda) y salidas (egresos) del periodo.
   const finance = useMemo(() => {
     const paysIn = db.payments.filter((p) => inPeriod(p.paidAt));
-    const salesIn = sales.filter((s) => inPeriod(s.soldAt));
+    // Ventas de tienda del periodo. Las pagadas EN LÍNEA (sold_by='online') ya
+    // entran como pago en `payments`, así que aquí se excluyen para no contarlas
+    // dos veces; quedan solo las de mostrador (pos_sell).
+    const salesIn = sales.filter((s) => inPeriod(s.soldAt) && s.soldBy !== 'online');
     const expIn = expenses.filter((e) => inPeriod(e.spentAt));
     // Comisiones de servicios COBRADAS (consulta realizada + comisión marcada cobrada).
     const commIn = appts.filter((a) => a.status === 'done' && a.commissionPaid && a.commissionUsd > 0 && inPeriod(a.scheduledFor ?? a.createdAt));

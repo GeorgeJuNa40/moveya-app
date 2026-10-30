@@ -124,9 +124,13 @@ async function applyStoreOrder(ref: Ref, mpPaymentId: string, amount: number) {
   if (existing) return;
   const { data: order } = await admin.from('store_orders').select('*').eq('id', ref.order_id).single();
   if (!order) return;
-  await admin.from('store_orders')
-    .update({ status: 'fulfilled', provider: 'mercadopago', paid_ref: mpPaymentId, fulfilled_at: new Date().toISOString() })
-    .eq('id', order.id);
+  // Entrega atomica: marca entregado, DESCUENTA STOCK y registra cada venta en
+  // product_sales (sold_by='online'). Idempotente por el estado del pedido.
+  await admin.rpc('fulfill_store_order', {
+    p_order_id: order.id,
+    p_provider: 'mercadopago',
+    p_paid_ref: mpPaymentId,
+  });
   await admin.from('payments').insert({
     id: crypto.randomUUID(), user_id: ref.user_id, amount_usd: amount || order.total, method: 'card',
     concept: 'Tienda: pedido en linea', paid_at: new Date().toISOString(), registered_by: 'online',
