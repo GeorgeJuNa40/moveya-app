@@ -31,7 +31,7 @@ import type {
 import { planHas, type PlanCapability } from './plans';
 import { applyTheme } from './theme';
 import { setActiveCurrency } from './format';
-import { notifyError, setResyncHandler } from './notify';
+import { notifyError, notifySuccess, setResyncHandler } from './notify';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import {
@@ -183,6 +183,9 @@ interface StoreValue {
   // escrito al registrarse). El `email` es solo el de contacto en la ficha, NO
   // cambia su correo de acceso (login).
   updateMemberProfile: (userId: string, patch: { fullName?: string; phone?: string; email?: string }) => void;
+  // Corrige el CORREO de un miembro actualizando TAMBIÉN su cuenta de acceso (Auth),
+  // para arreglar un correo mal capturado sin borrar/re-registrar. Devuelve true si OK.
+  setMemberEmail: (userId: string, email: string) => Promise<boolean>;
   // Subcuentas / perfiles vinculados (familiares que gestiona el titular).
   accountUser: User | null; // la cuenta con la que se inició sesión (titular)
   activeProfileId: string | null; // perfil activo (null = titular)
@@ -212,6 +215,8 @@ interface StoreValue {
   // miembro y sus datos (cascade). Devuelve true si se eliminó.
   setMemberStatus: (userId: string, status: 'active' | 'inactive' | 'banned') => void;
   deleteMember: (userId: string) => Promise<boolean>;
+  // El propio alumno elimina SU cuenta (y libera su correo). Cierra sesión al terminar.
+  deleteOwnAccount: () => Promise<boolean>;
   updateWhatsapp: (patch: Partial<WhatsappConfig>) => void;
   upsertWhatsappTemplate: (t: WhatsappTemplate) => void;
   deleteWhatsappTemplate: (id: string) => void;
@@ -1234,6 +1239,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setDb((prev) => ({ ...prev, users: prev.users.filter((u) => u.id !== userId) }));
       return true;
     },
+    async deleteOwnAccount() {
+      if (!accountUser) return false;
+      const uid = accountUser.id;
+      const { data, error } = await supabase.functions.invoke('delete-member', { body: { userId: uid } });
+      if (error || (data as { ok?: boolean } | null)?.ok === false) {
+        notifyError('cuenta', (data as { error?: string } | null)?.error ?? error?.message ?? 'No se pudo eliminar tu cuenta.');
+        return false;
+      }
+      try { await supabase.auth.signOut(); } catch { /* ya sin sesión */ }
+      return true;
+    },
     updateMemberProfile(userId, patch) {
       setDb((prev) => ({
         ...prev,
@@ -1251,6 +1267,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (patch.phone !== undefined) row.phone = patch.phone;
       if (patch.email !== undefined) row.email = patch.email;
       if (Object.keys(row).length) void dbUpdate('users', userId, row);
+    },
+    async setMemberEmail(userId, email) {
+      const clean = email.trim();
+      const { data, error } = await supabase.functions.invoke('set-member-email', { body: { userId, email: clean } });
+      if (error || (data as { ok?: boolean } | null)?.ok === false) {
+        notifyError('correo', (data as { error?: string } | null)?.error ?? error?.message ?? 'No se pudo cambiar el correo.');
+        return false;
+      }
+      setDb((prev) => ({
+        ...prev,
+        users: prev.users.map((u) => (u.id === userId ? { ...u, email: clean } : u)),
+      }));
+      notifySuccess('Correo actualizado.');
+      return true;
     },
     async addLinkedProfile(name, birthDate) {
       if (!accountUser) return;

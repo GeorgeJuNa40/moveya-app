@@ -44,7 +44,7 @@ function fmtBirthday(iso?: string): string | null {
 
 // CRM de alumnos: contacto, clases agendadas, membresía y registro de pagos.
 export default function MembersCRM() {
-  const { db, currentStudio, currentUser, studioUsers, membership, registerManualPlan, removeUserPackage, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember, pendingMembership, settleMembershipPayment, waiveMembershipPending, updateMemberProfile } = useStore();
+  const { db, currentStudio, currentUser, studioUsers, membership, registerManualPlan, removeUserPackage, addMember, isNewStudent, pendingPenalty, settlePenalty, waivePenalty, setStudentExternalCoach, setUserBranch, setMemberStatus, deleteMember, pendingMembership, settleMembershipPayment, waiveMembershipPending, updateMemberProfile, setMemberEmail } = useStore();
   // Etiqueta del adeudo de mensualidad según el periodo del paquete del alumno.
   const pendingLabel = (userId: string): string | null => {
     const up = pendingMembership(userId);
@@ -327,7 +327,15 @@ export default function MembersCRM() {
                 <MemberEditCard
                   key={detail.id}
                   member={detail}
-                  onSave={(patch) => { updateMemberProfile(detail.id, patch); setDetail({ ...detail, ...patch }); }}
+                  onSave={async (patch) => {
+                    const { email, ...rest } = patch;
+                    if (Object.keys(rest).length) { updateMemberProfile(detail.id, rest); setDetail({ ...detail, ...rest }); }
+                    // El correo pasa por la Edge Function (cambia también el login de Auth).
+                    if (email !== undefined && email.trim() !== (detail.email ?? '').trim()) {
+                      const ok = await setMemberEmail(detail.id, email);
+                      if (ok) setDetail({ ...detail, ...rest, email: email.trim() });
+                    }
+                  }}
                 />
 
                 <div className="flex items-center gap-2 mb-4">
