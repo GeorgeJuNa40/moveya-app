@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button } from '../../components/ui';
 import Avatar from '../../components/Avatar';
@@ -10,7 +11,8 @@ import { notifySuccess, notifyError } from '../../lib/notify';
 // (si lo necesita) su contraseña. El correo de acceso se muestra, pero no se
 // edita aquí para no romper su inicio de sesión.
 export default function MyProfile() {
-  const { accountUser, updateMyProfile, updateUserAvatar, updatePassword } = useStore();
+  const { accountUser, updateMyProfile, updateUserAvatar, updatePassword, deleteOwnAccount } = useStore();
+  const navigate = useNavigate();
   const u = accountUser!;
 
   const [name, setName] = useState(u.fullName);
@@ -20,6 +22,8 @@ export default function MyProfile() {
   const [pass, setPass] = useState('');
   const [pass2, setPass2] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const inp = 'w-full rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ring-brand';
 
@@ -41,6 +45,16 @@ export default function MyProfile() {
       notifyError('contraseña', (e as Error)?.message ?? 'No se pudo actualizar.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onDeleteAccount = async () => {
+    setDeleting(true);
+    try {
+      const ok = await deleteOwnAccount();
+      if (ok) { notifySuccess('Tu cuenta fue eliminada.'); navigate('/'); }
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -95,6 +109,42 @@ export default function MyProfile() {
               {saving ? 'Guardando…' : 'Actualizar contraseña'}
             </Button>
           </div>
+        </Card>
+
+        {/* Zona de peligro: el alumno elimina su propia cuenta (libera su correo). */}
+        <Card className="border border-red-200 bg-red-50/40 p-6">
+          <h2 className="text-sm font-semibold text-red-700">Eliminar mi cuenta</h2>
+          <p className="mt-0.5 text-xs text-ink-faint">
+            Borra tu cuenta y tus datos de forma permanente y libera tu correo para volver a usarlo. Esta acción no se puede deshacer.
+          </p>
+          {!confirmDel ? (
+            <div className="mt-3 flex justify-end">
+              <button
+                onClick={() => setConfirmDel(true)}
+                className="rounded-2xl border border-red-300 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
+              >
+                Eliminar mi cuenta
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+              <span className="text-xs text-red-700">¿Seguro? Esto no se puede deshacer.</span>
+              <button
+                onClick={() => setConfirmDel(false)}
+                disabled={deleting}
+                className="rounded-2xl px-4 py-2 text-sm font-semibold text-ink-soft hover:bg-cream-dark/40 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={onDeleteAccount}
+                disabled={deleting}
+                className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60"
+              >
+                {deleting ? 'Eliminando…' : 'Sí, eliminar'}
+              </button>
+            </div>
+          )}
         </Card>
       </div>
     </>

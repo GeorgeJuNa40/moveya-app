@@ -38,14 +38,24 @@ Deno.serve(async (req) => {
 
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
-    const { data: me } = await admin.from('users').select('studio_id, role').eq('id', ud.user.id).maybeSingle();
     const { data: target } = await admin.from('users').select('studio_id, role').eq('id', targetId).maybeSingle();
-    if (!me || !target) return json({ ok: false, error: 'No encontrado' }, 404);
+    if (!target) return json({ ok: false, error: 'No encontrado' }, 404);
 
-    // Solo dueño/gerente, del mismo estudio, y nunca al dueño.
-    if (!['STUDIO_ADMIN', 'BRANCH_ADMIN'].includes(me.role)) return json({ ok: false, error: 'Sin permiso' }, 403);
-    if (target.studio_id !== me.studio_id) return json({ ok: false, error: 'Otro estudio' }, 403);
-    if (target.role === 'STUDIO_ADMIN') return json({ ok: false, error: 'No se puede eliminar al dueño' }, 403);
+    const isSelf = targetId === ud.user.id;
+    if (isSelf) {
+      // Auto-eliminación: cualquier miembro puede borrar SU propia cuenta (y liberar
+      // su correo), salvo el DUEÑO del estudio (debe cancelar su suscripción primero).
+      if (target.role === 'STUDIO_ADMIN') {
+        return json({ ok: false, error: 'El dueño no puede eliminar su cuenta aquí. Cancela tu suscripción primero.' }, 403);
+      }
+    } else {
+      // Borrado por el personal: solo dueño/gerente, del mismo estudio, y nunca al dueño.
+      const { data: me } = await admin.from('users').select('studio_id, role').eq('id', ud.user.id).maybeSingle();
+      if (!me) return json({ ok: false, error: 'No encontrado' }, 404);
+      if (!['STUDIO_ADMIN', 'BRANCH_ADMIN'].includes(me.role)) return json({ ok: false, error: 'Sin permiso' }, 403);
+      if (target.studio_id !== me.studio_id) return json({ ok: false, error: 'Otro estudio' }, 403);
+      if (target.role === 'STUDIO_ADMIN') return json({ ok: false, error: 'No se puede eliminar al dueño' }, 403);
+    }
 
     // Desliga invitados (2x1) que lo tuvieran como anfitrión.
     try { await admin.from('class_guests').update({ host_user_id: null }).eq('host_user_id', targetId); } catch { /* best-effort */ }
