@@ -78,3 +78,67 @@ export function monthlyUsd(row: MoveyaStudioRow): number {
 export function trialExpired(row: MoveyaStudioRow): boolean {
   return row.status === 'TRIALING' && !!row.trialEndsAt && new Date(row.trialEndsAt).getTime() < Date.now();
 }
+
+// ---------------------------------------------------------------------------
+// Catálogo "Recomendados Move yA" (platform_products) — gestión del dueño.
+// ---------------------------------------------------------------------------
+export interface PlatformProductRow {
+  id: string;
+  title: string;
+  description: string;
+  imageUrl: string;
+  url: string;
+  category: string;
+  priceText: string;
+  active: boolean;
+  sortOrder: number;
+}
+
+// Lista TODO el catálogo (incluye inactivos). Solo responde al dueño.
+export async function fetchAllPlatformProducts(): Promise<PlatformProductRow[]> {
+  const { data, error } = await supabase.rpc('moveya_products_all');
+  if (error || !data) return [];
+  // deno-lint-ignore no-explicit-any
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    title: String(r.title ?? ''),
+    description: String(r.description ?? ''),
+    imageUrl: String(r.image_url ?? ''),
+    url: String(r.url ?? ''),
+    category: String(r.category ?? ''),
+    priceText: String(r.price_text ?? ''),
+    active: r.active !== false,
+    sortOrder: Number(r.sort_order ?? 0),
+  }));
+}
+
+// Crea (id vacío) o edita un producto. Devuelve true si salió bien.
+export async function savePlatformProduct(p: {
+  id?: string;
+  title: string;
+  description?: string;
+  imageUrl?: string;
+  url: string;
+  category?: string;
+  priceText?: string;
+  active?: boolean;
+  sortOrder?: number;
+}): Promise<boolean> {
+  const { error } = await supabase.rpc('moveya_product_save', {
+    p_id: p.id ?? '',
+    p_title: p.title,
+    p_description: p.description ?? '',
+    p_image_url: p.imageUrl ?? '',
+    p_url: p.url,
+    p_category: p.category ?? '',
+    p_price_text: p.priceText ?? '',
+    p_active: p.active ?? true,
+    p_sort: p.sortOrder ?? 0,
+  });
+  return !error;
+}
+
+export async function deletePlatformProduct(id: string): Promise<boolean> {
+  const { error } = await supabase.rpc('moveya_product_delete', { p_id: id });
+  return !error;
+}
