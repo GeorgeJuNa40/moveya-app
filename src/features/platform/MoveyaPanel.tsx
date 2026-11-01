@@ -5,6 +5,7 @@ import { notifySuccess, notifyError } from '../../lib/notify';
 import {
   fetchMoveyaOverview, monthlyUsd, trialExpired, type MoveyaStudioRow,
   fetchAllPlatformProducts, savePlatformProduct, deletePlatformProduct, type PlatformProductRow,
+  fetchLeads, saveLead, deleteLead, type MoveyaLead, type LeadStatus, LEAD_STATUSES, LEAD_STATUS_LABEL,
 } from '../../lib/platform';
 import { FOUNDER_CODE } from '../../lib/plans';
 
@@ -18,7 +19,7 @@ const PLAN_LABEL: Record<string, string> = { inicio: 'Inicio', pro: 'Pro', premi
 const inp = 'w-full rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ring-brand';
 const FOUNDER_CAP = 10;
 
-type Tab = 'resumen' | 'productos';
+type Tab = 'resumen' | 'crm' | 'productos';
 
 export default function MoveyaPanel() {
   const [tab, setTab] = useState<Tab>('resumen');
@@ -38,7 +39,7 @@ export default function MoveyaPanel() {
           </div>
           {/* Menú de pestañas */}
           <div className="mt-3 flex gap-2">
-            {([['resumen', 'Resumen'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
+            {([['resumen', 'Resumen'], ['crm', 'CRM'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
@@ -54,7 +55,7 @@ export default function MoveyaPanel() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-6 px-4 py-6">
-        {tab === 'resumen' ? <ResumenTab /> : <ProductosTab />}
+        {tab === 'resumen' ? <ResumenTab /> : tab === 'crm' ? <CrmTab /> : <ProductosTab />}
       </main>
     </div>
   );
@@ -150,6 +151,199 @@ function ResumenTab() {
       <p className="pt-2 text-center text-xs text-ink-faint">
         El MRR cuenta solo suscripciones activas (pagando). Las comisiones de paquetes/tienda se ven en tu panel de Stripe/Mercado Pago.
       </p>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pestaña CRM (leads / prospectos de estudios)
+// ---------------------------------------------------------------------------
+const LEAD_TONE: Record<LeadStatus, 'neutral' | 'brand' | 'warning' | 'success' | 'danger'> = {
+  nuevo: 'neutral', contactado: 'brand', demo: 'warning', prueba: 'warning', pagando: 'success', perdido: 'danger',
+};
+const waLink = (phone: string) => `https://wa.me/${phone.replace(/[^\d]/g, '')}`;
+const emptyLead = (): MoveyaLead => ({
+  id: '', name: '', ownerName: '', phone: '', email: '', city: '', status: 'nuevo', source: '', notes: '', nextFollowup: null, createdAt: '',
+});
+
+function CrmTab() {
+  const [leads, setLeads] = useState<MoveyaLead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<LeadStatus | 'todos'>('todos');
+  const [draft, setDraft] = useState<MoveyaLead | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+
+  const load = () => { setLoading(true); fetchLeads().then(setLeads).finally(() => setLoading(false)); };
+  useEffect(load, []);
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { todos: leads.length };
+    for (const s of LEAD_STATUSES) c[s] = leads.filter((l) => l.status === s).length;
+    return c;
+  }, [leads]);
+
+  const shown = filter === 'todos' ? leads : leads.filter((l) => l.status === filter);
+
+  const save = async () => {
+    if (!draft) return;
+    if (!draft.name.trim()) { notifyError('lead', 'El nombre es obligatorio.'); return; }
+    setSaving(true);
+    const ok = await saveLead({
+      id: draft.id || undefined,
+      name: draft.name.trim(), ownerName: draft.ownerName.trim(), phone: draft.phone.trim(),
+      email: draft.email.trim(), city: draft.city.trim(), status: draft.status,
+      source: draft.source.trim(), notes: draft.notes.trim(), nextFollowup: draft.nextFollowup || null,
+    });
+    setSaving(false);
+    if (ok) { notifySuccess(draft.id ? 'Lead actualizado.' : 'Lead agregado.'); setDraft(null); load(); }
+    else notifyError('lead', 'No se pudo guardar.');
+  };
+
+  const changeStatus = async (l: MoveyaLead, status: LeadStatus) => {
+    const ok = await saveLead({ ...l, id: l.id, status });
+    if (ok) load(); else notifyError('lead', 'No se pudo actualizar.');
+  };
+
+  const remove = async (id: string) => {
+    const ok = await deleteLead(id);
+    setConfirmDel(null);
+    if (ok) { notifySuccess('Lead eliminado.'); load(); } else notifyError('lead', 'No se pudo eliminar.');
+  };
+
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-ink">Leads / prospectos</h2>
+          <p className="text-xs text-ink-faint">Estudios y gyms por contactar y dar seguimiento.</p>
+        </div>
+        {!draft && (
+          <button onClick={() => setDraft(emptyLead())} className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90">+ Agregar</button>
+        )}
+      </div>
+
+      {/* Filtro por etapa */}
+      <div className="flex flex-wrap gap-2">
+        {(['todos', ...LEAD_STATUSES] as (LeadStatus | 'todos')[]).map((s) => (
+          <button
+            key={s}
+            onClick={() => setFilter(s)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+              filter === s ? 'bg-brand text-cream' : 'bg-cream-dark/50 text-ink-soft hover:bg-cream-dark'
+            }`}
+          >
+            {s === 'todos' ? 'Todos' : LEAD_STATUS_LABEL[s]} ({counts[s] ?? 0})
+          </button>
+        ))}
+      </div>
+
+      {/* Formulario crear/editar */}
+      {draft && (
+        <Card className="p-4 space-y-3">
+          <h3 className="text-sm font-semibold text-ink">{draft.id ? 'Editar lead' : 'Nuevo lead'}</h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Nombre del estudio/gym *</span>
+              <input className={inp} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Estudio Pilates Sur" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Contacto (persona)</span>
+              <input className={inp} value={draft.ownerName} onChange={(e) => setDraft({ ...draft, ownerName: e.target.value })} placeholder="Ana López" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Teléfono / WhatsApp</span>
+              <input className={inp} value={draft.phone} onChange={(e) => setDraft({ ...draft, phone: e.target.value })} placeholder="+52..." />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Correo</span>
+              <input className={inp} value={draft.email} onChange={(e) => setDraft({ ...draft, email: e.target.value })} placeholder="correo@..." />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Ciudad</span>
+              <input className={inp} value={draft.city} onChange={(e) => setDraft({ ...draft, city: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Etapa</span>
+              <select className={inp} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as LeadStatus })}>
+                {LEAD_STATUSES.map((s) => <option key={s} value={s}>{LEAD_STATUS_LABEL[s]}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Origen</span>
+              <input className={inp} value={draft.source} onChange={(e) => setDraft({ ...draft, source: e.target.value })} placeholder="WhatsApp, Instagram, referido…" />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Próximo seguimiento</span>
+              <input type="date" className={inp} value={draft.nextFollowup ?? ''} onChange={(e) => setDraft({ ...draft, nextFollowup: e.target.value || null })} />
+            </label>
+            <label className="block sm:col-span-2">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Notas</span>
+              <textarea className={`${inp} min-h-20`} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Qué habló, objeciones, siguiente paso…" />
+            </label>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setDraft(null)} disabled={saving} className="rounded-2xl px-4 py-2 text-sm font-semibold text-ink-soft hover:bg-cream-dark/40 disabled:opacity-60">Cancelar</button>
+            <button onClick={save} disabled={saving} className="rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar'}</button>
+          </div>
+        </Card>
+      )}
+
+      {/* Lista */}
+      {loading ? (
+        <p className="text-ink-faint">Cargando…</p>
+      ) : shown.length === 0 && !draft ? (
+        <Card className="p-8 text-center text-ink-faint">
+          {leads.length === 0 ? <>Aún no tienes leads. Toca <span className="font-semibold text-ink">+ Agregar</span> para registrar el primero.</> : 'No hay leads en esta etapa.'}
+        </Card>
+      ) : (
+        <section className="space-y-3">
+          {shown.map((l) => (
+            <Card key={l.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="truncate font-semibold text-ink">{l.name}</span>
+                    <Badge tone={LEAD_TONE[l.status]}>{LEAD_STATUS_LABEL[l.status]}</Badge>
+                    {l.city && <Badge tone="neutral">{l.city}</Badge>}
+                  </div>
+                  <p className="mt-1 text-xs text-ink-faint">
+                    {l.ownerName && <>{l.ownerName} · </>}
+                    {l.phone && <a href={waLink(l.phone)} target="_blank" rel="noreferrer" className="text-brand underline">{l.phone}</a>}
+                    {l.source && <> · {l.source}</>}
+                  </p>
+                  {l.notes && <p className="mt-1 line-clamp-2 text-xs text-ink-soft">{l.notes}</p>}
+                </div>
+                {l.nextFollowup && (
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs text-ink-faint">seguimiento</p>
+                    <p className="text-sm font-semibold text-ink">{fmtDate(l.nextFollowup)}</p>
+                  </div>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                <select
+                  value={l.status}
+                  onChange={(e) => changeStatus(l, e.target.value as LeadStatus)}
+                  className="rounded-2xl border border-cream-dark bg-white px-2 py-1.5 text-xs font-semibold text-ink-soft"
+                >
+                  {LEAD_STATUSES.map((s) => <option key={s} value={s}>{LEAD_STATUS_LABEL[s]}</option>)}
+                </select>
+                <button onClick={() => setDraft({ ...l })} className="rounded-2xl border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">Editar</button>
+                {confirmDel === l.id ? (
+                  <>
+                    <span className="self-center text-xs text-red-700">¿Seguro?</span>
+                    <button onClick={() => remove(l.id)} className="rounded-2xl bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">Sí</button>
+                    <button onClick={() => setConfirmDel(null)} className="rounded-2xl px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">No</button>
+                  </>
+                ) : (
+                  <button onClick={() => setConfirmDel(l.id)} className="rounded-2xl border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Borrar</button>
+                )}
+              </div>
+            </Card>
+          ))}
+        </section>
+      )}
     </>
   );
 }

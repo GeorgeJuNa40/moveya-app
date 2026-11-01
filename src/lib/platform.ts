@@ -142,3 +142,76 @@ export async function deletePlatformProduct(id: string): Promise<boolean> {
   const { error } = await supabase.rpc('moveya_product_delete', { p_id: id });
   return !error;
 }
+
+// ---------------------------------------------------------------------------
+// CRM de leads (prospectos de estudios/gyms) — gestión del dueño.
+// ---------------------------------------------------------------------------
+export type LeadStatus = 'nuevo' | 'contactado' | 'demo' | 'prueba' | 'pagando' | 'perdido';
+export const LEAD_STATUSES: LeadStatus[] = ['nuevo', 'contactado', 'demo', 'prueba', 'pagando', 'perdido'];
+export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
+  nuevo: 'Nuevo', contactado: 'Contactado', demo: 'Demo', prueba: 'En prueba', pagando: 'Pagando', perdido: 'Perdido',
+};
+
+export interface MoveyaLead {
+  id: string;
+  name: string;
+  ownerName: string;
+  phone: string;
+  email: string;
+  city: string;
+  status: LeadStatus;
+  source: string;
+  notes: string;
+  nextFollowup: string | null; // YYYY-MM-DD
+  createdAt: string;
+}
+
+export async function fetchLeads(): Promise<MoveyaLead[]> {
+  const { data, error } = await supabase.rpc('moveya_leads_all');
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    name: String(r.name ?? ''),
+    ownerName: String(r.owner_name ?? ''),
+    phone: String(r.phone ?? ''),
+    email: String(r.email ?? ''),
+    city: String(r.city ?? ''),
+    status: (r.status ?? 'nuevo') as LeadStatus,
+    source: String(r.source ?? ''),
+    notes: String(r.notes ?? ''),
+    nextFollowup: (r.next_followup ?? null) as string | null,
+    createdAt: String(r.created_at ?? ''),
+  }));
+}
+
+export async function saveLead(l: {
+  id?: string;
+  name: string;
+  ownerName?: string;
+  phone?: string;
+  email?: string;
+  city?: string;
+  status?: LeadStatus;
+  source?: string;
+  notes?: string;
+  nextFollowup?: string | null;
+}): Promise<boolean> {
+  const { error } = await supabase.rpc('moveya_lead_save', {
+    p_id: l.id ?? '',
+    p_name: l.name,
+    p_owner_name: l.ownerName ?? '',
+    p_phone: l.phone ?? '',
+    p_email: l.email ?? '',
+    p_city: l.city ?? '',
+    p_status: l.status ?? 'nuevo',
+    p_source: l.source ?? '',
+    p_notes: l.notes ?? '',
+    p_next_followup: l.nextFollowup || null,
+  });
+  return !error;
+}
+
+export async function deleteLead(id: string): Promise<boolean> {
+  const { error } = await supabase.rpc('moveya_lead_delete', { p_id: id });
+  return !error;
+}
