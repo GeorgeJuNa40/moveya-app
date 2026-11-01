@@ -298,6 +298,7 @@ export interface User {
   memberStatus?: 'active' | 'inactive' | 'banned';
   providerServiceId?: string; // (rol PROVIDER) id del servicio que atiende
   managedBy?: string; // (subcuenta/perfil vinculado) id del titular que lo gestiona
+  platformOwner?: boolean; // dueño de la plataforma Move yA (acceso al panel de creador)
 }
 
 // Invitado a una clase (sin cuenta): clase de prueba o acompañante (2x1). Ocupa

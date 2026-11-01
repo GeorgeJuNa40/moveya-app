@@ -50,6 +50,7 @@ const ResetPassword = lazyWithReload(() => import('./features/onboarding/ResetPa
 const Landing = lazyWithReload(() => import('./features/public/Landing'));
 // Landing exclusiva del Programa Fundador (por invitación, link privado).
 const FounderLanding = lazyWithReload(() => import('./features/public/FounderLanding'));
+const MoveyaPanel = lazyWithReload(() => import('./features/platform/MoveyaPanel'));
 // Página pública informativa del estudio (sin login).
 const StudioInfoPage = lazyWithReload(() => import('./features/public/StudioInfoPage'));
 // Registro de entrada (check-in) — se abre al escanear el QR de acceso.
@@ -166,6 +167,15 @@ function RequireRole({ role, children }: { role: Role | Role[]; children: React.
     );
   }
   return <AppShell>{children}</AppShell>;
+}
+
+// Guard del panel de CREADOR: solo el dueño de plataforma (platform_owner en su
+// cuenta titular). Página independiente, sin AppShell de estudio.
+function RequirePlatformOwner({ children }: { children: React.ReactNode }) {
+  const { accountUser } = useStore();
+  if (!accountUser) return <Navigate to="/" replace />;
+  if (!accountUser.platformOwner) return <Navigate to={homeFor(accountUser.role)} replace />;
+  return <>{children}</>;
 }
 
 export default function App() {
@@ -377,6 +387,9 @@ export default function App() {
       <Route path="/app/store" element={<RequireRole role="STUDENT"><Store /></RequireRole>} />
       <Route path="/app/suggestions" element={<RequireRole role="STUDENT"><Suggestions /></RequireRole>} />
       <Route path="/app/profile" element={<RequireRole role="STUDENT"><MyProfile /></RequireRole>} />
+
+      {/* Panel de creador Move yA (oculto; solo dueño de plataforma). */}
+      <Route path="/moveya" element={<RequirePlatformOwner><MoveyaPanel /></RequirePlatformOwner>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

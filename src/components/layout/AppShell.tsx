@@ -257,7 +257,7 @@ function MoreIcon({ className = 'h-6 w-6' }: { className?: string }) {
 }
 
 export default function AppShell({ children }: { children: ReactNode }) {
-  const { currentUser, currentStudio, logout, updateUserAvatar, can } = useStore();
+  const { currentUser, accountUser, currentStudio, logout, updateUserAvatar, can } = useStore();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -378,6 +378,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
         />
         <InstallAppButton className="mb-2" />
         <NotificationsButton className="mb-2" />
+        {accountUser?.platformOwner && (
+          <NavLink
+            to="/moveya"
+            className="mb-2 block w-full rounded-2xl border border-brand/40 bg-brand-soft px-3 py-2 text-left text-sm font-semibold text-brand hover:bg-brand hover:text-cream"
+          >
+            ◆ Panel Move yA
+          </NavLink>
+        )}
         <button
           onClick={handleLogout}
           className="w-full rounded-2xl px-3 py-2 text-sm text-ink-soft hover:bg-brand-soft text-left"
