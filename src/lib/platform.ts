@@ -215,3 +215,75 @@ export async function deleteLead(id: string): Promise<boolean> {
   const { error } = await supabase.rpc('moveya_lead_delete', { p_id: id });
   return !error;
 }
+
+// ---------------------------------------------------------------------------
+// WhatsApp de ventas de Move yA (estudio-plataforma oculto) — config del dueño.
+// ---------------------------------------------------------------------------
+export interface MoveyaWaConfig {
+  botEnabled: boolean;
+  aiActive: boolean;
+  number: string;
+  knowledge: string[];
+  connected: boolean;     // el número ya está conectado (whatsapp_accounts)
+  phoneNumberId: string;
+}
+
+export async function fetchWaConfig(): Promise<MoveyaWaConfig | null> {
+  const { data, error } = await supabase.rpc('moveya_wa_config');
+  if (error || !data) return null;
+  const d = data as Record<string, unknown>;
+  return {
+    botEnabled: d.botEnabled === true,
+    aiActive: d.aiActive === true,
+    number: String(d.number ?? ''),
+    knowledge: Array.isArray(d.knowledge) ? (d.knowledge as string[]) : [],
+    connected: d.connected === true,
+    phoneNumberId: String(d.phoneNumberId ?? ''),
+  };
+}
+
+export async function saveWaConfig(c: {
+  botEnabled: boolean; aiActive: boolean; number: string; knowledge: string[];
+}): Promise<boolean> {
+  const { error } = await supabase.rpc('moveya_wa_config_set', {
+    p_bot_enabled: c.botEnabled,
+    p_ai_active: c.aiActive,
+    p_number: c.number,
+    p_knowledge: c.knowledge,
+  });
+  return !error;
+}
+
+// Base de conocimiento de VENTAS por defecto (para el bot de Move yA). El dueño
+// puede cargarla con un botón y luego editarla a su gusto.
+export const DEFAULT_SALES_KB: string[] = [
+  'Move yA es una plataforma (software/app) para administrar estudios de Pilates, gimnasios y estudios fitness: reservas, pagos, membresías, coaches y comunicación con tus alumnos, todo en un solo lugar.',
+  'Move yA funciona desde el celular y la computadora; tus alumnos reservan sus clases desde su teléfono y tú administras todo desde tu panel.',
+  'Move yA sirve para estudios de Pilates, reformer, gimnasios, funcional, yoga y estudios mixtos (gimnasio + estudio).',
+  'Con Move yA dejas de usar libretas, Excel y grupos de WhatsApp: todo queda ordenado y automático.',
+  'Move yA es multi-rol: dueño o administrador del estudio, gerente de sucursal, recepción u operador, coach o entrenador, alumno y proveedor de servicios (nutrición, kinesiología, etc.).',
+  'Cada rol ve solo lo que le toca: el alumno reserva y ve sus créditos, el coach ve sus clases y pasa lista, recepción cobra y agenda, y el administrador ve reportes y configura todo.',
+  'Los planes mensuales de Move yA son: Inicio $499 MXN ($29.99 USD), Pro $999 MXN ($54.99 USD) y Premium $1,999 MXN ($114.99 USD) al mes.',
+  'El plan Inicio cuesta $499 MXN ($29.99 USD) al mes e incluye lo esencial para operar: calendario, reservas, control de acceso, membresías y paquetes, CRM, avisos de vencimiento y cobros con Stripe y Mercado Pago.',
+  'El plan Inicio permite hasta 50 alumnos activos y hasta 3 coaches.',
+  'El plan Pro cuesta $999 MXN ($54.99 USD) al mes e incluye todo lo del plan Inicio más alumnos ilimitados, hasta 8 coaches, tu marca propia (white-label), coaches externos, recompensas, servicios, reportes y página pública con QR.',
+  'El plan Premium cuesta $1,999 MXN ($114.99 USD) al mes e incluye todo lo del plan Pro más coaches ilimitados, tienda, bot de WhatsApp con inteligencia artificial, multi-sucursal con gerente por sede, reportes avanzados y soporte prioritario.',
+  'También existe pago anual con 2 meses gratis: Inicio $4,990 MXN ($299 USD), Pro $9,990 MXN ($549 USD) y Premium $19,990 MXN ($1,149 USD) al año.',
+  'La suscripción de Move yA es mensual (o anual) y la puedes cancelar cuando quieras, sin permanencia forzada.',
+  'Move yA tiene una prueba de $20 MXN ($1 USD) por 14 días con acceso Premium completo, para que lo pruebes sin riesgo.',
+  'Durante la prueba de 14 días tienes todas las funciones Premium; al terminar eliges tu plan y, si no activas uno, el panel se bloquea.',
+  'Programa Fundador: los primeros 10 estudios obtienen el plan Premium a precio de Pro más el bot, por $1,199 MXN ($64.99 USD) al mes de por vida, con el precio congelado para siempre.',
+  'El Programa Fundador es por invitación con el código FUNDADOR10 y está limitado a solo 10 estudios; cuando se llena, se cierra.',
+  'En el plan Premium la primera sucursal va incluida y cada sucursal adicional suma $990 MXN ($49 USD) al mes.',
+  'Pagos: Move yA se conecta con Stripe y Mercado Pago; el dinero de tus alumnos llega directo a TU cuenta, no pasa por nosotros.',
+  'No te cobramos comisión por las ventas a tus alumnos; tú te quedas con tu dinero (aplican solo las comisiones normales de Stripe o Mercado Pago).',
+  'El bot de WhatsApp en modo básico es gratis; el bot con inteligencia artificial, que entiende mejor y conversa más natural, se incluye en Premium y en Fundador.',
+  'Para empezar con Move yA regístrate aquí: https://moveyaapp.app/#/entrar',
+  '¿Eres de los primeros 10 estudios? Entra al Programa Fundador aquí: https://moveyaapp.app/#/fundador',
+  'Más información y acceso a Move yA: https://moveyaapp.app',
+  '¿Necesito conocimientos técnicos? No, Move yA es fácil de usar y te ayudamos a configurarlo.',
+  '¿Puedo cancelar cuando quiera? Sí, la suscripción es mensual y sin permanencia.',
+  '¿Funciona para gimnasios y no solo Pilates? Sí, sirve para gimnasios, estudios de Pilates, funcional, yoga y negocios mixtos.',
+  '¿Mis alumnos tienen que descargar una app de una tienda? No, entran desde el navegador del celular y también pueden instalarla como acceso directo.',
+  '¿Puedo usar mi propia marca? Sí, Move yA es white-label: tu nombre, tus colores y tu logo.',
+];

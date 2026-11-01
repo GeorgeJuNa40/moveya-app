@@ -6,6 +6,7 @@ import {
   fetchMoveyaOverview, monthlyUsd, trialExpired, type MoveyaStudioRow,
   fetchAllPlatformProducts, savePlatformProduct, deletePlatformProduct, type PlatformProductRow,
   fetchLeads, saveLead, deleteLead, type MoveyaLead, type LeadStatus, LEAD_STATUSES, LEAD_STATUS_LABEL,
+  fetchWaConfig, saveWaConfig, DEFAULT_SALES_KB, type MoveyaWaConfig,
 } from '../../lib/platform';
 import { FOUNDER_CODE } from '../../lib/plans';
 
@@ -19,7 +20,7 @@ const PLAN_LABEL: Record<string, string> = { inicio: 'Inicio', pro: 'Pro', premi
 const inp = 'w-full rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ring-brand';
 const FOUNDER_CAP = 10;
 
-type Tab = 'resumen' | 'crm' | 'productos';
+type Tab = 'resumen' | 'crm' | 'whatsapp' | 'productos';
 
 export default function MoveyaPanel() {
   const [tab, setTab] = useState<Tab>('resumen');
@@ -39,7 +40,7 @@ export default function MoveyaPanel() {
           </div>
           {/* Menú de pestañas */}
           <div className="mt-3 flex gap-2">
-            {([['resumen', 'Resumen'], ['crm', 'CRM'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
+            {([['resumen', 'Resumen'], ['crm', 'CRM'], ['whatsapp', 'WhatsApp'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
@@ -55,7 +56,7 @@ export default function MoveyaPanel() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-6 px-4 py-6">
-        {tab === 'resumen' ? <ResumenTab /> : tab === 'crm' ? <CrmTab /> : <ProductosTab />}
+        {tab === 'resumen' ? <ResumenTab /> : tab === 'crm' ? <CrmTab /> : tab === 'whatsapp' ? <WhatsAppTab /> : <ProductosTab />}
       </main>
     </div>
   );
@@ -344,6 +345,122 @@ function CrmTab() {
           ))}
         </section>
       )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pestaña WHATSAPP (bot de ventas de Move yA) — entrega 1: config + KB
+// ---------------------------------------------------------------------------
+function WhatsAppTab() {
+  const [cfg, setCfg] = useState<MoveyaWaConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [botEnabled, setBotEnabled] = useState(false);
+  const [aiActive, setAiActive] = useState(false);
+  const [number, setNumber] = useState('');
+  const [kb, setKb] = useState<string[]>([]);
+  const [newFact, setNewFact] = useState('');
+
+  useEffect(() => {
+    fetchWaConfig().then((c) => {
+      if (c) {
+        setCfg(c);
+        setBotEnabled(c.botEnabled); setAiActive(c.aiActive); setNumber(c.number); setKb(c.knowledge);
+      }
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    const ok = await saveWaConfig({ botEnabled, aiActive, number: number.trim(), knowledge: kb });
+    setSaving(false);
+    if (ok) { notifySuccess('Configuración guardada.'); setCfg({ ...(cfg as MoveyaWaConfig), botEnabled, aiActive, number: number.trim(), knowledge: kb }); }
+    else notifyError('whatsapp', 'No se pudo guardar.');
+  };
+
+  const addFact = () => { const t = newFact.trim(); if (!t) return; setKb([...kb, t]); setNewFact(''); };
+  const loadDefault = () => { const merged = Array.from(new Set([...kb, ...DEFAULT_SALES_KB])); setKb(merged); notifySuccess('Base de ventas cargada. Revisa y guarda.'); };
+
+  if (loading) return <p className="text-ink-faint">Cargando…</p>;
+  if (!cfg) return <Card className="p-6 text-center text-ink-soft">No se pudo cargar. Verifica tu acceso de creador y que el SQL de WhatsApp esté aplicado.</Card>;
+
+  return (
+    <>
+      {/* Estado de conexión */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Número de Move yA</h2>
+            <p className="text-xs text-ink-faint">El número con el que tu bot de ventas recibe y responde.</p>
+          </div>
+          {cfg.connected ? <Badge tone="success">Conectado</Badge> : <Badge tone="warning">Sin conectar</Badge>}
+        </div>
+        {!cfg.connected && (
+          <p className="mt-2 rounded-xl bg-cream-dark/40 p-3 text-xs text-ink-soft">
+            Aún no conectas un número dedicado de Move yA. La bandeja (ver/responder) llega en la siguiente entrega;
+            por ahora puedes dejar lista la configuración del bot y su base de conocimiento.
+          </p>
+        )}
+        <label className="mt-3 block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Número (solo informativo)</span>
+          <input className={inp} value={number} onChange={(e) => setNumber(e.target.value)} placeholder="+52..." />
+        </label>
+      </Card>
+
+      {/* Config del bot */}
+      <Card className="p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-ink">Bot de ventas</h2>
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-sm text-ink-soft">Bot encendido (responde automático)</span>
+          <input type="checkbox" checked={botEnabled} onChange={(e) => setBotEnabled(e.target.checked)} />
+        </label>
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-sm text-ink-soft">Respuestas con IA (Claude) <span className="text-ink-faint">· requiere saldo Anthropic</span></span>
+          <input type="checkbox" checked={aiActive} onChange={(e) => setAiActive(e.target.checked)} />
+        </label>
+        <p className="text-xs text-ink-faint">Con IA apagada, el bot responde con reglas (gratis) usando la base de abajo. Si el prospecto pide una persona, pasa a tu bandeja.</p>
+      </Card>
+
+      {/* Base de conocimiento de ventas */}
+      <Card className="p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Base de conocimiento (ventas)</h2>
+            <p className="text-xs text-ink-faint">Frases que el bot usa para responder. Una idea por línea.</p>
+          </div>
+          <button onClick={loadDefault} className="shrink-0 rounded-full border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">Cargar base</button>
+        </div>
+
+        <div className="flex gap-2">
+          <input className={inp} value={newFact} onChange={(e) => setNewFact(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addFact(); }} placeholder="Agregar una frase…" />
+          <button onClick={addFact} className="shrink-0 rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90">Agregar</button>
+        </div>
+
+        {kb.length === 0 ? (
+          <p className="text-xs text-ink-faint">Sin frases aún. Toca <span className="font-semibold text-ink">Cargar base</span> para empezar con la de ventas.</p>
+        ) : (
+          <ul className="space-y-2">
+            {kb.map((fact, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <textarea
+                  className={`${inp} min-h-10`}
+                  value={fact}
+                  onChange={(e) => setKb(kb.map((f, j) => (j === i ? e.target.value : f)))}
+                />
+                <button onClick={() => setKb(kb.filter((_, j) => j !== i))} className="mt-1 shrink-0 rounded-2xl border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">✕</button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="text-xs text-ink-faint">{kb.length} frase{kb.length === 1 ? '' : 's'}</p>
+      </Card>
+
+      <div className="flex justify-end">
+        <button onClick={save} disabled={saving} className="rounded-2xl bg-brand px-5 py-2.5 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">
+          {saving ? 'Guardando…' : 'Guardar configuración'}
+        </button>
+      </div>
     </>
   );
 }
