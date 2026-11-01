@@ -142,12 +142,19 @@ function homeFor(role: Role): string {
   return '/app';
 }
 
+// Inicio según el usuario: el dueño de plataforma (Move yA) aterriza en su panel
+// de creador; los demás, en el inicio de su rol.
+function homeForUser(u: { role: Role; platformOwner?: boolean }): string {
+  if (u.platformOwner) return '/moveya';
+  return homeFor(u.role);
+}
+
 function RequireRole({ role, children }: { role: Role | Role[]; children: React.ReactNode }) {
   const { currentUser, logout } = useStore();
   if (!currentUser) return <Navigate to="/" replace />;
   const allowed = Array.isArray(role) ? role : [role];
   if (!allowed.includes(currentUser.role)) {
-    return <Navigate to={homeFor(currentUser.role)} replace />;
+    return <Navigate to={homeForUser(currentUser)} replace />;
   }
   // Miembro dado de baja o vetado: no puede usar la app.
   if (currentUser.role === 'STUDENT' && currentUser.memberStatus && currentUser.memberStatus !== 'active') {
@@ -316,7 +323,7 @@ export default function App() {
         path="/"
         element={
           currentUser ? (
-            <Navigate to={homeFor(currentUser.role)} replace />
+            <Navigate to={homeForUser(currentUser)} replace />
           ) : new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('ceu') ? (
             <OnboardingScreen />
           ) : (
@@ -330,7 +337,7 @@ export default function App() {
         path="/entrar"
         element={
           currentUser ? (
-            <Navigate to={homeFor(currentUser.role)} replace />
+            <Navigate to={homeForUser(currentUser)} replace />
           ) : (
             <OnboardingScreen />
           )
