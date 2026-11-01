@@ -114,6 +114,7 @@ function mapUser(r: Row): User {
       ? { bio: r.coach_bio ?? '', specialties: r.coach_specialties ?? [], yearsExp: r.coach_years_exp ?? 0 }
       : undefined,
     source: r.source ?? undefined,
+    platformOwner: r.platform_owner ?? false,
   };
 }
 
