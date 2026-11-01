@@ -10,6 +10,7 @@ import {
   fetchWaConfig, saveWaConfig, DEFAULT_SALES_KB, type MoveyaWaConfig,
   fetchWaConvos, fetchWaThread, markWaRead, setWaMode, sendWaReply,
   type WaConversation, type WaMessage,
+  fetchEmailsRecent, sendEmailCampaign, brandedEmailHtml, DEFAULT_EMAIL_FROM, DEFAULT_EMAIL_TEMPLATES, type MoveyaEmail,
 } from '../../lib/platform';
 import { FOUNDER_CODE } from '../../lib/plans';
 
@@ -23,7 +24,7 @@ const PLAN_LABEL: Record<string, string> = { inicio: 'Inicio', pro: 'Pro', premi
 const inp = 'w-full rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ring-brand';
 const FOUNDER_CAP = 10;
 
-type Tab = 'resumen' | 'pagos' | 'crm' | 'whatsapp' | 'productos';
+type Tab = 'resumen' | 'pagos' | 'crm' | 'whatsapp' | 'email' | 'productos';
 
 export default function MoveyaPanel() {
   const [tab, setTab] = useState<Tab>('resumen');
@@ -43,7 +44,7 @@ export default function MoveyaPanel() {
           </div>
           {/* Menú de pestañas */}
           <div className="mt-3 flex gap-2">
-            {([['resumen', 'Resumen'], ['pagos', 'Pagos'], ['crm', 'CRM'], ['whatsapp', 'WhatsApp'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
+            {([['resumen', 'Resumen'], ['pagos', 'Pagos'], ['crm', 'CRM'], ['whatsapp', 'WhatsApp'], ['email', 'Email'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
@@ -59,7 +60,7 @@ export default function MoveyaPanel() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-6 px-4 py-6">
-        {tab === 'resumen' ? <ResumenTab /> : tab === 'pagos' ? <PagosTab /> : tab === 'crm' ? <CrmTab /> : tab === 'whatsapp' ? <WhatsAppTab /> : <ProductosTab />}
+        {tab === 'resumen' ? <ResumenTab /> : tab === 'pagos' ? <PagosTab /> : tab === 'crm' ? <CrmTab /> : tab === 'whatsapp' ? <WhatsAppTab /> : tab === 'email' ? <EmailTab /> : <ProductosTab />}
       </main>
     </div>
   );
@@ -708,6 +709,136 @@ function CrmTab() {
           </div>
         </div>
       ))}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pestaña EMAIL (campañas a leads vía Resend)
+// ---------------------------------------------------------------------------
+function EmailTab() {
+  const [leads, setLeads] = useState<MoveyaLead[]>([]);
+  const [emails, setEmails] = useState<MoveyaEmail[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState<'todos' | 'etapa' | 'manual'>('todos');
+  const [stage, setStage] = useState<LeadStatus>('nuevo');
+  const [manual, setManual] = useState({ email: '', name: '' });
+  const [from, setFrom] = useState(DEFAULT_EMAIL_FROM);
+  const [subject, setSubject] = useState('');
+  const [bodyText, setBodyText] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const load = () => {
+    fetchLeads().then(setLeads).catch(() => {});
+    fetchEmailsRecent().then(setEmails).catch(() => {}).finally(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const recipients = useMemo(() => {
+    if (mode === 'manual') return manual.email.trim() ? [{ email: manual.email.trim(), name: manual.name.trim() }] : [];
+    let ls = leads.filter((l) => l.email);
+    if (mode === 'etapa') ls = ls.filter((l) => l.status === stage);
+    return ls.map((l) => ({ email: l.email, name: l.ownerName || l.name }));
+  }, [mode, stage, manual, leads]);
+
+  const send = async () => {
+    if (!subject.trim() || !bodyText.trim()) { notifyError('email', 'Falta asunto o contenido.'); return; }
+    if (recipients.length === 0) { notifyError('email', 'No hay destinatarios con correo.'); return; }
+    setSending(true);
+    const res = await sendEmailCampaign({ from: from.trim(), subject: subject.trim(), html: brandedEmailHtml(bodyText), recipients });
+    setSending(false);
+    if ('error' in res && res.error) { notifyError('email', res.error); return; }
+    const r = res as { sent: number; failed: number };
+    notifySuccess(`Enviados: ${r.sent}${r.failed ? ` · fallidos: ${r.failed}` : ''}.`);
+    fetchEmailsRecent().then(setEmails);
+  };
+
+  return (
+    <>
+      <Card className="p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-ink">Enviar correo a leads</h2>
+
+        {/* Destinatarios */}
+        <div>
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Para</span>
+          <div className="flex flex-wrap gap-2">
+            {([['todos', 'Todos con correo'], ['etapa', 'Por etapa'], ['manual', 'Uno manual']] as [typeof mode, string][]).map(([k, label]) => (
+              <button key={k} onClick={() => setMode(k)} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${mode === k ? 'bg-brand text-cream' : 'bg-cream-dark/50 text-ink-soft hover:bg-cream-dark'}`}>{label}</button>
+            ))}
+          </div>
+          {mode === 'etapa' && (
+            <select className={`${inp} mt-2`} value={stage} onChange={(e) => setStage(e.target.value as LeadStatus)}>
+              {LEAD_STATUSES.map((s) => <option key={s} value={s}>{LEAD_STATUS_LABEL[s]}</option>)}
+            </select>
+          )}
+          {mode === 'manual' && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <input className={inp} value={manual.email} onChange={(e) => setManual({ ...manual, email: e.target.value })} placeholder="correo@..." />
+              <input className={inp} value={manual.name} onChange={(e) => setManual({ ...manual, name: e.target.value })} placeholder="Nombre (opcional)" />
+            </div>
+          )}
+          <p className="mt-1 text-xs text-ink-faint">{recipients.length} destinatario{recipients.length === 1 ? '' : 's'}</p>
+        </div>
+
+        {/* Plantillas */}
+        <div>
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Plantillas</span>
+          <div className="flex flex-wrap gap-2">
+            {DEFAULT_EMAIL_TEMPLATES.map((t) => (
+              <button key={t.name} onClick={() => { setSubject(t.subject); setBodyText(t.body); }} className="rounded-full border border-cream-dark px-3 py-1 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">{t.name}</button>
+            ))}
+          </div>
+        </div>
+
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Remitente (debe ser @moveyaapp.app)</span>
+          <input className={inp} value={from} onChange={(e) => setFrom(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Asunto</span>
+          <input className={inp} value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Asunto del correo" />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Mensaje</span>
+          <textarea className={`${inp} min-h-40`} value={bodyText} onChange={(e) => setBodyText(e.target.value)} placeholder="Escribe tu mensaje… Usa {{nombre}} y se reemplaza por el nombre de cada lead." />
+          <span className="mt-1 block text-xs text-ink-faint">Se envía con el diseño de marca Move yA. <code className="rounded bg-cream-dark/50 px-1">{'{{nombre}}'}</code> se personaliza por destinatario.</span>
+        </label>
+
+        <div className="flex justify-end">
+          <button onClick={send} disabled={sending || recipients.length === 0} className="rounded-2xl bg-brand px-5 py-2.5 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">
+            {sending ? 'Enviando…' : `Enviar a ${recipients.length}`}
+          </button>
+        </div>
+      </Card>
+
+      {/* Enviados recientes */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">Enviados recientes</h2>
+        {loading ? (
+          <p className="text-ink-faint">Cargando…</p>
+        ) : emails.length === 0 ? (
+          <Card className="p-6 text-center text-ink-faint">Aún no has enviado correos.</Card>
+        ) : (
+          <Card className="divide-y divide-cream-dark p-0">
+            {emails.map((e) => (
+              <div key={e.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-ink">{e.toName || e.toEmail}</p>
+                  <p className="truncate text-xs text-ink-faint">{e.subject}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  {e.status === 'sent' ? <Badge tone="success">Enviado</Badge> : <Badge tone="danger">Error</Badge>}
+                  <p className="mt-0.5 text-[10px] text-ink-faint">{fmtDate(e.sentAt)}</p>
+                </div>
+              </div>
+            ))}
+          </Card>
+        )}
+      </section>
+
+      <p className="pt-1 text-center text-xs text-ink-faint">
+        Envíos vía Resend desde tu dominio verificado. Respeta a quien pida "baja". Las respuestas llegan a tu correo de moveyaapp.app (Zoho).
+      </p>
     </>
   );
 }
