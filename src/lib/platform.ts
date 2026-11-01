@@ -241,6 +241,91 @@ export async function deleteLead(id: string): Promise<boolean> {
   return !error;
 }
 
+// ---------------------------------------------------------------------------
+// Email marketing (Resend) — envío a leads y registro.
+// ---------------------------------------------------------------------------
+export const DEFAULT_EMAIL_FROM = 'Move yA <hola@moveyaapp.app>';
+
+export interface MoveyaEmail {
+  id: string;
+  toEmail: string;
+  toName: string;
+  subject: string;
+  status: string; // sent | error
+  error: string;
+  sentAt: string;
+}
+
+export async function fetchEmailsRecent(limit = 50): Promise<MoveyaEmail[]> {
+  const { data, error } = await supabase.rpc('moveya_emails_recent', { p_limit: limit });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    toEmail: String(r.to_email ?? ''),
+    toName: String(r.to_name ?? ''),
+    subject: String(r.subject ?? ''),
+    status: String(r.status ?? ''),
+    error: String(r.error ?? ''),
+    sentAt: String(r.sent_at ?? ''),
+  }));
+}
+
+export async function sendEmailCampaign(input: {
+  from: string; subject: string; html: string;
+  recipients: { email: string; name?: string }[];
+}): Promise<{ ok: boolean; sent: number; failed: number } | { ok: false; error: string }> {
+  const { data, error } = await supabase.functions.invoke('send-email', { body: input });
+  if (error) {
+    let detail = error.message || 'No se pudo enviar';
+    try {
+      const ctx = (error as { context?: Response }).context;
+      if (ctx && typeof ctx.clone === 'function') { const b = await ctx.clone().json(); if (b?.error) detail = String(b.error); }
+    } catch { /* sin cuerpo */ }
+    return { ok: false, error: detail };
+  }
+  const d = (data ?? {}) as { ok?: boolean; sent?: number; failed?: number };
+  return { ok: d.ok === true, sent: Number(d.sent ?? 0), failed: Number(d.failed ?? 0) };
+}
+
+// Envuelve texto plano en un HTML de correo con la marca Move yA (estilos
+// en línea, como requieren los clientes de correo).
+export function brandedEmailHtml(bodyText: string): string {
+  const safe = bodyText
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+  return `<!doctype html><html><body style="margin:0;background:#F4F1EA;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;padding:24px;">
+    <div style="background:#4A5D55;border-radius:16px 16px 0 0;padding:20px 24px;color:#FAF8F3;">
+      <div style="font-size:18px;font-weight:bold;letter-spacing:.5px;">Move yA</div>
+    </div>
+    <div style="background:#ffffff;border-radius:0 0 16px 16px;padding:24px;color:#212121;font-size:15px;line-height:1.6;">
+      ${safe}
+    </div>
+    <p style="color:#8a8a8a;font-size:12px;text-align:center;margin:16px 8px;">
+      Recibes este correo porque mostraste interés en Move yA. Si no quieres recibir más, responde con "baja".
+    </p>
+  </div></body></html>`;
+}
+
+// Plantillas de arranque (editables antes de enviar).
+export const DEFAULT_EMAIL_TEMPLATES: { name: string; subject: string; body: string }[] = [
+  {
+    name: 'Primer contacto',
+    subject: 'Ordena las reservas y cobros de tu estudio con Move yA',
+    body: 'Hola {{nombre}},\n\nSoy de Move yA. Ayudamos a estudios de Pilates y gimnasios a ordenar sus reservas, pagos, membresías y la comunicación con sus alumnos — todo desde el celular.\n\n¿Te late que te muestre en 10 min cómo se vería para tu estudio? Tenemos una prueba de $1 USD por 14 días con acceso completo.\n\nResponde este correo y agendamos. 💚\n\nMove yA · moveyaapp.app',
+  },
+  {
+    name: 'Seguimiento',
+    subject: '¿Lo viste? Te dejo cómo arrancar con Move yA',
+    body: 'Hola {{nombre}},\n\nTe escribí hace unos días sobre Move yA. Sé que el día a día del estudio no para 🙂\n\nSi quieres, arranca tú mismo la prueba de $1 por 14 días aquí: https://moveyaapp.app/#/entrar — y cualquier duda, me respondes.\n\nMove yA',
+  },
+  {
+    name: 'Invitación a demo',
+    subject: 'Te muestro Move yA en una demo rápida',
+    body: 'Hola {{nombre}},\n\n¿Tienes 15 minutos esta semana? Te enseño Move yA en vivo con el caso de tu estudio y resolvemos tus dudas.\n\nDime 2 horarios que te acomoden y lo agendamos.\n\nMove yA',
+  },
+];
+
 // Captura pública de un lead (desde el formulario de embudo, sin login).
 export async function captureLead(l: {
   name: string; ownerName?: string; phone?: string; email?: string; city?: string; note?: string; source?: string;
