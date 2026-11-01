@@ -180,9 +180,11 @@ async function applyStoreOrder(m: Record<string, string>, s: Stripe.Checkout.Ses
   });
 }
 
-// Precios de referencia (informativos) — deben coincidir con plans.ts.
-const PLAN_PRICE_USD: Record<string, number> = { inicio: 24.99, pro: 44.99, premium: 84.99 };
-const PLAN_PRICE_USD_YEAR: Record<string, number> = { inicio: 249, pro: 449, premium: 799 };
+// Precios de referencia (informativos) — deben coincidir con plans.ts (precios
+// VIGENTES para estudios nuevos). Los estudios heredados (legacy, p. ej. JES)
+// conservan su precio guardado; sus renovaciones no recalculan este valor.
+const PLAN_PRICE_USD: Record<string, number> = { inicio: 29.99, pro: 54.99, premium: 114.99 };
+const PLAN_PRICE_USD_YEAR: Record<string, number> = { inicio: 299, pro: 549, premium: 1149 };
 
 async function applySubscription(m: Record<string, string>, s: Stripe.Checkout.Session) {
   const { data: studio } = await admin
