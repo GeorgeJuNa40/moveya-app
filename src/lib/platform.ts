@@ -73,6 +73,31 @@ export function monthlyUsd(row: MoveyaStudioRow): number {
   return monthly ?? 0;
 }
 
+// ---- Transacciones del SaaS (lo que los estudios le pagan a Move yA) ----
+export interface MoveyaPayment {
+  id: string;
+  studioName: string;
+  amount: number;
+  currency: string; // USD | MXN
+  concept: string;
+  provider: string; // stripe | mercadopago
+  paidAt: string;
+}
+
+export async function fetchMoveyaPayments(limit = 100): Promise<MoveyaPayment[]> {
+  const { data, error } = await supabase.rpc('moveya_payments_recent', { p_limit: limit });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    studioName: String(r.studio_name ?? ''),
+    amount: Number(r.amount ?? 0),
+    currency: String(r.currency ?? 'USD'),
+    concept: String(r.concept ?? ''),
+    provider: String(r.provider ?? ''),
+    paidAt: String(r.paid_at ?? ''),
+  }));
+}
+
 // Una prueba/promo cuyo plazo ya venció (sigue marcada TRIALING pero el acceso
 // ya está bloqueado por fecha).
 export function trialExpired(row: MoveyaStudioRow): boolean {

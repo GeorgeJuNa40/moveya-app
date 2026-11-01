@@ -13,6 +13,18 @@ const DAY = 86400000;
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
+// Registra un cobro SaaS de Move yA (MXN via MP). Best-effort, idempotente por ref.
+async function recordMoveyaPayment(studioId: string | undefined, amount: number, concept: string, ref: string) {
+  if (!studioId || !ref || !(amount > 0)) return;
+  try {
+    const { data: st } = await admin.from('studios').select('name').eq('id', studioId).maybeSingle();
+    await admin.from('moveya_payments').insert({
+      id: crypto.randomUUID(), studio_id: studioId, studio_name: st?.name ?? null,
+      amount, currency: 'MXN', concept, provider: 'mercadopago', ref, paid_at: new Date().toISOString(),
+    });
+  } catch (_) { /* best-effort: no interrumpir el webhook */ }
+}
+
 async function mpGet(path: string, token: string) {
   const res = await fetch(`${MP_API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
   return { ok: res.ok, data: await res.json().catch(() => ({})) };
@@ -64,16 +76,16 @@ Deno.serve(async (req) => {
         await applyStoreOrder(ref, String(id), Number(pay.transaction_amount) || 0);
       } else if (ref.kind === 'promo' && ref.studio_id) {
         // Promo de bienvenida pagada → abre 14 días de acceso Premium.
-        await applyPromo(ref, String(id));
+        await applyPromo(ref, String(id), Number(pay.transaction_amount) || 0);
       } else if (ref.kind === 'subscription' && ref.studio_id) {
         // Pago de la suscripción SaaS aprobado → activa el plan del estudio.
-        await applySaaS(ref, String(preId ?? id), true);
+        await applySaaS(ref, String(preId ?? id), true, Number(pay.transaction_amount) || 0, String(id));
       } else if (preId) {
         // El pago viene ligado a un preapproval: lo consultamos para su referencia.
         const { ok: pok, data: pre } = await readWithAnyToken(`/preapproval/${preId}`);
         if (pok) {
           const pref = parseRef(pre?.external_reference);
-          if (pref.kind === 'subscription' && pref.studio_id) await applySaaS(pref, String(preId), pre?.status === 'authorized' || pay?.status === 'approved');
+          if (pref.kind === 'subscription' && pref.studio_id) await applySaaS(pref, String(preId), pre?.status === 'authorized' || pay?.status === 'approved', Number(pay.transaction_amount) || 0, String(id));
           if (pref.kind === 'membership_sub' && (pre?.status === 'authorized' || pay?.status === 'approved')) await applyMembership(pref, String(preId));
         }
       }
@@ -139,7 +151,7 @@ async function applyStoreOrder(ref: Ref, mpPaymentId: string, amount: number) {
 }
 
 // -------- Promo de bienvenida: abre 14 días de acceso Premium (idempotente) --------
-async function applyPromo(ref: Ref, mpPaymentId: string) {
+async function applyPromo(ref: Ref, mpPaymentId: string, amount = 0) {
   const { data: studio } = await admin.from('studios').select('subscription, whatsapp').eq('id', ref.studio_id).single();
   const sub = studio?.subscription ?? {};
   if (sub.promoPaymentId === mpPaymentId) return; // ya aplicada
@@ -153,10 +165,11 @@ async function applyPromo(ref: Ref, mpPaymentId: string) {
   // El bot con IA (costo) NO se enciende en la promo; se activa al pagar Premium.
   const whatsapp = { ...(studio?.whatsapp ?? {}), aiActive: false };
   await admin.from('studios').update({ subscription: next, whatsapp }).eq('id', ref.studio_id);
+  await recordMoveyaPayment(ref.studio_id, amount, 'Prueba $1 (14 días)', mpPaymentId);
 }
 
 // -------- Suscripción SaaS del estudio (activar/cancelar) --------
-async function applySaaS(ref: Ref, preapprovalId: string, active: boolean) {
+async function applySaaS(ref: Ref, preapprovalId: string, active: boolean, amount = 0, payRef = '') {
   const { data: studio } = await admin.from('studios').select('subscription, whatsapp').eq('id', ref.studio_id).single();
   const end = new Date(Date.now() + 30 * DAY);
   const next = {
@@ -168,6 +181,7 @@ async function applySaaS(ref: Ref, preapprovalId: string, active: boolean) {
   // Premium (y Fundador, que ES premium) incluye el bot con IA.
   const whatsapp = { ...(studio?.whatsapp ?? {}), aiActive: ref.plan === 'premium' && active };
   await admin.from('studios').update({ subscription: next, whatsapp }).eq('id', ref.studio_id);
+  if (active) await recordMoveyaPayment(ref.studio_id, amount, ref.founder ? 'Fundador' : `Suscripción ${ref.plan ?? ''}`.trim(), payRef);
 }
 
 // -------- Membresía domiciliada por MP: crea el acceso (idempotente) --------

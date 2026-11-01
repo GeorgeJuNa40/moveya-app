@@ -4,6 +4,7 @@ import { Card, StatCard, Badge } from '../../components/ui';
 import { notifySuccess, notifyError } from '../../lib/notify';
 import {
   fetchMoveyaOverview, monthlyUsd, trialExpired, type MoveyaStudioRow,
+  fetchMoveyaPayments, type MoveyaPayment,
   fetchAllPlatformProducts, savePlatformProduct, deletePlatformProduct, type PlatformProductRow,
   fetchLeads, saveLead, deleteLead, type MoveyaLead, type LeadStatus, LEAD_STATUSES, LEAD_STATUS_LABEL,
   fetchWaConfig, saveWaConfig, DEFAULT_SALES_KB, type MoveyaWaConfig,
@@ -169,6 +170,7 @@ function riskReason(r: MoveyaStudioRow): string {
 
 function PagosTab() {
   const [rows, setRows] = useState<MoveyaStudioRow[]>([]);
+  const [pays, setPays] = useState<MoveyaPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(false);
 
@@ -177,6 +179,7 @@ function PagosTab() {
       .then((r) => { setRows(r); if (!r.length) setErr(true); })
       .catch(() => setErr(true))
       .finally(() => setLoading(false));
+    fetchMoveyaPayments().then(setPays).catch(() => {});
   }, []);
 
   const f = useMemo(() => {
@@ -276,8 +279,30 @@ function PagosTab() {
         )}
       </section>
 
+      {/* Transacciones recientes (cobros SaaS registrados) */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">Transacciones recientes</h2>
+        {pays.length === 0 ? (
+          <Card className="p-6 text-center text-ink-faint">
+            Aún no hay cobros registrados. Las nuevas suscripciones, renovaciones y pruebas de aquí en adelante aparecerán aquí.
+          </Card>
+        ) : (
+          <Card className="divide-y divide-cream-dark p-0">
+            {pays.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-ink">{p.studioName || '—'}</p>
+                  <p className="text-xs text-ink-faint">{p.concept} · {p.provider === 'mercadopago' ? 'MP' : 'Stripe'} · {fmtDate(p.paidAt)}</p>
+                </div>
+                <span className="shrink-0 font-bold text-ink">{p.currency === 'MXN' ? `$${p.amount.toFixed(2)} MXN` : usd(p.amount)}</span>
+              </div>
+            ))}
+          </Card>
+        )}
+      </section>
+
       <p className="pt-2 text-center text-xs text-ink-faint">
-        El detalle de transacciones y retiros (payouts) vive en tu panel de Stripe / Mercado Pago. Aquí ves la salud de tu ingreso recurrente.
+        Las transacciones se registran a partir de ahora. El detalle completo y los retiros (payouts) viven en tu panel de Stripe / Mercado Pago.
       </p>
     </>
   );
