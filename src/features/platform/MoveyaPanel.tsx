@@ -7,6 +7,8 @@ import {
   fetchAllPlatformProducts, savePlatformProduct, deletePlatformProduct, type PlatformProductRow,
   fetchLeads, saveLead, deleteLead, type MoveyaLead, type LeadStatus, LEAD_STATUSES, LEAD_STATUS_LABEL,
   fetchWaConfig, saveWaConfig, DEFAULT_SALES_KB, type MoveyaWaConfig,
+  fetchWaConvos, fetchWaThread, markWaRead, setWaMode, sendWaReply,
+  type WaConversation, type WaMessage,
 } from '../../lib/platform';
 import { FOUNDER_CODE } from '../../lib/plans';
 
@@ -350,9 +352,165 @@ function CrmTab() {
 }
 
 // ---------------------------------------------------------------------------
-// Pestaña WHATSAPP (bot de ventas de Move yA) — entrega 1: config + KB
+// Pestaña WHATSAPP (bot de ventas de Move yA): Bandeja + Configuración
 // ---------------------------------------------------------------------------
 function WhatsAppTab() {
+  const [view, setView] = useState<'bandeja' | 'config'>('bandeja');
+  return (
+    <>
+      <div className="flex gap-2">
+        {([['bandeja', 'Bandeja'], ['config', 'Configuración']] as ['bandeja' | 'config', string][]).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setView(k)}
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+              view === k ? 'bg-brand text-cream' : 'bg-cream-dark/50 text-ink-soft hover:bg-cream-dark'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {view === 'bandeja' ? <WaBandejaView /> : <WaConfigView />}
+    </>
+  );
+}
+
+// --- Bandeja: conversaciones + responder ---
+const waTime = (s: string | null) => (s ? new Date(s).toLocaleString('es-MX', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+
+function WaBandejaView() {
+  const [convos, setConvos] = useState<WaConversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sel, setSel] = useState<WaConversation | null>(null);
+  const [thread, setThread] = useState<WaMessage[]>([]);
+  const [loadingThread, setLoadingThread] = useState(false);
+  const [reply, setReply] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const loadConvos = () => { setLoading(true); fetchWaConvos().then(setConvos).finally(() => setLoading(false)); };
+  useEffect(loadConvos, []);
+
+  const openConvo = async (c: WaConversation) => {
+    setSel(c); setLoadingThread(true);
+    const t = await fetchWaThread(c.id); setThread(t); setLoadingThread(false);
+    if (c.unread > 0) { await markWaRead(c.id); setConvos((p) => p.map((x) => (x.id === c.id ? { ...x, unread: 0 } : x))); }
+  };
+
+  const send = async () => {
+    if (!sel || !reply.trim()) return;
+    setSending(true);
+    const ok = await sendWaReply(sel.id, reply.trim());
+    setSending(false);
+    if (ok) { setReply(''); setThread(await fetchWaThread(sel.id)); loadConvos(); }
+    else notifyError('whatsapp', 'No se pudo enviar. ¿El número de Move yA está conectado?');
+  };
+
+  const toggleMode = async () => {
+    if (!sel) return;
+    const next = sel.mode === 'bot' ? 'human' : 'bot';
+    const ok = await setWaMode(sel.id, next);
+    if (ok) { setSel({ ...sel, mode: next }); setConvos((p) => p.map((x) => (x.id === sel.id ? { ...x, mode: next } : x))); }
+    else notifyError('whatsapp', 'No se pudo cambiar el modo.');
+  };
+
+  // Vista de conversación abierta
+  if (sel) {
+    return (
+      <Card className="flex h-[70vh] flex-col p-0">
+        <div className="flex items-center justify-between gap-2 border-b border-cream-dark p-3">
+          <button onClick={() => setSel(null)} className="text-sm font-semibold text-ink-soft hover:text-ink">← Chats</button>
+          <div className="min-w-0 text-center">
+            <p className="truncate text-sm font-semibold text-ink">{sel.contactName || sel.contactPhone}</p>
+            <p className="text-xs text-ink-faint">{sel.contactPhone}</p>
+          </div>
+          <button
+            onClick={toggleMode}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${sel.mode === 'human' ? 'bg-amber-100 text-amber-800' : 'bg-cream-dark/60 text-ink-soft'}`}
+            title="Alternar entre que responda el bot o tú"
+          >
+            {sel.mode === 'human' ? '🙋 Humano' : '🤖 Bot'}
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-2 overflow-y-auto bg-cream-light/40 p-3">
+          {loadingThread ? (
+            <p className="text-center text-xs text-ink-faint">Cargando…</p>
+          ) : thread.length === 0 ? (
+            <p className="text-center text-xs text-ink-faint">Sin mensajes.</p>
+          ) : (
+            thread.map((m) => {
+              const out = m.direction === 'out';
+              return (
+                <div key={m.id} className={`flex ${out ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${out ? 'bg-brand text-cream' : 'bg-white text-ink border border-cream-dark'}`}>
+                    <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                    <p className={`mt-1 text-[10px] ${out ? 'text-cream/70' : 'text-ink-faint'}`}>
+                      {m.sender === 'bot' ? 'bot · ' : m.sender === 'human' ? 'tú · ' : ''}{waTime(m.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="flex items-end gap-2 border-t border-cream-dark p-3">
+          <textarea
+            className={`${inp} min-h-10 flex-1`}
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}
+            placeholder="Escribe tu respuesta…"
+          />
+          <button onClick={send} disabled={sending || !reply.trim()} className="shrink-0 rounded-2xl bg-brand px-4 py-2.5 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">
+            {sending ? '…' : 'Enviar'}
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
+  // Lista de conversaciones
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-ink">Conversaciones</h2>
+        <button onClick={loadConvos} className="rounded-full border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">Actualizar</button>
+      </div>
+      {loading ? (
+        <p className="text-ink-faint">Cargando…</p>
+      ) : convos.length === 0 ? (
+        <Card className="p-8 text-center text-ink-faint">
+          Aún no hay conversaciones. Cuando conectes tu número y te escriban prospectos, aparecerán aquí.
+        </Card>
+      ) : (
+        <section className="space-y-2">
+          {convos.map((c) => (
+            <Card key={c.id} className="cursor-pointer p-3 hover:bg-cream-dark/20" >
+              <button onClick={() => openConvo(c)} className="block w-full text-left">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-semibold text-ink">{c.contactName || c.contactPhone}</span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {c.mode === 'human' && <Badge tone="warning">Humano</Badge>}
+                    {c.unread > 0 && <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] font-bold text-cream">{c.unread}</span>}
+                    <span className="text-xs text-ink-faint">{waTime(c.lastMessageAt)}</span>
+                  </div>
+                </div>
+                <p className="mt-0.5 truncate text-xs text-ink-faint">
+                  {c.lastDirection === 'out' ? 'Tú: ' : ''}{c.lastMessageText}
+                </p>
+              </button>
+            </Card>
+          ))}
+        </section>
+      )}
+    </>
+  );
+}
+
+// --- Configuración del bot + base de conocimiento ---
+function WaConfigView() {
   const [cfg, setCfg] = useState<MoveyaWaConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

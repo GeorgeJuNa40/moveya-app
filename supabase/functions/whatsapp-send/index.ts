@@ -45,9 +45,10 @@ Deno.serve(async (req) => {
     const caller = userData.user;
     if (!caller) return json({ error: 'No autorizado' }, 401);
 
-    const { data: me } = await asUser.from('users').select('id, studio_id, role').eq('id', caller.id).single();
+    const { data: me } = await asUser.from('users').select('id, studio_id, role, platform_owner').eq('id', caller.id).single();
     if (!me) return json({ error: 'Usuario no encontrado' }, 404);
-    if (me.role !== 'STUDIO_ADMIN' && me.role !== 'COACH') {
+    // El dueño de plataforma también puede responder (al WhatsApp de Move yA).
+    if (me.role !== 'STUDIO_ADMIN' && me.role !== 'COACH' && me.platform_owner !== true) {
       return json({ error: 'Solo el estudio puede responder' }, 403);
     }
 
@@ -65,7 +66,9 @@ Deno.serve(async (req) => {
       .eq('id', conversationId)
       .single();
     if (!convo) return json({ error: 'Conversación no encontrada' }, 404);
-    if (convo.studio_id !== me.studio_id) return json({ error: 'No autorizado' }, 403);
+    // El dueño de plataforma responde a las conversaciones del WhatsApp de Move yA.
+    const isPlatform = me.platform_owner === true && convo.studio_id === 'moveya-platform';
+    if (!isPlatform && convo.studio_id !== me.studio_id) return json({ error: 'No autorizado' }, 403);
 
     // Resuelve con qué token y número enviar: primero el propio del estudio
     // (Embedded Signup), si no, el token global (alta manual / Fase A).
