@@ -22,7 +22,7 @@ const PLAN_LABEL: Record<string, string> = { inicio: 'Inicio', pro: 'Pro', premi
 const inp = 'w-full rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ring-brand';
 const FOUNDER_CAP = 10;
 
-type Tab = 'resumen' | 'crm' | 'whatsapp' | 'productos';
+type Tab = 'resumen' | 'pagos' | 'crm' | 'whatsapp' | 'productos';
 
 export default function MoveyaPanel() {
   const [tab, setTab] = useState<Tab>('resumen');
@@ -42,7 +42,7 @@ export default function MoveyaPanel() {
           </div>
           {/* Menú de pestañas */}
           <div className="mt-3 flex gap-2">
-            {([['resumen', 'Resumen'], ['crm', 'CRM'], ['whatsapp', 'WhatsApp'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
+            {([['resumen', 'Resumen'], ['pagos', 'Pagos'], ['crm', 'CRM'], ['whatsapp', 'WhatsApp'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
@@ -58,7 +58,7 @@ export default function MoveyaPanel() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-6 px-4 py-6">
-        {tab === 'resumen' ? <ResumenTab /> : tab === 'crm' ? <CrmTab /> : tab === 'whatsapp' ? <WhatsAppTab /> : <ProductosTab />}
+        {tab === 'resumen' ? <ResumenTab /> : tab === 'pagos' ? <PagosTab /> : tab === 'crm' ? <CrmTab /> : tab === 'whatsapp' ? <WhatsAppTab /> : <ProductosTab />}
       </main>
     </div>
   );
@@ -153,6 +153,131 @@ function ResumenTab() {
 
       <p className="pt-2 text-center text-xs text-ink-faint">
         El MRR cuenta solo suscripciones activas (pagando). Las comisiones de paquetes/tienda se ven en tu panel de Stripe/Mercado Pago.
+      </p>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pestaña PAGOS (vista financiera de la suscripción SaaS — derivada del resumen)
+// ---------------------------------------------------------------------------
+function riskReason(r: MoveyaStudioRow): string {
+  if (r.status === 'PAST_DUE') return 'Impago';
+  if (r.status === 'TRIALING' && trialExpired(r)) return 'Prueba vencida';
+  return 'Prueba por vencer';
+}
+
+function PagosTab() {
+  const [rows, setRows] = useState<MoveyaStudioRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    fetchMoveyaOverview()
+      .then((r) => { setRows(r); if (!r.length) setErr(true); })
+      .catch(() => setErr(true))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const f = useMemo(() => {
+    const paying = rows.filter((r) => r.status === 'ACTIVE');
+    const mrr = rows.reduce((a, r) => a + monthlyUsd(r), 0);
+    const now = Date.now();
+    const in30 = now + 30 * 86400000;
+    const in7 = now + 7 * 86400000;
+
+    const byPlan: Record<string, { count: number; total: number }> = {};
+    for (const r of paying) {
+      const label = r.founder ? 'Fundador' : r.plan ? PLAN_LABEL[r.plan] ?? r.plan : 'Sin plan';
+      byPlan[label] = byPlan[label] || { count: 0, total: 0 };
+      byPlan[label].count++; byPlan[label].total += monthlyUsd(r);
+    }
+    const renewals = paying
+      .filter((r) => r.currentPeriodEnd && new Date(r.currentPeriodEnd).getTime() <= in30)
+      .sort((a, b) => new Date(a.currentPeriodEnd as string).getTime() - new Date(b.currentPeriodEnd as string).getTime());
+    const risk = rows.filter((r) =>
+      r.status === 'PAST_DUE' ||
+      (r.status === 'TRIALING' && trialExpired(r)) ||
+      (r.status === 'TRIALING' && !trialExpired(r) && !!r.trialEndsAt && new Date(r.trialEndsAt).getTime() <= in7),
+    );
+    const annualCount = paying.filter((r) => r.billing === 'annual').length;
+    return { payingCount: paying.length, mrr, arr: mrr * 12, byPlan, renewals, risk, annualCount };
+  }, [rows]);
+
+  if (loading) return <p className="text-ink-faint">Cargando…</p>;
+  if (err) return <Card className="p-6 text-center text-ink-soft">No se pudo cargar. Verifica tu acceso de creador.</Card>;
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="MRR (USD)" value={usd(f.mrr)} hint="Ingreso mensual recurrente" icon="💵" />
+        <StatCard label="ARR (USD)" value={usd(f.arr)} hint="Proyección anual (MRR×12)" icon="📈" />
+        <StatCard label="Pagando" value={f.payingCount} hint={`${f.annualCount} anual${f.annualCount === 1 ? '' : 'es'}`} icon="✅" />
+        <StatCard label="En riesgo" value={f.risk.length} hint="Impagos y pruebas por vencer" icon="⚠️" />
+      </div>
+
+      {/* Ingresos por plan */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">Ingresos por plan (mensual)</h2>
+        {Object.keys(f.byPlan).length === 0 ? (
+          <Card className="p-6 text-center text-ink-faint">Aún no hay suscripciones pagando.</Card>
+        ) : (
+          <Card className="divide-y divide-cream-dark p-0">
+            {Object.entries(f.byPlan).sort((a, b) => b[1].total - a[1].total).map(([plan, v]) => (
+              <div key={plan} className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-2">
+                  {plan === 'Fundador' ? <Badge tone="brand">Fundador</Badge> : <span className="font-semibold text-ink">{plan}</span>}
+                  <span className="text-xs text-ink-faint">· {v.count} estudio{v.count === 1 ? '' : 's'}</span>
+                </div>
+                <span className="font-bold text-ink">{usd(v.total)}/mes</span>
+              </div>
+            ))}
+          </Card>
+        )}
+      </section>
+
+      {/* Próximas renovaciones */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">Próximas renovaciones (30 días)</h2>
+        {f.renewals.length === 0 ? (
+          <Card className="p-6 text-center text-ink-faint">Sin renovaciones en los próximos 30 días.</Card>
+        ) : (
+          <Card className="divide-y divide-cream-dark p-0">
+            {f.renewals.map((r) => (
+              <div key={r.id} className="flex items-center justify-between px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-ink">{r.name}</p>
+                  <p className="text-xs text-ink-faint">{r.founder ? 'Fundador' : r.plan ? PLAN_LABEL[r.plan] ?? r.plan : '—'} · {usd(monthlyUsd(r))}/mes</p>
+                </div>
+                <span className="shrink-0 text-sm text-ink-soft">{fmtDate(r.currentPeriodEnd)}</span>
+              </div>
+            ))}
+          </Card>
+        )}
+      </section>
+
+      {/* En riesgo / seguimiento */}
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">En riesgo / seguimiento</h2>
+        {f.risk.length === 0 ? (
+          <Card className="p-6 text-center text-ink-faint">Nada en riesgo. 🎉</Card>
+        ) : (
+          <Card className="divide-y divide-cream-dark p-0">
+            {f.risk.map((r) => (
+              <div key={r.id} className="flex items-center justify-between px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-ink">{r.name}</p>
+                  <p className="text-xs text-ink-faint">vence {fmtDate(r.trialEndsAt ?? r.currentPeriodEnd)}</p>
+                </div>
+                <Badge tone="danger">{riskReason(r)}</Badge>
+              </div>
+            ))}
+          </Card>
+        )}
+      </section>
+
+      <p className="pt-2 text-center text-xs text-ink-faint">
+        El detalle de transacciones y retiros (payouts) vive en tu panel de Stripe / Mercado Pago. Aquí ves la salud de tu ingreso recurrente.
       </p>
     </>
   );
