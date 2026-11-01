@@ -254,6 +254,70 @@ export async function saveWaConfig(c: {
   return !error;
 }
 
+// ---- Bandeja (conversaciones de WhatsApp de Move yA) ----
+export interface WaConversation {
+  id: string;
+  contactPhone: string;
+  contactName: string;
+  mode: 'bot' | 'human';
+  lastMessageText: string;
+  lastMessageAt: string | null;
+  lastDirection: string;
+  unread: number;
+}
+export interface WaMessage {
+  id: string;
+  direction: 'in' | 'out';
+  sender: 'contact' | 'bot' | 'human';
+  body: string;
+  createdAt: string;
+}
+
+export async function fetchWaConvos(): Promise<WaConversation[]> {
+  const { data, error } = await supabase.rpc('moveya_wa_convos');
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    contactPhone: String(r.contact_phone ?? ''),
+    contactName: String(r.contact_name ?? ''),
+    mode: (r.mode ?? 'bot') as 'bot' | 'human',
+    lastMessageText: String(r.last_message_text ?? ''),
+    lastMessageAt: (r.last_message_at ?? null) as string | null,
+    lastDirection: String(r.last_direction ?? ''),
+    unread: Number(r.unread ?? 0),
+  }));
+}
+
+export async function fetchWaThread(convoId: string): Promise<WaMessage[]> {
+  const { data, error } = await supabase.rpc('moveya_wa_thread', { p_convo: convoId });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    direction: (r.direction ?? 'in') as 'in' | 'out',
+    sender: (r.sender ?? 'contact') as 'contact' | 'bot' | 'human',
+    body: String(r.body ?? ''),
+    createdAt: String(r.created_at ?? ''),
+  }));
+}
+
+export async function markWaRead(convoId: string): Promise<void> {
+  await supabase.rpc('moveya_wa_mark_read', { p_convo: convoId });
+}
+
+export async function setWaMode(convoId: string, mode: 'bot' | 'human'): Promise<boolean> {
+  const { error } = await supabase.rpc('moveya_wa_set_mode', { p_convo: convoId, p_mode: mode });
+  return !error;
+}
+
+// Envía una respuesta (del dueño) por la Edge Function whatsapp-send.
+export async function sendWaReply(convoId: string, text: string): Promise<boolean> {
+  const { data, error } = await supabase.functions.invoke('whatsapp-send', {
+    body: { conversationId: convoId, text },
+  });
+  if (error) return false;
+  return (data as { ok?: boolean } | null)?.ok === true;
+}
+
 // Base de conocimiento de VENTAS por defecto (para el bot de Move yA). El dueño
 // puede cargarla con un botón y luego editarla a su gusto.
 export const DEFAULT_SALES_KB: string[] = [
