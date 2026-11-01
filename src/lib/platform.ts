@@ -241,6 +241,23 @@ export async function deleteLead(id: string): Promise<boolean> {
   return !error;
 }
 
+// Captura pública de un lead (desde el formulario de embudo, sin login).
+export async function captureLead(l: {
+  name: string; ownerName?: string; phone?: string; email?: string; city?: string; note?: string; source?: string;
+}): Promise<boolean> {
+  const { data, error } = await supabase.rpc('capture_lead', {
+    p_name: l.name,
+    p_owner_name: l.ownerName ?? '',
+    p_phone: l.phone ?? '',
+    p_email: l.email ?? '',
+    p_city: l.city ?? '',
+    p_note: l.note ?? '',
+    p_source: l.source ?? 'formulario',
+  });
+  if (error) return false;
+  return data === true;
+}
+
 // ---------------------------------------------------------------------------
 // WhatsApp de ventas de Move yA (estudio-plataforma oculto) — config del dueño.
 // ---------------------------------------------------------------------------

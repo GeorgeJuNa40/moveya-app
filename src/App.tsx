@@ -51,6 +51,7 @@ const Landing = lazyWithReload(() => import('./features/public/Landing'));
 // Landing exclusiva del Programa Fundador (por invitación, link privado).
 const FounderLanding = lazyWithReload(() => import('./features/public/FounderLanding'));
 const MoveyaPanel = lazyWithReload(() => import('./features/platform/MoveyaPanel'));
+const MoveyaCapture = lazyWithReload(() => import('./features/public/MoveyaCapture'));
 // Página pública informativa del estudio (sin login).
 const StudioInfoPage = lazyWithReload(() => import('./features/public/StudioInfoPage'));
 // Registro de entrada (check-in) — se abre al escanear el QR de acceso.
@@ -397,6 +398,9 @@ export default function App() {
 
       {/* Panel de creador Move yA (oculto; solo dueño de plataforma). */}
       <Route path="/moveya" element={<RequirePlatformOwner><MoveyaPanel /></RequirePlatformOwner>} />
+
+      {/* Captura pública de leads (embudo Move yA) — sin login. */}
+      <Route path="/captura" element={<MoveyaCapture />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
