@@ -457,6 +457,10 @@ const LEAD_TONE: Record<LeadStatus, 'neutral' | 'brand' | 'warning' | 'success' 
   nuevo: 'neutral', contactado: 'brand', demo: 'warning', prueba: 'warning', pagando: 'success', perdido: 'danger',
 };
 const waLink = (phone: string) => `https://wa.me/${phone.replace(/[^\d]/g, '')}`;
+// Color de acento por etapa (para el tablero kanban).
+const STAGE_ACCENT: Record<LeadStatus, string> = {
+  nuevo: '#9aa39d', contactado: '#4A5D55', demo: '#C98A2B', prueba: '#88B8B7', pagando: '#2E7D53', perdido: '#B23B3B',
+};
 const emptyLead = (): MoveyaLead => ({
   id: '', name: '', ownerName: '', phone: '', email: '', city: '', status: 'nuevo', source: '', notes: '', nextFollowup: null, createdAt: '',
 });
@@ -468,6 +472,8 @@ function CrmTab() {
   const [draft, setDraft] = useState<MoveyaLead | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [view, setView] = useState<'lista' | 'tablero'>('tablero');
+  const [dragId, setDragId] = useState<string | null>(null);
 
   const load = () => { setLoading(true); fetchLeads().then(setLeads).finally(() => setLoading(false)); };
   useEffect(load, []);
@@ -508,30 +514,41 @@ function CrmTab() {
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold text-ink">Leads / prospectos</h2>
           <p className="text-xs text-ink-faint">Estudios y gyms por contactar y dar seguimiento.</p>
         </div>
-        {!draft && (
-          <button onClick={() => setDraft(emptyLead())} className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90">+ Agregar</button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex rounded-full bg-cream-dark/50 p-0.5">
+            {(['tablero', 'lista'] as const).map((v) => (
+              <button key={v} onClick={() => setView(v)} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${view === v ? 'bg-brand text-cream' : 'text-ink-soft'}`}>
+                {v === 'tablero' ? 'Tablero' : 'Lista'}
+              </button>
+            ))}
+          </div>
+          {!draft && (
+            <button onClick={() => setDraft(emptyLead())} className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90">+ Agregar</button>
+          )}
+        </div>
       </div>
 
-      {/* Filtro por etapa */}
-      <div className="flex flex-wrap gap-2">
-        {(['todos', ...LEAD_STATUSES] as (LeadStatus | 'todos')[]).map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-              filter === s ? 'bg-brand text-cream' : 'bg-cream-dark/50 text-ink-soft hover:bg-cream-dark'
-            }`}
-          >
-            {s === 'todos' ? 'Todos' : LEAD_STATUS_LABEL[s]} ({counts[s] ?? 0})
-          </button>
-        ))}
-      </div>
+      {/* Filtro por etapa (solo en vista lista) */}
+      {view === 'lista' && (
+        <div className="flex flex-wrap gap-2">
+          {(['todos', ...LEAD_STATUSES] as (LeadStatus | 'todos')[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                filter === s ? 'bg-brand text-cream' : 'bg-cream-dark/50 text-ink-soft hover:bg-cream-dark'
+              }`}
+            >
+              {s === 'todos' ? 'Todos' : LEAD_STATUS_LABEL[s]} ({counts[s] ?? 0})
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Formulario crear/editar */}
       {draft && (
@@ -584,8 +601,8 @@ function CrmTab() {
         </Card>
       )}
 
-      {/* Lista */}
-      {loading ? (
+      {/* Vista LISTA */}
+      {view === 'lista' && (loading ? (
         <p className="text-ink-faint">Cargando…</p>
       ) : shown.length === 0 && !draft ? (
         <Card className="p-8 text-center text-ink-faint">
@@ -638,7 +655,59 @@ function CrmTab() {
             </Card>
           ))}
         </section>
-      )}
+      ))}
+
+      {/* Vista TABLERO (kanban: arrastra una tarjeta entre etapas) */}
+      {view === 'tablero' && (loading ? (
+        <p className="text-ink-faint">Cargando…</p>
+      ) : leads.length === 0 && !draft ? (
+        <Card className="p-8 text-center text-ink-faint">Aún no tienes leads. Toca <span className="font-semibold text-ink">+ Agregar</span> para registrar el primero.</Card>
+      ) : (
+        <div className="-mx-4 overflow-x-auto px-4 pb-2">
+          <div className="flex gap-3" style={{ minWidth: 'min-content' }}>
+            {LEAD_STATUSES.map((stage) => {
+              const col = leads.filter((l) => l.status === stage);
+              return (
+                <div
+                  key={stage}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    const l = leads.find((x) => x.id === dragId);
+                    if (l && l.status !== stage) changeStatus(l, stage);
+                    setDragId(null);
+                  }}
+                  className="flex w-60 shrink-0 flex-col rounded-2xl bg-cream-dark/25"
+                >
+                  <div className="flex items-center justify-between rounded-t-2xl border-t-4 px-3 py-2" style={{ borderColor: STAGE_ACCENT[stage] }}>
+                    <span className="text-xs font-semibold text-ink">{LEAD_STATUS_LABEL[stage]}</span>
+                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-ink-soft">{col.length}</span>
+                  </div>
+                  <div className="flex-1 space-y-2 p-2">
+                    {col.map((l) => (
+                      <div
+                        key={l.id}
+                        draggable
+                        onDragStart={() => setDragId(l.id)}
+                        onDragEnd={() => setDragId(null)}
+                        onClick={() => setDraft({ ...l })}
+                        className="cursor-grab rounded-xl border border-cream-dark/60 bg-white p-3 shadow-sm active:cursor-grabbing"
+                      >
+                        <p className="truncate text-sm font-semibold text-ink">{l.name}</p>
+                        {l.ownerName && <p className="truncate text-xs text-ink-faint">{l.ownerName}</p>}
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          {l.phone && <a href={waLink(l.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-brand underline">WhatsApp</a>}
+                          {l.nextFollowup && <span className="text-[10px] text-ink-faint">📅 {fmtDate(l.nextFollowup)}</span>}
+                        </div>
+                      </div>
+                    ))}
+                    {col.length === 0 && <p className="px-1 py-2 text-center text-[11px] text-ink-faint">—</p>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </>
   );
 }
