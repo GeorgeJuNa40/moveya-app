@@ -42,6 +42,28 @@ const admin = createClient(
 
 const DAY = 86400000;
 
+// Registra un cobro de suscripción SaaS (ingreso de Move yA) en moveya_payments.
+// Best-effort e idempotente por `ref` (nunca rompe el flujo del webhook).
+async function recordMoveyaPayment(p: {
+  studioId: string; studioName?: string | null; amountUsd: number; concept: string; ref: string;
+}) {
+  try {
+    await admin.from('moveya_payments').insert({
+      id: crypto.randomUUID(),
+      studio_id: p.studioId,
+      studio_name: p.studioName ?? null,
+      amount: p.amountUsd,
+      currency: 'USD',
+      concept: p.concept,
+      provider: 'stripe',
+      ref: p.ref,
+      paid_at: new Date().toISOString(),
+    });
+  } catch (_) {
+    /* best-effort: no interrumpir el webhook */
+  }
+}
+
 Deno.serve(async (req) => {
   const sig = req.headers.get('stripe-signature') ?? '';
   const raw = await req.text();
@@ -189,7 +211,7 @@ const PLAN_PRICE_USD_YEAR: Record<string, number> = { inicio: 299, pro: 549, pre
 async function applySubscription(m: Record<string, string>, s: Stripe.Checkout.Session) {
   const { data: studio } = await admin
     .from('studios')
-    .select('subscription, whatsapp')
+    .select('name, subscription, whatsapp')
     .eq('id', m.studio_id)
     .single();
 
@@ -224,13 +246,21 @@ async function applySubscription(m: Record<string, string>, s: Stripe.Checkout.S
   const whatsapp = { ...(studio?.whatsapp ?? {}), aiActive: plan === 'premium' };
 
   await admin.from('studios').update({ subscription: next, whatsapp }).eq('id', m.studio_id);
+
+  await recordMoveyaPayment({
+    studioId: m.studio_id,
+    studioName: studio?.name,
+    amountUsd: priceUsd,
+    concept: isFounder ? 'Fundador' : `Suscripción ${plan} (${billing === 'annual' ? 'anual' : 'mensual'})`,
+    ref: s.id,
+  });
 }
 
 // Promo de bienvenida pagada → abre 14 días de acceso Premium (idempotente).
 async function applyPromo(m: Record<string, string>, s: Stripe.Checkout.Session) {
   const { data: studio } = await admin
     .from('studios')
-    .select('subscription, whatsapp')
+    .select('name, subscription, whatsapp')
     .eq('id', m.studio_id)
     .single();
   const sub = (studio?.subscription ?? {}) as Record<string, unknown>;
@@ -250,13 +280,15 @@ async function applyPromo(m: Record<string, string>, s: Stripe.Checkout.Session)
   // El bot con IA (costo) no se enciende en la promo; se activa al pagar Premium.
   const whatsapp = { ...(studio?.whatsapp ?? {}), aiActive: false };
   await admin.from('studios').update({ subscription: next, whatsapp }).eq('id', m.studio_id);
+
+  await recordMoveyaPayment({ studioId: m.studio_id, studioName: studio?.name, amountUsd: 1, concept: 'Prueba $1 (14 días)', ref: s.id });
 }
 
 // Busca el estudio dueño de una suscripción de Stripe (guardada en el jsonb).
 async function findStudioBySub(subId: string) {
   const { data } = await admin
     .from('studios')
-    .select('id, subscription')
+    .select('id, name, subscription')
     .eq('subscription->>stripeSubscriptionId', subId)
     .maybeSingle();
   return data ?? null;
@@ -270,12 +302,21 @@ async function renewSubscription(subId: string, inv: Stripe.Invoice): Promise<bo
   // deno-lint-ignore no-explicit-any
   const periodEnd = (inv as any)?.lines?.data?.[0]?.period?.end as number | undefined;
   const end = periodEnd ? new Date(periodEnd * 1000) : new Date(Date.now() + 30 * DAY);
+  const sub = (studio.subscription ?? {}) as Record<string, unknown>;
   const next = {
-    ...(studio.subscription ?? {}),
+    ...sub,
     status: 'ACTIVE',
     currentPeriodEnd: end.toISOString(),
   };
   await admin.from('studios').update({ subscription: next }).eq('id', studio.id);
+
+  await recordMoveyaPayment({
+    studioId: studio.id,
+    studioName: studio.name,
+    amountUsd: Number(sub.priceUsd ?? 0),
+    concept: `Renovación ${sub.plan ?? ''}`.trim(),
+    ref: inv.id,
+  });
   return true;
 }
 
