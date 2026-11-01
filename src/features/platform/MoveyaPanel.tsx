@@ -78,8 +78,48 @@ function estadoBadge(r: MoveyaStudioRow) {
   return <Badge tone="neutral">—</Badge>;
 }
 
+// --- Mini-gráficos (paleta de marca Move yA, sin librerías) ---
+function BarRow({ label, value, pct, tone = 'brand' }: { label: string; value: string; pct: number; tone?: 'brand' | 'mint' }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+        <span className="truncate text-ink-soft">{label}</span>
+        <span className="shrink-0 font-semibold text-ink">{value}</span>
+      </div>
+      <div className="h-2.5 w-full overflow-hidden rounded-full bg-cream-dark/40">
+        <div className={`h-full rounded-full ${tone === 'mint' ? 'bg-mint' : 'bg-brand'}`} style={{ width: `${Math.max(3, Math.min(100, pct))}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function Donut({ segments, centerTop, centerBottom }: { segments: { value: number; color: string }[]; centerTop: string; centerBottom: string }) {
+  const total = segments.reduce((a, s) => a + s.value, 0) || 1;
+  const R = 42, C = 2 * Math.PI * R;
+  let offset = 0;
+  return (
+    <div className="relative h-32 w-32 shrink-0">
+      <svg viewBox="0 0 100 100" className="h-32 w-32 -rotate-90">
+        <circle cx="50" cy="50" r={R} fill="none" stroke="#e7e2d8" strokeWidth="11" />
+        {segments.filter((s) => s.value > 0).map((s, i) => {
+          const len = (s.value / total) * C;
+          const el = <circle key={i} cx="50" cy="50" r={R} fill="none" stroke={s.color} strokeWidth="11" strokeDasharray={`${Math.max(0, len - 1.5)} ${C - Math.max(0, len - 1.5)}`} strokeDashoffset={-offset} />;
+          offset += len;
+          return el;
+        })}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-2xl font-bold text-ink">{centerTop}</span>
+        <span className="text-[10px] uppercase tracking-wide text-ink-faint">{centerBottom}</span>
+      </div>
+    </div>
+  );
+}
+
 function ResumenTab() {
   const [rows, setRows] = useState<MoveyaStudioRow[]>([]);
+  const [pays, setPays] = useState<MoveyaPayment[]>([]);
+  const [leads, setLeads] = useState<MoveyaLead[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(false);
 
@@ -88,15 +128,34 @@ function ResumenTab() {
       .then((r) => { setRows(r); if (!r.length) setErr(true); })
       .catch(() => setErr(true))
       .finally(() => setLoading(false));
+    fetchMoveyaPayments(5).then(setPays).catch(() => {});
+    fetchLeads().then(setLeads).catch(() => {});
   }, []);
 
   const m = useMemo(() => {
-    const paying = rows.filter((r) => r.status === 'ACTIVE').length;
-    const trialing = rows.filter((r) => r.status === 'TRIALING' && !trialExpired(r)).length;
-    const foundersUsed = rows.filter((r) => r.founder && r.status === 'ACTIVE').length;
+    const paying = rows.filter((r) => r.status === 'ACTIVE');
+    const trialing = rows.filter((r) => r.status === 'TRIALING' && !trialExpired(r));
+    const expired = rows.filter((r) => (r.status === 'TRIALING' && trialExpired(r)) || r.status === 'PAST_DUE' || r.status === 'CANCELED');
+    const foundersUsed = paying.filter((r) => r.founder).length;
     const mrr = rows.reduce((a, r) => a + monthlyUsd(r), 0);
-    return { paying, trialing, foundersUsed, mrr };
-  }, [rows]);
+
+    const byPlan: Record<string, number> = {};
+    for (const r of paying) {
+      const label = r.founder ? 'Fundador' : r.plan ? PLAN_LABEL[r.plan] ?? r.plan : 'Sin plan';
+      byPlan[label] = (byPlan[label] ?? 0) + monthlyUsd(r);
+    }
+    const planRows = Object.entries(byPlan).sort((a, b) => b[1] - a[1]);
+    const planMax = Math.max(1, ...planRows.map(([, v]) => v));
+
+    const leadsActive = leads.filter((l) => l.status !== 'perdido' && l.status !== 'pagando').length;
+    const funnel = LEAD_STATUSES.map((s) => ({ s, n: leads.filter((l) => l.status === s).length }));
+    const funnelMax = Math.max(1, ...funnel.map((x) => x.n));
+
+    return {
+      paying: paying.length, trialing: trialing.length, expired: expired.length,
+      foundersUsed, mrr, arr: mrr * 12, planRows, planMax, leadsActive, funnel, funnelMax,
+    };
+  }, [rows, leads]);
 
   const ordered = useMemo(() => {
     const rank: Record<string, number> = { ACTIVE: 0, TRIALING: 1, PAST_DUE: 2, CANCELED: 3 };
@@ -106,15 +165,107 @@ function ResumenTab() {
   if (loading) return <p className="text-ink-faint">Cargando…</p>;
   if (err) return <Card className="p-6 text-center text-ink-soft">No se pudo cargar. Verifica que tu cuenta tenga acceso de creador.</Card>;
 
+  const legend = [
+    { label: 'Pagando', n: m.paying, color: '#2E7D53' },
+    { label: 'En prueba', n: m.trialing, color: '#C98A2B' },
+    { label: 'Vencidas', n: m.expired, color: '#B23B3B' },
+  ];
+
   return (
     <>
+      {/* Hero: ingreso recurrente */}
+      <Card className="overflow-hidden p-0">
+        <div className="p-5 text-cream" style={{ background: 'linear-gradient(135deg, #4A5D55 0%, #2f3b36 100%)' }}>
+          <p className="text-xs uppercase tracking-wide text-cream/70">Ingreso mensual recurrente</p>
+          <p className="mt-1 text-4xl font-bold">{usd(m.mrr)}</p>
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+            <span><span className="text-cream/70">ARR </span><b>{usd(m.arr)}</b></span>
+            <span><span className="text-cream/70">Pagando </span><b>{m.paying}</b></span>
+            <span><span className="text-cream/70">En prueba </span><b>{m.trialing}</b></span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Chips */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="MRR (USD)" value={usd(m.mrr)} hint="Ingreso recurrente mensual" icon="💵" />
-        <StatCard label="Pagando" value={m.paying} hint="Suscripciones activas" icon="✅" />
-        <StatCard label="En prueba" value={m.trialing} hint="Pruebas vigentes" icon="⏳" />
         <StatCard label="Fundadores" value={`${m.foundersUsed}/${FOUNDER_CAP}`} hint={`Código ${FOUNDER_CODE}`} icon="⭐" />
+        <StatCard label="Leads activos" value={m.leadsActive} hint="En el embudo" icon="🎯" />
+        <StatCard label="Estudios" value={rows.length} hint={`${m.paying} pagando`} icon="🏠" />
+        <StatCard label="En riesgo" value={m.expired} hint="Vencidos / impagos" icon="⚠️" />
       </div>
 
+      {/* Estudios por estado (dona) + Ingresos por plan (barras) */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-4">
+          <h2 className="mb-3 text-sm font-semibold text-ink">Estudios por estado</h2>
+          <div className="flex items-center gap-4">
+            <Donut
+              segments={[{ value: m.paying, color: '#2E7D53' }, { value: m.trialing, color: '#C98A2B' }, { value: m.expired, color: '#B23B3B' }]}
+              centerTop={String(rows.length)}
+              centerBottom="estudios"
+            />
+            <ul className="space-y-2 text-sm">
+              {legend.map((l) => (
+                <li key={l.label} className="flex items-center gap-2">
+                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: l.color }} />
+                  <span className="text-ink-soft">{l.label}</span>
+                  <span className="font-semibold text-ink">{l.n}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <h2 className="mb-3 text-sm font-semibold text-ink">Ingresos por plan (mensual)</h2>
+          {m.planRows.length === 0 ? (
+            <p className="text-xs text-ink-faint">Aún no hay suscripciones pagando.</p>
+          ) : (
+            <div className="space-y-3">
+              {m.planRows.map(([plan, total]) => (
+                <BarRow key={plan} label={plan} value={`${usd(total)}/mes`} pct={(total / m.planMax) * 100} />
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Embudo de leads + Transacciones recientes */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="p-4">
+          <h2 className="mb-3 text-sm font-semibold text-ink">Embudo de leads</h2>
+          {leads.length === 0 ? (
+            <p className="text-xs text-ink-faint">Aún no hay leads. Agrégalos en la pestaña CRM.</p>
+          ) : (
+            <div className="space-y-3">
+              {m.funnel.map(({ s, n }) => (
+                <BarRow key={s} label={LEAD_STATUS_LABEL[s]} value={String(n)} pct={(n / m.funnelMax) * 100} tone="mint" />
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card className="p-4">
+          <h2 className="mb-3 text-sm font-semibold text-ink">Transacciones recientes</h2>
+          {pays.length === 0 ? (
+            <p className="text-xs text-ink-faint">Aún no hay cobros registrados.</p>
+          ) : (
+            <ul className="divide-y divide-cream-dark">
+              {pays.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-ink">{p.studioName || '—'}</p>
+                    <p className="text-xs text-ink-faint">{p.concept} · {fmtDate(p.paidAt)}</p>
+                  </div>
+                  <span className="shrink-0 text-sm font-bold text-ink">{p.currency === 'MXN' ? `$${p.amount.toFixed(0)} MXN` : usd(p.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      {/* Lista de estudios (detalle) */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-ink">Estudios ({rows.length})</h2>
         {ordered.map((r) => {
@@ -142,19 +293,10 @@ function ResumenTab() {
                   </p>
                 </div>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-ink-faint">
-                <span>Pasarela: {r.provider === 'mercadopago' ? 'Mercado Pago' : r.provider === 'stripe' ? 'Stripe' : '—'}</span>
-                <span>·</span>
-                <span>Cobro en línea: {r.stripeOk ? 'Stripe ✓' : r.mpOk ? 'MP ✓' : 'sin pasarela'}</span>
-              </div>
             </Card>
           );
         })}
       </section>
-
-      <p className="pt-2 text-center text-xs text-ink-faint">
-        El MRR cuenta solo suscripciones activas (pagando). Las comisiones de paquetes/tienda se ven en tu panel de Stripe/Mercado Pago.
-      </p>
     </>
   );
 }
