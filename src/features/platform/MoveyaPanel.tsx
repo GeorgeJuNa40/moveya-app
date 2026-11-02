@@ -469,8 +469,21 @@ const emptyLead = (): MoveyaLead => ({
   id: '', name: '', ownerName: '', phone: '', email: '', city: '', status: 'nuevo', source: '', notes: '', nextFollowup: null, demoAt: null, createdAt: '',
 });
 
+// Enlaces públicos del embudo (se comparten para captar prospectos). El dominio
+// canónico de cara al prospecto es moveyaapp.app; todos muestran el calendario.
+const PUBLIC_BASE = 'https://moveyaapp.app';
+const FUNNEL_LINKS: { label: string; src: string }[] = [
+  { label: 'General', src: '' },
+  { label: 'Instagram', src: 'instagram' },
+  { label: 'WhatsApp', src: 'whatsapp' },
+  { label: 'Facebook', src: 'facebook' },
+  { label: 'TikTok', src: 'tiktok' },
+];
+const funnelUrl = (src: string) => `${PUBLIC_BASE}/#/demo${src ? `?src=${src}` : ''}`;
+
 function CrmTab() {
   const [leads, setLeads] = useState<MoveyaLead[]>([]);
+  const [showLinks, setShowLinks] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<LeadStatus | 'todos'>('todos');
   const [draft, setDraft] = useState<MoveyaLead | null>(null);
@@ -516,6 +529,11 @@ function CrmTab() {
     if (ok) { notifySuccess('Lead eliminado.'); load(); } else notifyError('lead', 'No se pudo eliminar.');
   };
 
+  const copyLink = async (url: string) => {
+    try { await navigator.clipboard.writeText(url); notifySuccess('Enlace copiado.'); }
+    catch { notifyError('lead', 'No se pudo copiar. Selecciónalo y cópialo a mano.'); }
+  };
+
   return (
     <>
       <div className="flex items-center justify-between gap-2">
@@ -536,6 +554,30 @@ function CrmTab() {
           )}
         </div>
       </div>
+
+      {/* Enlaces del embudo (para compartir y captar prospectos) */}
+      <Card className="p-4">
+        <button onClick={() => setShowLinks((v) => !v)} className="flex w-full items-center justify-between gap-2 text-left">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-ink">🔗 Enlaces de tu embudo</h3>
+            <p className="text-xs text-ink-faint">Compártelos en tus redes o mensajes. Quien agende cae aquí en tu CRM.</p>
+          </div>
+          <span className="shrink-0 text-xs font-semibold text-brand">{showLinks ? 'Ocultar' : 'Ver'}</span>
+        </button>
+        {showLinks && (
+          <div className="mt-3 space-y-2">
+            {FUNNEL_LINKS.map((c) => (
+              <div key={c.label} className="flex items-center gap-2">
+                <span className="w-16 shrink-0 text-xs font-semibold text-ink-soft">{c.label}</span>
+                <code className="min-w-0 flex-1 truncate rounded-lg bg-cream-dark/40 px-2 py-1.5 text-[11px] text-ink">{funnelUrl(c.src)}</code>
+                <button onClick={() => copyLink(funnelUrl(c.src))} className="shrink-0 rounded-lg border border-cream-dark px-2.5 py-1.5 text-[11px] font-semibold text-ink-soft hover:bg-cream-dark/40">Copiar</button>
+                <a href={funnelUrl(c.src)} target="_blank" rel="noreferrer" className="shrink-0 rounded-lg border border-cream-dark px-2.5 py-1.5 text-[11px] font-semibold text-brand hover:bg-cream-dark/40">Abrir</a>
+              </div>
+            ))}
+            <p className="pt-1 text-[11px] text-ink-faint">El <code className="rounded bg-cream-dark/40 px-1">?src=</code> te dice de dónde llegó cada prospecto (lo ves en el campo “origen” del lead).</p>
+          </div>
+        )}
+      </Card>
 
       {/* Filtro por etapa (solo en vista lista) */}
       {view === 'lista' && (
