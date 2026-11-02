@@ -32,43 +32,83 @@ const FOUNDER_CAP = 10;
 
 type Tab = 'resumen' | 'pagos' | 'crm' | 'whatsapp' | 'email' | 'contenido' | 'productos';
 
+const NAV: [Tab, string, string][] = [
+  ['resumen', 'Resumen', '📊'],
+  ['pagos', 'Pagos', '💳'],
+  ['crm', 'CRM', '🗂️'],
+  ['whatsapp', 'WhatsApp', '💬'],
+  ['email', 'Email', '✉️'],
+  ['contenido', 'Contenido', '📅'],
+  ['productos', 'Productos', '🛍️'],
+];
+
+function NavList({ tab, onSelect }: { tab: Tab; onSelect: (t: Tab) => void }) {
+  return (
+    <div className="space-y-1">
+      {NAV.map(([k, label, icon]) => (
+        <button
+          key={k}
+          onClick={() => onSelect(k)}
+          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+            tab === k ? 'bg-brand text-cream' : 'text-ink-soft hover:bg-cream-dark/40'
+          }`}
+        >
+          <span className="text-base">{icon}</span>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function MoveyaPanel() {
   const [tab, setTab] = useState<Tab>('resumen');
+  const [menuOpen, setMenuOpen] = useState(false);
   const { logout } = useStore();
+  const select = (t: Tab) => { setTab(t); setMenuOpen(false); };
 
   return (
     <div className="min-h-screen bg-cream">
-      <header className="sticky top-0 z-10 border-b border-cream-dark bg-cream/90 backdrop-blur">
-        <div className="mx-auto max-w-4xl px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wide text-ink-faint">Panel de creador</p>
-              <h1 className="text-lg font-bold text-ink">Move yA · Negocio</h1>
-            </div>
-            <button onClick={() => logout()} className="rounded-full border border-cream-dark px-4 py-2 text-sm font-semibold text-ink-soft hover:bg-cream-dark/40">
-              Salir
-            </button>
-          </div>
-          {/* Menú de pestañas */}
-          <div className="mt-3 flex gap-2">
-            {([['resumen', 'Resumen'], ['pagos', 'Pagos'], ['crm', 'CRM'], ['whatsapp', 'WhatsApp'], ['email', 'Email'], ['contenido', 'Contenido'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
-              <button
-                key={k}
-                onClick={() => setTab(k)}
-                className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-                  tab === k ? 'bg-brand text-cream' : 'text-ink-soft hover:bg-cream-dark/40'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+      {/* Barra superior (siempre visible) */}
+      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-cream-dark bg-cream/90 px-4 py-3 backdrop-blur">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setMenuOpen(true)} aria-label="Abrir menú" className="grid h-9 w-9 place-items-center rounded-lg text-lg text-ink hover:bg-cream-dark/40 lg:hidden">☰</button>
+          <div>
+            <p className="text-[11px] uppercase tracking-wide text-ink-faint">Panel de creador</p>
+            <h1 className="text-base font-bold leading-tight text-ink">Move yA · Negocio</h1>
           </div>
         </div>
+        <button onClick={() => logout()} className="rounded-full border border-cream-dark px-4 py-2 text-sm font-semibold text-ink-soft hover:bg-cream-dark/40">
+          Salir
+        </button>
       </header>
 
-      <main className="mx-auto max-w-4xl space-y-6 px-4 py-6">
-        {tab === 'resumen' ? <ResumenTab /> : tab === 'pagos' ? <PagosTab /> : tab === 'crm' ? <CrmTab /> : tab === 'whatsapp' ? <WhatsAppTab /> : tab === 'email' ? <EmailTab /> : tab === 'contenido' ? <ContenidoTab /> : <ProductosTab />}
-      </main>
+      <div className="lg:flex">
+        {/* Barra lateral (escritorio) */}
+        <nav className="hidden w-56 shrink-0 border-r border-cream-dark px-3 py-4 lg:block">
+          <div className="sticky top-20">
+            <NavList tab={tab} onSelect={select} />
+          </div>
+        </nav>
+
+        {/* Cajón lateral (móvil) */}
+        {menuOpen && (
+          <div className="fixed inset-0 z-30 lg:hidden">
+            <div className="absolute inset-0 bg-black/30" onClick={() => setMenuOpen(false)} />
+            <nav className="absolute left-0 top-0 h-full w-64 bg-cream p-4 shadow-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-sm font-bold text-ink">Menú</span>
+                <button onClick={() => setMenuOpen(false)} aria-label="Cerrar menú" className="grid h-8 w-8 place-items-center rounded-lg text-ink hover:bg-cream-dark/40">✕</button>
+              </div>
+              <NavList tab={tab} onSelect={select} />
+            </nav>
+          </div>
+        )}
+
+        <main className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6">
+          {tab === 'resumen' ? <ResumenTab /> : tab === 'pagos' ? <PagosTab /> : tab === 'crm' ? <CrmTab /> : tab === 'whatsapp' ? <WhatsAppTab /> : tab === 'email' ? <EmailTab /> : tab === 'contenido' ? <ContenidoTab /> : <ProductosTab />}
+        </main>
+      </div>
     </div>
   );
 }
@@ -1268,12 +1308,74 @@ const emptyPost = (): ContentPost => ({
   id: '', scheduledFor: todayStr(), channel: 'instagram', title: '', caption: '', status: 'idea', link: '',
 });
 
+// Calendario mensual (tipo GHL): cuadrícula del mes, toca un día para crear,
+// toca una publicación para editarla.
+const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const WEEK_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const ymdOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function monthGrid(cursor: Date): Date[] {
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+  const startDow = (first.getDay() + 6) % 7; // lunes = 0
+  const start = new Date(first);
+  start.setDate(first.getDate() - startDow);
+  return Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+}
+
+function ContentCalendar({ posts, onNew, onEdit }: { posts: ContentPost[]; onNew: (dateStr: string) => void; onEdit: (p: ContentPost) => void }) {
+  const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const days = monthGrid(cursor);
+  const todayYmd = ymdOf(new Date());
+  const move = (delta: number) => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));
+
+  return (
+    <Card className="p-3">
+      <div className="mb-3 flex items-center justify-between">
+        <button onClick={() => move(-1)} className="grid h-8 w-8 place-items-center rounded-lg text-ink hover:bg-cream-dark/40">‹</button>
+        <span className="text-sm font-bold text-ink">{MONTHS_ES[cursor.getMonth()]} {cursor.getFullYear()}</span>
+        <button onClick={() => move(1)} className="grid h-8 w-8 place-items-center rounded-lg text-ink hover:bg-cream-dark/40">›</button>
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {WEEK_ES.map((w) => <div key={w} className="pb-1 text-center text-[10px] font-semibold text-ink-faint">{w}</div>)}
+        {days.map((d) => {
+          const dstr = ymdOf(d);
+          const inMonth = d.getMonth() === cursor.getMonth();
+          const dayPosts = posts.filter((p) => p.scheduledFor === dstr);
+          return (
+            <button
+              key={dstr}
+              onClick={() => onNew(dstr)}
+              className={`flex min-h-[54px] flex-col rounded-lg border p-1 text-left transition ${inMonth ? 'border-cream-dark bg-white hover:border-brand' : 'border-transparent bg-cream-dark/20 text-ink-faint'}`}
+            >
+              <span className={`text-[10px] font-semibold ${dstr === todayYmd ? 'grid h-4 w-4 place-items-center rounded-full bg-brand text-cream' : 'text-ink-soft'}`}>{d.getDate()}</span>
+              <div className="mt-0.5 flex flex-wrap gap-0.5">
+                {dayPosts.slice(0, 3).map((p) => (
+                  <span
+                    key={p.id}
+                    onClick={(e) => { e.stopPropagation(); onEdit(p); }}
+                    title={p.title || CONTENT_CHANNEL_LABEL[p.channel]}
+                    className="text-[11px] leading-none"
+                  >
+                    {CHANNEL_ICON[p.channel]}
+                  </span>
+                ))}
+                {dayPosts.length > 3 && <span className="text-[9px] text-ink-faint">+{dayPosts.length - 3}</span>}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[11px] text-ink-faint">Toca un día para programar · toca un ícono para editar esa publicación.</p>
+    </Card>
+  );
+}
+
 function ContenidoTab() {
   const [posts, setPosts] = useState<ContentPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<ContentPost | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [view, setView] = useState<'calendario' | 'lista'>('calendario');
 
   const load = () => { setLoading(true); fetchContent().then(setPosts).finally(() => setLoading(false)); };
   useEffect(load, []);
@@ -1314,14 +1416,31 @@ function ContenidoTab() {
           <h2 className="text-sm font-semibold text-ink">Calendario de contenido</h2>
           <p className="text-xs text-ink-faint">Planea tus publicaciones de redes. Guarda idea, fecha, canal y copy.</p>
         </div>
-        {!draft && (
-          <button onClick={() => setDraft(emptyPost())} className="shrink-0 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90">+ Nueva</button>
-        )}
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="flex rounded-full bg-cream-dark/50 p-0.5">
+            {(['calendario', 'lista'] as const).map((v) => (
+              <button key={v} onClick={() => setView(v)} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${view === v ? 'bg-brand text-cream' : 'text-ink-soft'}`}>
+                {v === 'calendario' ? 'Calendario' : 'Lista'}
+              </button>
+            ))}
+          </div>
+          {!draft && (
+            <button onClick={() => setDraft(emptyPost())} className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90">+ Nueva</button>
+          )}
+        </div>
       </div>
 
       <Card className="p-3 text-xs text-ink-soft">
         💡 Por ahora es un <b>planificador</b>: organizas y copias el texto para publicarlo tú. La publicación automática a Instagram/TikTok necesita aprobación de Meta/TikTok (lo activamos cuando la tengas).
       </Card>
+
+      {view === 'calendario' && !draft && (
+        <ContentCalendar
+          posts={posts}
+          onNew={(dstr) => setDraft({ ...emptyPost(), scheduledFor: dstr })}
+          onEdit={(p) => setDraft({ ...p })}
+        />
+      )}
 
       {/* Formulario crear/editar */}
       {draft && (
@@ -1364,7 +1483,7 @@ function ContenidoTab() {
       )}
 
       {/* Lista de publicaciones */}
-      {loading ? (
+      {view === 'lista' && (loading ? (
         <p className="text-ink-faint">Cargando…</p>
       ) : posts.length === 0 && !draft ? (
         <Card className="p-8 text-center text-ink-faint">Aún no tienes contenido planeado. Toca <span className="font-semibold text-ink">+ Nueva</span> para tu primera publicación.</Card>
@@ -1403,7 +1522,7 @@ function ContenidoTab() {
             </Card>
           ))}
         </section>
-      )}
+      ))}
     </>
   );
 }
