@@ -41,6 +41,7 @@ function AmountBlock({ p, billing, currency }: { p: Plan; billing: BillingInterv
 
 const REGISTRO = '/entrar?nuevo=1';
 const LOGIN = '/entrar';
+const DEMO = '/demo?src=landing';
 
 // Marca de loto (outline salvia) para la barra superior y el pie.
 function LotusMark({ className }: { className?: string }) {
@@ -221,6 +222,7 @@ export default function Landing() {
           <p className="sub">Reservas, control de acceso, membresías con vencimiento, pagos con tarjeta, tienda y WhatsApp con IA — en una sola app con la cara de tu marca. Para estudios, gimnasios y centros mixtos. Menos caos, más clientes.</p>
           <div className="cta">
             <Link className="btn btn-primary" to={REGISTRO}>Empieza por ${promo} · {PROMO_TRIAL_DAYS} días</Link>
+            <Link className="btn btn-ghost" to={DEMO}>Agenda una demo</Link>
             <a className="btn btn-ghost" href="#como">Ver cómo funciona</a>
           </div>
           <div className="reassure">
@@ -392,7 +394,10 @@ export default function Landing() {
           <LotusMark className="final-mark" />
           <h2>Tu próxima clase llena empieza hoy</h2>
           <p className="lead" style={{ marginTop: 14 }}>Prueba Move yA completo por ${promo} · {PROMO_TRIAL_DAYS} días con acceso Premium. Con tu marca desde el primer día.</p>
-          <Link className="btn btn-primary big" to={REGISTRO}>Crear mi estudio</Link>
+          <div className="cta" style={{ justifyContent: 'center', marginTop: 8 }}>
+            <Link className="btn btn-primary big" to={REGISTRO}>Crear mi estudio</Link>
+            <Link className="btn btn-ghost big" to={DEMO}>Agenda una demo</Link>
+          </div>
         </div>
       </div>
 
@@ -595,6 +600,8 @@ const CSS = `
 .mya-land .final-mark{width:50px;height:50px;color:var(--mint-soft);margin:0 auto 14px}
 .mya-land .finalbox .btn-primary{background:var(--cream);color:var(--sage)}
 .mya-land .finalbox .btn-primary:hover{background:#fff}
+.mya-land .finalbox .btn-ghost{color:var(--cream);border-color:rgba(244,241,234,.45);background:transparent}
+.mya-land .finalbox .btn-ghost:hover{border-color:var(--cream);background:rgba(255,255,255,.08)}
 
 /* Footer */
 .mya-land footer{position:relative;z-index:2;border-top:1px solid var(--line);padding:28px 0;color:var(--muted);font-size:13px;background:var(--cream2)}

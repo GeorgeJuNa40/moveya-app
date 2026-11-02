@@ -52,6 +52,8 @@ const Landing = lazyWithReload(() => import('./features/public/Landing'));
 const FounderLanding = lazyWithReload(() => import('./features/public/FounderLanding'));
 const MoveyaPanel = lazyWithReload(() => import('./features/platform/MoveyaPanel'));
 const MoveyaCapture = lazyWithReload(() => import('./features/public/MoveyaCapture'));
+// Agenda pública de demos (embudo Move yA) — elige día/hora y cae en el CRM.
+const MoveyaDemo = lazyWithReload(() => import('./features/public/MoveyaDemo'));
 // Página pública informativa del estudio (sin login).
 const StudioInfoPage = lazyWithReload(() => import('./features/public/StudioInfoPage'));
 // Registro de entrada (check-in) — se abre al escanear el QR de acceso.
@@ -401,6 +403,7 @@ export default function App() {
 
       {/* Captura pública de leads (embudo Move yA) — sin login. */}
       <Route path="/captura" element={<MoveyaCapture />} />
+      <Route path="/demo" element={<MoveyaDemo />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

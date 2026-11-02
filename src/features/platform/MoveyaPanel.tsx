@@ -20,6 +20,9 @@ import { FOUNDER_CODE } from '../../lib/plans';
 const usd = (n: number) => `$${n.toFixed(2)}`;
 const fmtDate = (s: string | null) =>
   s ? new Date(s).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+// Fecha + hora (para demos agendadas): "mié 5 nov · 18:00".
+const fmtDateTime = (s: string | null) =>
+  s ? new Date(s).toLocaleString('es-MX', { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 const PLAN_LABEL: Record<string, string> = { inicio: 'Inicio', pro: 'Pro', premium: 'Premium' };
 const inp = 'w-full rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ring-brand';
 const FOUNDER_CAP = 10;
@@ -463,7 +466,7 @@ const STAGE_ACCENT: Record<LeadStatus, string> = {
   nuevo: '#9aa39d', contactado: '#4A5D55', demo: '#C98A2B', prueba: '#88B8B7', pagando: '#2E7D53', perdido: '#B23B3B',
 };
 const emptyLead = (): MoveyaLead => ({
-  id: '', name: '', ownerName: '', phone: '', email: '', city: '', status: 'nuevo', source: '', notes: '', nextFollowup: null, createdAt: '',
+  id: '', name: '', ownerName: '', phone: '', email: '', city: '', status: 'nuevo', source: '', notes: '', nextFollowup: null, demoAt: null, createdAt: '',
 });
 
 function CrmTab() {
@@ -625,6 +628,11 @@ function CrmTab() {
                     {l.phone && <a href={waLink(l.phone)} target="_blank" rel="noreferrer" className="text-brand underline">{l.phone}</a>}
                     {l.source && <> · {l.source}</>}
                   </p>
+                  {l.demoAt && (
+                    <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-mint/20 px-2 py-0.5 text-[11px] font-semibold text-brand">
+                      📅 Demo: {fmtDateTime(l.demoAt)}
+                    </p>
+                  )}
                   {l.notes && <p className="mt-1 line-clamp-2 text-xs text-ink-soft">{l.notes}</p>}
                 </div>
                 {l.nextFollowup && (
@@ -699,6 +707,7 @@ function CrmTab() {
                           {l.phone && <a href={waLink(l.phone)} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-brand underline">WhatsApp</a>}
                           {l.nextFollowup && <span className="text-[10px] text-ink-faint">📅 {fmtDate(l.nextFollowup)}</span>}
                         </div>
+                        {l.demoAt && <p className="mt-1 truncate text-[10px] font-semibold text-brand">📅 Demo: {fmtDateTime(l.demoAt)}</p>}
                       </div>
                     ))}
                     {col.length === 0 && <p className="px-1 py-2 text-center text-[11px] text-ink-faint">—</p>}

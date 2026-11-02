@@ -188,6 +188,7 @@ export interface MoveyaLead {
   source: string;
   notes: string;
   nextFollowup: string | null; // YYYY-MM-DD
+  demoAt: string | null;       // fecha/hora de demo solicitada (ISO) — si agendó
   createdAt: string;
 }
 
@@ -205,6 +206,7 @@ export async function fetchLeads(): Promise<MoveyaLead[]> {
     source: String(r.source ?? ''),
     notes: String(r.notes ?? ''),
     nextFollowup: (r.next_followup ?? null) as string | null,
+    demoAt: (r.demo_at ?? null) as string | null,
     createdAt: String(r.created_at ?? ''),
   }));
 }
@@ -244,7 +246,7 @@ export async function deleteLead(id: string): Promise<boolean> {
 // ---------------------------------------------------------------------------
 // Email marketing (Resend) — envío a leads y registro.
 // ---------------------------------------------------------------------------
-export const DEFAULT_EMAIL_FROM = 'Move yA <hola@moveyaapp.app>';
+export const DEFAULT_EMAIL_FROM = 'Move yA <ventas@moveyaapp.app>';
 
 export interface MoveyaEmail {
   id: string;
@@ -338,6 +340,25 @@ export async function captureLead(l: {
     p_city: l.city ?? '',
     p_note: l.note ?? '',
     p_source: l.source ?? 'formulario',
+  });
+  if (error) return false;
+  return data === true;
+}
+
+// Agenda pública de demo: crea un lead en etapa 'demo' con la fecha/hora elegida.
+export async function requestDemo(l: {
+  name: string; ownerName?: string; phone?: string; email?: string; city?: string;
+  note?: string; source?: string; demoAt?: string | null;
+}): Promise<boolean> {
+  const { data, error } = await supabase.rpc('request_demo', {
+    p_name: l.name,
+    p_owner_name: l.ownerName ?? '',
+    p_phone: l.phone ?? '',
+    p_email: l.email ?? '',
+    p_city: l.city ?? '',
+    p_note: l.note ?? '',
+    p_source: l.source ?? 'agenda-demo',
+    p_demo_at: l.demoAt ?? '',
   });
   if (error) return false;
   return data === true;
