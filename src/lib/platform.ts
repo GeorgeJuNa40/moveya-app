@@ -503,8 +503,16 @@ export const DEFAULT_SALES_KB: string[] = [
 // ---------------------------------------------------------------------------
 // Secuencias de seguimiento automáticas (Fase 3) — config editable del dueño.
 // ---------------------------------------------------------------------------
-export interface SequenceStep { delayHours: number; subject: string; body: string }
-export interface SequenceConfig { active: boolean; steps: SequenceStep[] }
+export type StepKind = 'email' | 'stage';
+export interface SequenceStep { delayHours: number; kind: StepKind; subject: string; body: string; stage: string }
+// Disparador por origen del lead (o 'any' = todos).
+export type TriggerSource = 'any' | 'formulario' | 'agenda-demo' | 'instagram' | 'facebook' | 'tiktok' | 'whatsapp';
+export const TRIGGER_SOURCES: TriggerSource[] = ['any', 'agenda-demo', 'formulario', 'instagram', 'facebook', 'tiktok', 'whatsapp'];
+export const TRIGGER_SOURCE_LABEL: Record<TriggerSource, string> = {
+  any: 'Todos los leads', 'agenda-demo': 'Agenda de demo', formulario: 'Captura (formulario)',
+  instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', whatsapp: 'WhatsApp',
+};
+export interface SequenceConfig { active: boolean; triggerSource: TriggerSource; steps: SequenceStep[] }
 
 export async function fetchSequenceConfig(): Promise<SequenceConfig | null> {
   const { data, error } = await supabase.rpc('moveya_seq_config_get');
@@ -514,17 +522,22 @@ export async function fetchSequenceConfig(): Promise<SequenceConfig | null> {
   const steps = Array.isArray(row.steps) ? row.steps : [];
   return {
     active: !!row.active,
+    triggerSource: (row.trigger_source ?? 'any') as TriggerSource,
     steps: steps.map((s: Record<string, unknown>) => ({
       delayHours: Number(s.delay_hours ?? 0),
+      kind: ((s.kind as string) === 'stage' ? 'stage' : 'email') as StepKind,
       subject: String(s.subject ?? ''),
       body: String(s.body ?? ''),
+      stage: String(s.stage ?? 'contactado'),
     })),
   };
 }
 
-export async function saveSequenceConfig(active: boolean, steps: SequenceStep[]): Promise<boolean> {
-  const p_steps = steps.map((s) => ({ delay_hours: Math.max(0, Math.round(s.delayHours || 0)), subject: s.subject, body: s.body }));
-  const { error } = await supabase.rpc('moveya_seq_config_save', { p_active: active, p_steps });
+export async function saveSequenceConfig(active: boolean, steps: SequenceStep[], triggerSource: TriggerSource): Promise<boolean> {
+  const p_steps = steps.map((s) => s.kind === 'stage'
+    ? { delay_hours: Math.max(0, Math.round(s.delayHours || 0)), kind: 'stage', stage: s.stage }
+    : { delay_hours: Math.max(0, Math.round(s.delayHours || 0)), kind: 'email', subject: s.subject, body: s.body });
+  const { error } = await supabase.rpc('moveya_seq_config_save', { p_active: active, p_steps, p_trigger_source: triggerSource });
   return !error;
 }
 

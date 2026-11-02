@@ -11,7 +11,8 @@ import {
   fetchWaConvos, fetchWaThread, markWaRead, setWaMode, sendWaReply,
   type WaConversation, type WaMessage,
   fetchEmailsRecent, sendEmailCampaign, brandedEmailHtml, DEFAULT_EMAIL_FROM, DEFAULT_EMAIL_TEMPLATES, type MoveyaEmail,
-  fetchSequenceConfig, saveSequenceConfig, fetchSequenceStats, type SequenceStep,
+  fetchSequenceConfig, saveSequenceConfig, fetchSequenceStats, type SequenceStep, type StepKind,
+  type TriggerSource, TRIGGER_SOURCES, TRIGGER_SOURCE_LABEL,
   fetchContent, saveContent, deleteContent, type ContentPost, type ContentStatus, type ContentChannel,
   CONTENT_STATUSES, CONTENT_STATUS_LABEL, CONTENT_CHANNELS, CONTENT_CHANNEL_LABEL,
 } from '../../lib/platform';
@@ -813,6 +814,7 @@ function CrmTab() {
 // ---------------------------------------------------------------------------
 function SequenceAutomation() {
   const [active, setActive] = useState(true);
+  const [trigger, setTrigger] = useState<TriggerSource>('any');
   const [steps, setSteps] = useState<SequenceStep[]>([]);
   const [stats, setStats] = useState({ pending: 0, sent: 0 });
   const [loading, setLoading] = useState(true);
@@ -821,28 +823,30 @@ function SequenceAutomation() {
 
   useEffect(() => {
     Promise.all([fetchSequenceConfig(), fetchSequenceStats()])
-      .then(([cfg, st]) => { if (cfg) { setActive(cfg.active); setSteps(cfg.steps); } setStats(st); })
+      .then(([cfg, st]) => { if (cfg) { setActive(cfg.active); setTrigger(cfg.triggerSource); setSteps(cfg.steps); } setStats(st); })
       .finally(() => setLoading(false));
   }, []);
 
   const save = async () => {
     setSaving(true);
-    const ok = await saveSequenceConfig(active, steps);
+    const ok = await saveSequenceConfig(active, steps, trigger);
     setSaving(false);
     if (ok) notifySuccess('Automatización guardada.'); else notifyError('seq', 'No se pudo guardar.');
   };
 
   const setStep = (i: number, patch: Partial<SequenceStep>) =>
     setSteps((ss) => ss.map((s, k) => (k === i ? { ...s, ...patch } : s)));
-  const addStep = () => setSteps((ss) => [...ss, { delayHours: (ss.length ? 72 : 0), subject: '', body: '' }]);
+  const addStep = (kind: StepKind) => setSteps((ss) => [...ss, {
+    delayHours: (ss.length ? 72 : 0), kind, subject: '', body: '', stage: 'contactado',
+  }]);
   const removeStep = (i: number) => setSteps((ss) => ss.filter((_, k) => k !== i));
 
   return (
     <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-ink">🤖 Automatización · Secuencia de bienvenida</h2>
-          <p className="text-xs text-ink-faint">Cada lead nuevo con correo (captura o demo) recibe estos correos solos, en los días que configures.</p>
+          <h2 className="text-sm font-semibold text-ink">🤖 Automatización · Workflow</h2>
+          <p className="text-xs text-ink-faint">Cuando entra un lead, se ejecutan estos pasos solos (enviar correo o mover de etapa) en los días que configures.</p>
         </div>
         <button onClick={() => setOpen((v) => !v)} className="shrink-0 text-xs font-semibold text-brand">{open ? 'Ocultar' : 'Configurar'}</button>
       </div>
@@ -859,31 +863,53 @@ function SequenceAutomation() {
 
       {open && (
         <div className="mt-4 space-y-3">
+          {/* Disparador */}
+          <label className="block rounded-xl bg-cream-dark/25 p-3">
+            <span className="mb-1 block text-xs font-semibold text-ink">⚡ Disparador — ¿a qué leads aplica?</span>
+            <select className={inp} value={trigger} onChange={(e) => setTrigger(e.target.value as TriggerSource)}>
+              {TRIGGER_SOURCES.map((t) => <option key={t} value={t}>{TRIGGER_SOURCE_LABEL[t]}</option>)}
+            </select>
+          </label>
+
+          {/* Pasos */}
           {steps.map((s, i) => (
             <div key={i} className="rounded-xl border border-cream-dark bg-white p-3">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold text-ink">Correo {i + 1}</span>
+                <span className="text-xs font-semibold text-ink">Paso {i + 1} · {s.kind === 'stage' ? 'Cambiar etapa' : 'Enviar correo'}</span>
                 <button onClick={() => removeStep(i)} className="text-[11px] font-semibold text-red-600 hover:underline">Quitar</button>
               </div>
-              <label className="mb-2 flex items-center gap-2 text-xs text-ink-soft">
-                Enviar
+              <label className="mb-2 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+                Ejecutar
                 <input
                   type="number" min={0}
                   value={Math.round(s.delayHours / 24)}
                   onChange={(e) => setStep(i, { delayHours: Math.max(0, Number(e.target.value) || 0) * 24 })}
                   className="w-16 rounded-lg border border-cream-dark bg-white px-2 py-1 text-sm"
                 />
-                días después de entrar el lead {i === 0 && <span className="text-ink-faint">(0 = de inmediato)</span>}
+                días después {i === 0 && <span className="text-ink-faint">(0 = de inmediato)</span>}
               </label>
-              <input className={`${inp} mb-2`} value={s.subject} onChange={(e) => setStep(i, { subject: e.target.value })} placeholder="Asunto (usa {{nombre}})" />
-              <textarea className={`${inp} min-h-24`} value={s.body} onChange={(e) => setStep(i, { body: e.target.value })} placeholder="Mensaje (usa {{nombre}})" />
+              {s.kind === 'stage' ? (
+                <label className="flex items-center gap-2 text-xs text-ink-soft">
+                  Mover el lead a:
+                  <select className="rounded-lg border border-cream-dark bg-white px-2 py-1.5 text-sm" value={s.stage} onChange={(e) => setStep(i, { stage: e.target.value })}>
+                    {LEAD_STATUSES.map((st) => <option key={st} value={st}>{LEAD_STATUS_LABEL[st]}</option>)}
+                  </select>
+                </label>
+              ) : (
+                <>
+                  <input className={`${inp} mb-2`} value={s.subject} onChange={(e) => setStep(i, { subject: e.target.value })} placeholder="Asunto (usa {{nombre}})" />
+                  <textarea className={`${inp} min-h-24`} value={s.body} onChange={(e) => setStep(i, { body: e.target.value })} placeholder="Mensaje (usa {{nombre}})" />
+                </>
+              )}
             </div>
           ))}
-          <div className="flex items-center justify-between">
-            <button onClick={addStep} className="rounded-full border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">+ Agregar correo</button>
-            <button onClick={save} disabled={saving} className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar automatización'}</button>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => addStep('email')} className="rounded-full border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">+ Correo</button>
+            <button onClick={() => addStep('stage')} className="rounded-full border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">+ Cambiar etapa</button>
+            <button onClick={save} disabled={saving} className="ml-auto rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar workflow'}</button>
           </div>
-          <p className="text-[11px] text-ink-faint">Se envían desde tu remitente de Move yA con el diseño de marca. {'{{'}nombre{'}}'} se reemplaza por el nombre del lead.</p>
+          <p className="text-[11px] text-ink-faint">Los correos salen desde tu remitente de Move yA con el diseño de marca. {'{{'}nombre{'}}'} se reemplaza por el nombre del lead. (Paso de WhatsApp: próximamente, requiere plantilla aprobada de Meta.)</p>
         </div>
       )}
     </Card>
@@ -1308,10 +1334,14 @@ const emptyPost = (): ContentPost => ({
   id: '', scheduledFor: todayStr(), channel: 'instagram', title: '', caption: '', status: 'idea', link: '',
 });
 
-// Calendario mensual (tipo GHL): cuadrícula del mes, toca un día para crear,
-// toca una publicación para editarla.
+// Calendario mensual (tipo GHL): toca un día para ver/crear, colores por estado,
+// y arrastra una publicación de un día a otro para reprogramarla.
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const WEEK_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+// Color del chip según estado (idea / listo / publicado).
+const STATUS_CHIP: Record<ContentStatus, string> = {
+  idea: 'bg-cream-dark/70 text-ink-soft', listo: 'bg-mint/60 text-ink', publicado: 'bg-green-100 text-green-700',
+};
 const ymdOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 function monthGrid(cursor: Date): Date[] {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -1321,11 +1351,19 @@ function monthGrid(cursor: Date): Date[] {
   return Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
 }
 
-function ContentCalendar({ posts, onNew, onEdit }: { posts: ContentPost[]; onNew: (dateStr: string) => void; onEdit: (p: ContentPost) => void }) {
+function ContentCalendar({ posts, onNew, onEdit, onReschedule }: {
+  posts: ContentPost[];
+  onNew: (dateStr: string) => void;
+  onEdit: (p: ContentPost) => void;
+  onReschedule: (p: ContentPost, dateStr: string) => void;
+}) {
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [selected, setSelected] = useState(ymdOf(new Date()));
+  const [dragId, setDragId] = useState<string | null>(null);
   const days = monthGrid(cursor);
   const todayYmd = ymdOf(new Date());
   const move = (delta: number) => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));
+  const selectedPosts = posts.filter((p) => p.scheduledFor === selected);
 
   return (
     <Card className="p-3">
@@ -1340,31 +1378,71 @@ function ContentCalendar({ posts, onNew, onEdit }: { posts: ContentPost[]; onNew
           const dstr = ymdOf(d);
           const inMonth = d.getMonth() === cursor.getMonth();
           const dayPosts = posts.filter((p) => p.scheduledFor === dstr);
+          const isSel = dstr === selected;
           return (
-            <button
+            <div
               key={dstr}
-              onClick={() => onNew(dstr)}
-              className={`flex min-h-[54px] flex-col rounded-lg border p-1 text-left transition ${inMonth ? 'border-cream-dark bg-white hover:border-brand' : 'border-transparent bg-cream-dark/20 text-ink-faint'}`}
+              onClick={() => setSelected(dstr)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                const p = posts.find((x) => x.id === dragId);
+                if (p && p.scheduledFor !== dstr) onReschedule(p, dstr);
+                setDragId(null);
+              }}
+              className={`flex min-h-[54px] cursor-pointer flex-col rounded-lg border p-1 text-left transition ${isSel ? 'border-brand ring-1 ring-brand' : inMonth ? 'border-cream-dark bg-white hover:border-brand' : 'border-transparent bg-cream-dark/20 text-ink-faint'}`}
             >
               <span className={`text-[10px] font-semibold ${dstr === todayYmd ? 'grid h-4 w-4 place-items-center rounded-full bg-brand text-cream' : 'text-ink-soft'}`}>{d.getDate()}</span>
               <div className="mt-0.5 flex flex-wrap gap-0.5">
                 {dayPosts.slice(0, 3).map((p) => (
                   <span
                     key={p.id}
+                    draggable
+                    onDragStart={(e) => { e.stopPropagation(); setDragId(p.id); }}
+                    onDragEnd={() => setDragId(null)}
                     onClick={(e) => { e.stopPropagation(); onEdit(p); }}
                     title={p.title || CONTENT_CHANNEL_LABEL[p.channel]}
-                    className="text-[11px] leading-none"
+                    className={`grid h-4 w-4 cursor-grab place-items-center rounded text-[10px] leading-none active:cursor-grabbing ${STATUS_CHIP[p.status]}`}
                   >
                     {CHANNEL_ICON[p.channel]}
                   </span>
                 ))}
                 {dayPosts.length > 3 && <span className="text-[9px] text-ink-faint">+{dayPosts.length - 3}</span>}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
-      <p className="mt-2 text-[11px] text-ink-faint">Toca un día para programar · toca un ícono para editar esa publicación.</p>
+
+      {/* Leyenda de estados */}
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-ink-faint">
+        {CONTENT_STATUSES.map((s) => (
+          <span key={s} className="flex items-center gap-1">
+            <span className={`h-3 w-3 rounded ${STATUS_CHIP[s]}`} /> {CONTENT_STATUS_LABEL[s]}
+          </span>
+        ))}
+        <span className="ml-auto">Arrastra para reprogramar</span>
+      </div>
+
+      {/* Publicaciones del día seleccionado */}
+      <div className="mt-3 border-t border-cream-dark pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-ink">{fmtDate(selected)}</span>
+          <button onClick={() => onNew(selected)} className="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-cream hover:opacity-90">+ Nueva este día</button>
+        </div>
+        {selectedPosts.length === 0 ? (
+          <p className="text-[11px] text-ink-faint">Sin publicaciones este día.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {selectedPosts.map((p) => (
+              <button key={p.id} onClick={() => onEdit(p)} className="flex w-full items-center gap-2 rounded-lg border border-cream-dark bg-white px-2 py-1.5 text-left hover:border-brand">
+                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded ${STATUS_CHIP[p.status]}`}>{CHANNEL_ICON[p.channel]}</span>
+                <span className="min-w-0 flex-1 truncate text-xs text-ink">{p.title || p.caption || CONTENT_CHANNEL_LABEL[p.channel]}</span>
+                <Badge tone={CONTENT_TONE[p.status]}>{CONTENT_STATUS_LABEL[p.status]}</Badge>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
@@ -1439,6 +1517,10 @@ function ContenidoTab() {
           posts={posts}
           onNew={(dstr) => setDraft({ ...emptyPost(), scheduledFor: dstr })}
           onEdit={(p) => setDraft({ ...p })}
+          onReschedule={async (p, dstr) => {
+            const ok = await saveContent({ ...p, id: p.id, scheduledFor: dstr });
+            if (ok) { notifySuccess('Publicación reprogramada.'); load(); } else notifyError('content', 'No se pudo reprogramar.');
+          }}
         />
       )}
 
