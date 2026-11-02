@@ -534,3 +534,60 @@ export async function fetchSequenceStats(): Promise<{ pending: number; sent: num
   const row = Array.isArray(data) ? data[0] : data;
   return { pending: Number(row?.pending ?? 0), sent: Number(row?.sent ?? 0) };
 }
+
+// ---------------------------------------------------------------------------
+// Calendario de contenido (Fase 5) — planificador de redes del dueño.
+// ---------------------------------------------------------------------------
+export type ContentStatus = 'idea' | 'listo' | 'publicado';
+export const CONTENT_STATUSES: ContentStatus[] = ['idea', 'listo', 'publicado'];
+export const CONTENT_STATUS_LABEL: Record<ContentStatus, string> = { idea: 'Idea', listo: 'Listo', publicado: 'Publicado' };
+export type ContentChannel = 'instagram' | 'facebook' | 'tiktok' | 'whatsapp' | 'otro';
+export const CONTENT_CHANNELS: ContentChannel[] = ['instagram', 'facebook', 'tiktok', 'whatsapp', 'otro'];
+export const CONTENT_CHANNEL_LABEL: Record<ContentChannel, string> = {
+  instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', whatsapp: 'WhatsApp', otro: 'Otro',
+};
+
+export interface ContentPost {
+  id: string;
+  scheduledFor: string; // YYYY-MM-DD
+  channel: ContentChannel;
+  title: string;
+  caption: string;
+  status: ContentStatus;
+  link: string;
+}
+
+export async function fetchContent(): Promise<ContentPost[]> {
+  const { data, error } = await supabase.rpc('moveya_content_all');
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: String(r.id),
+    scheduledFor: String(r.scheduled_for ?? ''),
+    channel: (r.channel ?? 'instagram') as ContentChannel,
+    title: String(r.title ?? ''),
+    caption: String(r.caption ?? ''),
+    status: (r.status ?? 'idea') as ContentStatus,
+    link: String(r.link ?? ''),
+  }));
+}
+
+export async function saveContent(p: {
+  id?: string; scheduledFor: string; channel: ContentChannel; title?: string;
+  caption?: string; status?: ContentStatus; link?: string;
+}): Promise<boolean> {
+  const { error } = await supabase.rpc('moveya_content_save', {
+    p_id: p.id ?? '',
+    p_scheduled_for: p.scheduledFor,
+    p_channel: p.channel,
+    p_title: p.title ?? '',
+    p_caption: p.caption ?? '',
+    p_status: p.status ?? 'idea',
+    p_link: p.link ?? '',
+  });
+  return !error;
+}
+
+export async function deleteContent(id: string): Promise<boolean> {
+  const { error } = await supabase.rpc('moveya_content_delete', { p_id: id });
+  return !error;
+}
