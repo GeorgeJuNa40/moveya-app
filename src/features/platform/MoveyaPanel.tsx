@@ -1334,10 +1334,14 @@ const emptyPost = (): ContentPost => ({
   id: '', scheduledFor: todayStr(), channel: 'instagram', title: '', caption: '', status: 'idea', link: '',
 });
 
-// Calendario mensual (tipo GHL): cuadrícula del mes, toca un día para crear,
-// toca una publicación para editarla.
+// Calendario mensual (tipo GHL): toca un día para ver/crear, colores por estado,
+// y arrastra una publicación de un día a otro para reprogramarla.
 const MONTHS_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const WEEK_ES = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+// Color del chip según estado (idea / listo / publicado).
+const STATUS_CHIP: Record<ContentStatus, string> = {
+  idea: 'bg-cream-dark/70 text-ink-soft', listo: 'bg-mint/60 text-ink', publicado: 'bg-green-100 text-green-700',
+};
 const ymdOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 function monthGrid(cursor: Date): Date[] {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -1347,11 +1351,19 @@ function monthGrid(cursor: Date): Date[] {
   return Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
 }
 
-function ContentCalendar({ posts, onNew, onEdit }: { posts: ContentPost[]; onNew: (dateStr: string) => void; onEdit: (p: ContentPost) => void }) {
+function ContentCalendar({ posts, onNew, onEdit, onReschedule }: {
+  posts: ContentPost[];
+  onNew: (dateStr: string) => void;
+  onEdit: (p: ContentPost) => void;
+  onReschedule: (p: ContentPost, dateStr: string) => void;
+}) {
   const [cursor, setCursor] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [selected, setSelected] = useState(ymdOf(new Date()));
+  const [dragId, setDragId] = useState<string | null>(null);
   const days = monthGrid(cursor);
   const todayYmd = ymdOf(new Date());
   const move = (delta: number) => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));
+  const selectedPosts = posts.filter((p) => p.scheduledFor === selected);
 
   return (
     <Card className="p-3">
@@ -1366,31 +1378,71 @@ function ContentCalendar({ posts, onNew, onEdit }: { posts: ContentPost[]; onNew
           const dstr = ymdOf(d);
           const inMonth = d.getMonth() === cursor.getMonth();
           const dayPosts = posts.filter((p) => p.scheduledFor === dstr);
+          const isSel = dstr === selected;
           return (
-            <button
+            <div
               key={dstr}
-              onClick={() => onNew(dstr)}
-              className={`flex min-h-[54px] flex-col rounded-lg border p-1 text-left transition ${inMonth ? 'border-cream-dark bg-white hover:border-brand' : 'border-transparent bg-cream-dark/20 text-ink-faint'}`}
+              onClick={() => setSelected(dstr)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                const p = posts.find((x) => x.id === dragId);
+                if (p && p.scheduledFor !== dstr) onReschedule(p, dstr);
+                setDragId(null);
+              }}
+              className={`flex min-h-[54px] cursor-pointer flex-col rounded-lg border p-1 text-left transition ${isSel ? 'border-brand ring-1 ring-brand' : inMonth ? 'border-cream-dark bg-white hover:border-brand' : 'border-transparent bg-cream-dark/20 text-ink-faint'}`}
             >
               <span className={`text-[10px] font-semibold ${dstr === todayYmd ? 'grid h-4 w-4 place-items-center rounded-full bg-brand text-cream' : 'text-ink-soft'}`}>{d.getDate()}</span>
               <div className="mt-0.5 flex flex-wrap gap-0.5">
                 {dayPosts.slice(0, 3).map((p) => (
                   <span
                     key={p.id}
+                    draggable
+                    onDragStart={(e) => { e.stopPropagation(); setDragId(p.id); }}
+                    onDragEnd={() => setDragId(null)}
                     onClick={(e) => { e.stopPropagation(); onEdit(p); }}
                     title={p.title || CONTENT_CHANNEL_LABEL[p.channel]}
-                    className="text-[11px] leading-none"
+                    className={`grid h-4 w-4 cursor-grab place-items-center rounded text-[10px] leading-none active:cursor-grabbing ${STATUS_CHIP[p.status]}`}
                   >
                     {CHANNEL_ICON[p.channel]}
                   </span>
                 ))}
                 {dayPosts.length > 3 && <span className="text-[9px] text-ink-faint">+{dayPosts.length - 3}</span>}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
-      <p className="mt-2 text-[11px] text-ink-faint">Toca un día para programar · toca un ícono para editar esa publicación.</p>
+
+      {/* Leyenda de estados */}
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-[10px] text-ink-faint">
+        {CONTENT_STATUSES.map((s) => (
+          <span key={s} className="flex items-center gap-1">
+            <span className={`h-3 w-3 rounded ${STATUS_CHIP[s]}`} /> {CONTENT_STATUS_LABEL[s]}
+          </span>
+        ))}
+        <span className="ml-auto">Arrastra para reprogramar</span>
+      </div>
+
+      {/* Publicaciones del día seleccionado */}
+      <div className="mt-3 border-t border-cream-dark pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-xs font-semibold text-ink">{fmtDate(selected)}</span>
+          <button onClick={() => onNew(selected)} className="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-cream hover:opacity-90">+ Nueva este día</button>
+        </div>
+        {selectedPosts.length === 0 ? (
+          <p className="text-[11px] text-ink-faint">Sin publicaciones este día.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {selectedPosts.map((p) => (
+              <button key={p.id} onClick={() => onEdit(p)} className="flex w-full items-center gap-2 rounded-lg border border-cream-dark bg-white px-2 py-1.5 text-left hover:border-brand">
+                <span className={`grid h-5 w-5 shrink-0 place-items-center rounded ${STATUS_CHIP[p.status]}`}>{CHANNEL_ICON[p.channel]}</span>
+                <span className="min-w-0 flex-1 truncate text-xs text-ink">{p.title || p.caption || CONTENT_CHANNEL_LABEL[p.channel]}</span>
+                <Badge tone={CONTENT_TONE[p.status]}>{CONTENT_STATUS_LABEL[p.status]}</Badge>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </Card>
   );
 }
@@ -1465,6 +1517,10 @@ function ContenidoTab() {
           posts={posts}
           onNew={(dstr) => setDraft({ ...emptyPost(), scheduledFor: dstr })}
           onEdit={(p) => setDraft({ ...p })}
+          onReschedule={async (p, dstr) => {
+            const ok = await saveContent({ ...p, id: p.id, scheduledFor: dstr });
+            if (ok) { notifySuccess('Publicación reprogramada.'); load(); } else notifyError('content', 'No se pudo reprogramar.');
+          }}
         />
       )}
 
