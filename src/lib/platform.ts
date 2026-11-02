@@ -499,3 +499,38 @@ export const DEFAULT_SALES_KB: string[] = [
   '¿Mis alumnos tienen que descargar una app de una tienda? No, entran desde el navegador del celular y también pueden instalarla como acceso directo.',
   '¿Puedo usar mi propia marca? Sí, Move yA es white-label: tu nombre, tus colores y tu logo.',
 ];
+
+// ---------------------------------------------------------------------------
+// Secuencias de seguimiento automáticas (Fase 3) — config editable del dueño.
+// ---------------------------------------------------------------------------
+export interface SequenceStep { delayHours: number; subject: string; body: string }
+export interface SequenceConfig { active: boolean; steps: SequenceStep[] }
+
+export async function fetchSequenceConfig(): Promise<SequenceConfig | null> {
+  const { data, error } = await supabase.rpc('moveya_seq_config_get');
+  if (error || !data) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return null;
+  const steps = Array.isArray(row.steps) ? row.steps : [];
+  return {
+    active: !!row.active,
+    steps: steps.map((s: Record<string, unknown>) => ({
+      delayHours: Number(s.delay_hours ?? 0),
+      subject: String(s.subject ?? ''),
+      body: String(s.body ?? ''),
+    })),
+  };
+}
+
+export async function saveSequenceConfig(active: boolean, steps: SequenceStep[]): Promise<boolean> {
+  const p_steps = steps.map((s) => ({ delay_hours: Math.max(0, Math.round(s.delayHours || 0)), subject: s.subject, body: s.body }));
+  const { error } = await supabase.rpc('moveya_seq_config_save', { p_active: active, p_steps });
+  return !error;
+}
+
+export async function fetchSequenceStats(): Promise<{ pending: number; sent: number }> {
+  const { data, error } = await supabase.rpc('moveya_seq_stats');
+  if (error || !data) return { pending: 0, sent: 0 };
+  const row = Array.isArray(data) ? data[0] : data;
+  return { pending: Number(row?.pending ?? 0), sent: Number(row?.sent ?? 0) };
+}

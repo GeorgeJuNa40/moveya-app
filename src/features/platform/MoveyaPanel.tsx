@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useStore } from '../../lib/store';
 import { Card, StatCard, Badge } from '../../components/ui';
 import { notifySuccess, notifyError } from '../../lib/notify';
 import {
@@ -11,6 +11,7 @@ import {
   fetchWaConvos, fetchWaThread, markWaRead, setWaMode, sendWaReply,
   type WaConversation, type WaMessage,
   fetchEmailsRecent, sendEmailCampaign, brandedEmailHtml, DEFAULT_EMAIL_FROM, DEFAULT_EMAIL_TEMPLATES, type MoveyaEmail,
+  fetchSequenceConfig, saveSequenceConfig, fetchSequenceStats, type SequenceStep,
 } from '../../lib/platform';
 import { FOUNDER_CODE } from '../../lib/plans';
 
@@ -31,6 +32,7 @@ type Tab = 'resumen' | 'pagos' | 'crm' | 'whatsapp' | 'email' | 'productos';
 
 export default function MoveyaPanel() {
   const [tab, setTab] = useState<Tab>('resumen');
+  const { logout } = useStore();
 
   return (
     <div className="min-h-screen bg-cream">
@@ -41,9 +43,9 @@ export default function MoveyaPanel() {
               <p className="text-xs uppercase tracking-wide text-ink-faint">Panel de creador</p>
               <h1 className="text-lg font-bold text-ink">Move yA · Negocio</h1>
             </div>
-            <Link to="/admin" className="rounded-full border border-cream-dark px-4 py-2 text-sm font-semibold text-ink-soft hover:bg-cream-dark/40">
-              ← Volver
-            </Link>
+            <button onClick={() => logout()} className="rounded-full border border-cream-dark px-4 py-2 text-sm font-semibold text-ink-soft hover:bg-cream-dark/40">
+              Salir
+            </button>
           </div>
           {/* Menú de pestañas */}
           <div className="mt-3 flex gap-2">
@@ -765,6 +767,88 @@ function CrmTab() {
 }
 
 // ---------------------------------------------------------------------------
+// Automatización: secuencia de bienvenida (se dispara sola al entrar un lead).
+// ---------------------------------------------------------------------------
+function SequenceAutomation() {
+  const [active, setActive] = useState(true);
+  const [steps, setSteps] = useState<SequenceStep[]>([]);
+  const [stats, setStats] = useState({ pending: 0, sent: 0 });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    Promise.all([fetchSequenceConfig(), fetchSequenceStats()])
+      .then(([cfg, st]) => { if (cfg) { setActive(cfg.active); setSteps(cfg.steps); } setStats(st); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    const ok = await saveSequenceConfig(active, steps);
+    setSaving(false);
+    if (ok) notifySuccess('Automatización guardada.'); else notifyError('seq', 'No se pudo guardar.');
+  };
+
+  const setStep = (i: number, patch: Partial<SequenceStep>) =>
+    setSteps((ss) => ss.map((s, k) => (k === i ? { ...s, ...patch } : s)));
+  const addStep = () => setSteps((ss) => [...ss, { delayHours: (ss.length ? 72 : 0), subject: '', body: '' }]);
+  const removeStep = (i: number) => setSteps((ss) => ss.filter((_, k) => k !== i));
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-ink">🤖 Automatización · Secuencia de bienvenida</h2>
+          <p className="text-xs text-ink-faint">Cada lead nuevo con correo (captura o demo) recibe estos correos solos, en los días que configures.</p>
+        </div>
+        <button onClick={() => setOpen((v) => !v)} className="shrink-0 text-xs font-semibold text-brand">{open ? 'Ocultar' : 'Configurar'}</button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+        <button
+          onClick={() => setActive((v) => !v)}
+          className={`rounded-full px-3 py-1 font-semibold ${active ? 'bg-brand text-cream' : 'bg-cream-dark/60 text-ink-soft'}`}
+        >
+          {active ? '● Activa' : '○ Pausada'}
+        </button>
+        {!loading && <span className="text-ink-faint">Programados: <b className="text-ink">{stats.pending}</b> · Enviados: <b className="text-ink">{stats.sent}</b></span>}
+      </div>
+
+      {open && (
+        <div className="mt-4 space-y-3">
+          {steps.map((s, i) => (
+            <div key={i} className="rounded-xl border border-cream-dark bg-white p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold text-ink">Correo {i + 1}</span>
+                <button onClick={() => removeStep(i)} className="text-[11px] font-semibold text-red-600 hover:underline">Quitar</button>
+              </div>
+              <label className="mb-2 flex items-center gap-2 text-xs text-ink-soft">
+                Enviar
+                <input
+                  type="number" min={0}
+                  value={Math.round(s.delayHours / 24)}
+                  onChange={(e) => setStep(i, { delayHours: Math.max(0, Number(e.target.value) || 0) * 24 })}
+                  className="w-16 rounded-lg border border-cream-dark bg-white px-2 py-1 text-sm"
+                />
+                días después de entrar el lead {i === 0 && <span className="text-ink-faint">(0 = de inmediato)</span>}
+              </label>
+              <input className={`${inp} mb-2`} value={s.subject} onChange={(e) => setStep(i, { subject: e.target.value })} placeholder="Asunto (usa {{nombre}})" />
+              <textarea className={`${inp} min-h-24`} value={s.body} onChange={(e) => setStep(i, { body: e.target.value })} placeholder="Mensaje (usa {{nombre}})" />
+            </div>
+          ))}
+          <div className="flex items-center justify-between">
+            <button onClick={addStep} className="rounded-full border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">+ Agregar correo</button>
+            <button onClick={save} disabled={saving} className="rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar automatización'}</button>
+          </div>
+          <p className="text-[11px] text-ink-faint">Se envían desde tu remitente de Move yA con el diseño de marca. {'{{'}nombre{'}}'} se reemplaza por el nombre del lead.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Pestaña EMAIL (campañas a leads vía Resend)
 // ---------------------------------------------------------------------------
 function EmailTab() {
@@ -806,6 +890,8 @@ function EmailTab() {
 
   return (
     <>
+      <SequenceAutomation />
+
       <Card className="p-4 space-y-3">
         <h2 className="text-sm font-semibold text-ink">Enviar correo a leads</h2>
 
