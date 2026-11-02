@@ -14,7 +14,7 @@ function srcFromHash(): string {
 }
 
 // Horarios disponibles (hora local del prospecto). Ajustables.
-const SLOTS = ['09:00', '11:00', '13:00', '16:00', '18:00'];
+const SLOTS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00'];
 const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
@@ -64,7 +64,7 @@ export default function MoveyaDemo() {
     <div className="min-h-screen" style={{ background: 'linear-gradient(160deg, #4A5D55 0%, #2f3b36 100%)' }}>
       <div className="mx-auto flex max-w-xl flex-col px-4 py-10">
         <div className="mb-6 text-center text-cream">
-          <p className="text-sm font-semibold tracking-wide text-mint">MOVE yA</p>
+          <p className="text-sm font-semibold tracking-wide text-mint">Move yA</p>
           <h1 className="mt-2 text-2xl font-bold leading-tight">Agenda tu demo gratis</h1>
           <p className="mt-2 text-sm text-cream/80">15 minutos en video. Te muestro Move yA en vivo con el caso de tu estudio y resolvemos tus dudas. Sin compromiso.</p>
         </div>

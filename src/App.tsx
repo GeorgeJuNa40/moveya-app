@@ -51,8 +51,8 @@ const Landing = lazyWithReload(() => import('./features/public/Landing'));
 // Landing exclusiva del Programa Fundador (por invitación, link privado).
 const FounderLanding = lazyWithReload(() => import('./features/public/FounderLanding'));
 const MoveyaPanel = lazyWithReload(() => import('./features/platform/MoveyaPanel'));
-const MoveyaCapture = lazyWithReload(() => import('./features/public/MoveyaCapture'));
 // Agenda pública de demos (embudo Move yA) — elige día/hora y cae en el CRM.
+// Sirve tanto a /demo como a /captura (ambos muestran el calendario).
 const MoveyaDemo = lazyWithReload(() => import('./features/public/MoveyaDemo'));
 // Página pública informativa del estudio (sin login).
 const StudioInfoPage = lazyWithReload(() => import('./features/public/StudioInfoPage'));
@@ -402,7 +402,7 @@ export default function App() {
       <Route path="/moveya" element={<RequirePlatformOwner><MoveyaPanel /></RequirePlatformOwner>} />
 
       {/* Captura pública de leads (embudo Move yA) — sin login. */}
-      <Route path="/captura" element={<MoveyaCapture />} />
+      <Route path="/captura" element={<MoveyaDemo />} />
       <Route path="/demo" element={<MoveyaDemo />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
