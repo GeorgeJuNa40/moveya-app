@@ -12,6 +12,8 @@ import {
   type WaConversation, type WaMessage,
   fetchEmailsRecent, sendEmailCampaign, brandedEmailHtml, DEFAULT_EMAIL_FROM, DEFAULT_EMAIL_TEMPLATES, type MoveyaEmail,
   fetchSequenceConfig, saveSequenceConfig, fetchSequenceStats, type SequenceStep,
+  fetchContent, saveContent, deleteContent, type ContentPost, type ContentStatus, type ContentChannel,
+  CONTENT_STATUSES, CONTENT_STATUS_LABEL, CONTENT_CHANNELS, CONTENT_CHANNEL_LABEL,
 } from '../../lib/platform';
 import { FOUNDER_CODE } from '../../lib/plans';
 
@@ -28,7 +30,7 @@ const PLAN_LABEL: Record<string, string> = { inicio: 'Inicio', pro: 'Pro', premi
 const inp = 'w-full rounded-xl border border-cream-dark bg-white px-3 py-2.5 text-sm outline-none focus:ring-2 ring-brand';
 const FOUNDER_CAP = 10;
 
-type Tab = 'resumen' | 'pagos' | 'crm' | 'whatsapp' | 'email' | 'productos';
+type Tab = 'resumen' | 'pagos' | 'crm' | 'whatsapp' | 'email' | 'contenido' | 'productos';
 
 export default function MoveyaPanel() {
   const [tab, setTab] = useState<Tab>('resumen');
@@ -49,7 +51,7 @@ export default function MoveyaPanel() {
           </div>
           {/* Menú de pestañas */}
           <div className="mt-3 flex gap-2">
-            {([['resumen', 'Resumen'], ['pagos', 'Pagos'], ['crm', 'CRM'], ['whatsapp', 'WhatsApp'], ['email', 'Email'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
+            {([['resumen', 'Resumen'], ['pagos', 'Pagos'], ['crm', 'CRM'], ['whatsapp', 'WhatsApp'], ['email', 'Email'], ['contenido', 'Contenido'], ['productos', 'Productos Move yA']] as [Tab, string][]).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
@@ -65,7 +67,7 @@ export default function MoveyaPanel() {
       </header>
 
       <main className="mx-auto max-w-4xl space-y-6 px-4 py-6">
-        {tab === 'resumen' ? <ResumenTab /> : tab === 'pagos' ? <PagosTab /> : tab === 'crm' ? <CrmTab /> : tab === 'whatsapp' ? <WhatsAppTab /> : tab === 'email' ? <EmailTab /> : <ProductosTab />}
+        {tab === 'resumen' ? <ResumenTab /> : tab === 'pagos' ? <PagosTab /> : tab === 'crm' ? <CrmTab /> : tab === 'whatsapp' ? <WhatsAppTab /> : tab === 'email' ? <EmailTab /> : tab === 'contenido' ? <ContenidoTab /> : <ProductosTab />}
       </main>
     </div>
   );
@@ -1248,6 +1250,160 @@ function WaConfigView() {
           {saving ? 'Guardando…' : 'Guardar configuración'}
         </button>
       </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Pestaña CONTENIDO (calendario/planificador de redes) · Fase 5
+// ---------------------------------------------------------------------------
+const CONTENT_TONE: Record<ContentStatus, 'neutral' | 'brand' | 'success'> = {
+  idea: 'neutral', listo: 'brand', publicado: 'success',
+};
+const CHANNEL_ICON: Record<ContentChannel, string> = {
+  instagram: '📸', facebook: '👍', tiktok: '🎵', whatsapp: '💬', otro: '📝',
+};
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const emptyPost = (): ContentPost => ({
+  id: '', scheduledFor: todayStr(), channel: 'instagram', title: '', caption: '', status: 'idea', link: '',
+});
+
+function ContenidoTab() {
+  const [posts, setPosts] = useState<ContentPost[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState<ContentPost | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+
+  const load = () => { setLoading(true); fetchContent().then(setPosts).finally(() => setLoading(false)); };
+  useEffect(load, []);
+
+  const save = async () => {
+    if (!draft) return;
+    if (!draft.scheduledFor) { notifyError('content', 'Falta la fecha.'); return; }
+    setSaving(true);
+    const ok = await saveContent({
+      id: draft.id || undefined, scheduledFor: draft.scheduledFor, channel: draft.channel,
+      title: draft.title.trim(), caption: draft.caption.trim(), status: draft.status, link: draft.link.trim(),
+    });
+    setSaving(false);
+    if (ok) { notifySuccess(draft.id ? 'Publicación actualizada.' : 'Publicación agregada.'); setDraft(null); load(); }
+    else notifyError('content', 'No se pudo guardar.');
+  };
+
+  const changeStatus = async (p: ContentPost, status: ContentStatus) => {
+    const ok = await saveContent({ ...p, id: p.id, status });
+    if (ok) load(); else notifyError('content', 'No se pudo actualizar.');
+  };
+
+  const remove = async (id: string) => {
+    const ok = await deleteContent(id);
+    setConfirmDel(null);
+    if (ok) { notifySuccess('Publicación eliminada.'); load(); } else notifyError('content', 'No se pudo eliminar.');
+  };
+
+  const copyCaption = async (text: string) => {
+    try { await navigator.clipboard.writeText(text); notifySuccess('Copy copiado.'); }
+    catch { notifyError('content', 'No se pudo copiar.'); }
+  };
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-ink">Calendario de contenido</h2>
+          <p className="text-xs text-ink-faint">Planea tus publicaciones de redes. Guarda idea, fecha, canal y copy.</p>
+        </div>
+        {!draft && (
+          <button onClick={() => setDraft(emptyPost())} className="shrink-0 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90">+ Nueva</button>
+        )}
+      </div>
+
+      <Card className="p-3 text-xs text-ink-soft">
+        💡 Por ahora es un <b>planificador</b>: organizas y copias el texto para publicarlo tú. La publicación automática a Instagram/TikTok necesita aprobación de Meta/TikTok (lo activamos cuando la tengas).
+      </Card>
+
+      {/* Formulario crear/editar */}
+      {draft && (
+        <Card className="p-4 space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Fecha *</span>
+              <input type="date" className={inp} value={draft.scheduledFor} onChange={(e) => setDraft({ ...draft, scheduledFor: e.target.value })} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Canal</span>
+              <select className={inp} value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value as ContentChannel })}>
+                {CONTENT_CHANNELS.map((c) => <option key={c} value={c}>{CONTENT_CHANNEL_LABEL[c]}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Estado</span>
+              <select className={inp} value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as ContentStatus })}>
+                {CONTENT_STATUSES.map((s) => <option key={s} value={s}>{CONTENT_STATUS_LABEL[s]}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">Título / idea interna</span>
+              <input className={inp} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} placeholder="Ej. Reel: 3 beneficios del Pilates" />
+            </label>
+          </div>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Copy (texto a publicar)</span>
+            <textarea className={`${inp} min-h-28`} value={draft.caption} onChange={(e) => setDraft({ ...draft, caption: e.target.value })} placeholder="Escribe el texto del post, con hashtags y llamado a la acción…" />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium text-ink-soft">Link del post (cuando lo publiques, opcional)</span>
+            <input className={inp} value={draft.link} onChange={(e) => setDraft({ ...draft, link: e.target.value })} placeholder="https://instagram.com/p/…" />
+          </label>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setDraft(null)} disabled={saving} className="rounded-2xl px-4 py-2 text-sm font-semibold text-ink-soft hover:bg-cream-dark/40 disabled:opacity-60">Cancelar</button>
+            <button onClick={save} disabled={saving} className="rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar'}</button>
+          </div>
+        </Card>
+      )}
+
+      {/* Lista de publicaciones */}
+      {loading ? (
+        <p className="text-ink-faint">Cargando…</p>
+      ) : posts.length === 0 && !draft ? (
+        <Card className="p-8 text-center text-ink-faint">Aún no tienes contenido planeado. Toca <span className="font-semibold text-ink">+ Nueva</span> para tu primera publicación.</Card>
+      ) : (
+        <section className="space-y-3">
+          {posts.map((p) => (
+            <Card key={p.id} className="p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-ink">{CHANNEL_ICON[p.channel]} {CONTENT_CHANNEL_LABEL[p.channel]}</span>
+                    <Badge tone={CONTENT_TONE[p.status]}>{CONTENT_STATUS_LABEL[p.status]}</Badge>
+                    <span className="text-xs text-ink-faint">📅 {fmtDate(p.scheduledFor)}</span>
+                  </div>
+                  {p.title && <p className="mt-1 text-sm font-medium text-ink">{p.title}</p>}
+                  {p.caption && <p className="mt-1 whitespace-pre-wrap text-xs text-ink-soft line-clamp-4">{p.caption}</p>}
+                  {p.link && <a href={p.link} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-brand underline">Ver post publicado</a>}
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                {p.caption && <button onClick={() => copyCaption(p.caption)} className="rounded-2xl border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">Copiar copy</button>}
+                <select value={p.status} onChange={(e) => changeStatus(p, e.target.value as ContentStatus)} className="rounded-2xl border border-cream-dark bg-white px-2 py-1.5 text-xs font-semibold text-ink-soft">
+                  {CONTENT_STATUSES.map((s) => <option key={s} value={s}>{CONTENT_STATUS_LABEL[s]}</option>)}
+                </select>
+                <button onClick={() => setDraft({ ...p })} className="rounded-2xl border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">Editar</button>
+                {confirmDel === p.id ? (
+                  <>
+                    <span className="self-center text-xs text-red-700">¿Seguro?</span>
+                    <button onClick={() => remove(p.id)} className="rounded-2xl bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">Sí</button>
+                    <button onClick={() => setConfirmDel(null)} className="rounded-2xl px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">No</button>
+                  </>
+                ) : (
+                  <button onClick={() => setConfirmDel(p.id)} className="rounded-2xl border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">Borrar</button>
+                )}
+              </div>
+            </Card>
+          ))}
+        </section>
+      )}
     </>
   );
 }
