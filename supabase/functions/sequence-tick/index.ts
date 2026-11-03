@@ -13,6 +13,8 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') ?? '';
+const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN') ?? '';
+const GRAPH = 'https://graph.facebook.com/v21.0';
 const FROM = 'Move yA <ventas@moveyaapp.app>';
 const BATCH = 60;
 
@@ -46,12 +48,12 @@ Deno.serve(async () => {
 
     const { data: cfg } = await admin.from('moveya_sequence_config').select('active, steps').eq('id', 1).maybeSingle();
     if (!cfg?.active) return json({ ok: true, skipped: 'workflow inactivo', sent: 0 });
-    const steps: { kind?: string; subject?: string; body?: string; stage?: string }[] = Array.isArray(cfg.steps) ? cfg.steps : [];
+    const steps: { kind?: string; subject?: string; body?: string; stage?: string; template?: string; lang?: string }[] = Array.isArray(cfg.steps) ? cfg.steps : [];
 
     const nowIso = new Date().toISOString();
     const { data: due, error } = await admin
       .from('moveya_sequence_queue')
-      .select('id, lead_id, to_email, to_name, step_index')
+      .select('id, lead_id, to_email, to_name, to_phone, step_index')
       .eq('status', 'pending')
       .lte('send_at', nowIso)
       .order('send_at', { ascending: true })
@@ -60,6 +62,7 @@ Deno.serve(async () => {
     if (!due || due.length === 0) return json({ ok: true, sent: 0 });
 
     let sent = 0;
+    let wa = 0;
     let failed = 0;
     let staged = 0;
     let canceled = 0;
@@ -80,6 +83,44 @@ Deno.serve(async () => {
           try { await admin.from('moveya_leads').update({ status: target, updated_at: new Date().toISOString() }).eq('id', row.lead_id); staged++; } catch { /* ignore */ }
         }
         await admin.from('moveya_sequence_queue').update({ status: 'sent' }).eq('id', row.id);
+        continue;
+      }
+
+      // --- Paso: WhatsApp (plantilla aprobada) ---
+      if (kind === 'whatsapp') {
+        const phone = String(row.to_phone ?? '').replace(/[^0-9]/g, '');
+        const tmpl = String(step.template ?? '').trim();
+        if (!phone || !tmpl) { // sin teléfono o sin plantilla, no se puede
+          await admin.from('moveya_sequence_queue').update({ status: 'canceled' }).eq('id', row.id);
+          canceled++;
+          continue;
+        }
+        // Número + token de la plataforma (se configuran al poner el número de producción).
+        const { data: acct } = await admin.from('whatsapp_accounts')
+          .select('phone_number_id, access_token').eq('studio_id', 'moveya-platform').maybeSingle();
+        const pnid = acct?.phone_number_id;
+        const token = acct?.access_token || WHATSAPP_TOKEN;
+        if (!pnid || !token) { // WhatsApp aún no configurado → se cancela este paso
+          await admin.from('moveya_sequence_queue').update({ status: 'canceled' }).eq('id', row.id);
+          canceled++;
+          continue;
+        }
+        const who = (row.to_name && String(row.to_name).trim()) || 'hola';
+        const lang = String(step.lang ?? 'es_MX').trim() || 'es_MX';
+        try {
+          const res = await fetch(`${GRAPH}/${pnid}/messages`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp', to: phone, type: 'template',
+              template: { name: tmpl, language: { code: lang },
+                components: [{ type: 'body', parameters: [{ type: 'text', text: who }] }] },
+            }),
+          });
+          if (res.ok) wa++; else { failed++; }
+        } catch { failed++; }
+        await admin.from('moveya_sequence_queue').update({ status: 'sent' }).eq('id', row.id);
+        await new Promise((rz) => setTimeout(rz, 300));
         continue;
       }
 
@@ -124,7 +165,7 @@ Deno.serve(async () => {
       canceled++;
     }
 
-    return json({ ok: true, sent, failed, staged, canceled });
+    return json({ ok: true, sent, wa, failed, staged, canceled });
   } catch (e) {
     return json({ ok: false, error: String((e as Error)?.message ?? e) }, 500);
   }
