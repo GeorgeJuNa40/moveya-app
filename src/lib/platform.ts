@@ -503,8 +503,8 @@ export const DEFAULT_SALES_KB: string[] = [
 // ---------------------------------------------------------------------------
 // Secuencias de seguimiento automáticas (Fase 3) — config editable del dueño.
 // ---------------------------------------------------------------------------
-export type StepKind = 'email' | 'stage';
-export interface SequenceStep { delayHours: number; kind: StepKind; subject: string; body: string; stage: string }
+export type StepKind = 'email' | 'stage' | 'whatsapp';
+export interface SequenceStep { delayHours: number; kind: StepKind; subject: string; body: string; stage: string; template: string; lang: string }
 // Disparador por origen del lead (o 'any' = todos).
 export type TriggerSource = 'any' | 'formulario' | 'agenda-demo' | 'instagram' | 'facebook' | 'tiktok' | 'whatsapp';
 export const TRIGGER_SOURCES: TriggerSource[] = ['any', 'agenda-demo', 'formulario', 'instagram', 'facebook', 'tiktok', 'whatsapp'];
@@ -523,20 +523,29 @@ export async function fetchSequenceConfig(): Promise<SequenceConfig | null> {
   return {
     active: !!row.active,
     triggerSource: (row.trigger_source ?? 'any') as TriggerSource,
-    steps: steps.map((s: Record<string, unknown>) => ({
-      delayHours: Number(s.delay_hours ?? 0),
-      kind: ((s.kind as string) === 'stage' ? 'stage' : 'email') as StepKind,
-      subject: String(s.subject ?? ''),
-      body: String(s.body ?? ''),
-      stage: String(s.stage ?? 'contactado'),
-    })),
+    steps: steps.map((s: Record<string, unknown>) => {
+      const k = s.kind as string;
+      const kind: StepKind = k === 'stage' ? 'stage' : k === 'whatsapp' ? 'whatsapp' : 'email';
+      return {
+        delayHours: Number(s.delay_hours ?? 0),
+        kind,
+        subject: String(s.subject ?? ''),
+        body: String(s.body ?? ''),
+        stage: String(s.stage ?? 'contactado'),
+        template: String(s.template ?? ''),
+        lang: String(s.lang ?? 'es_MX'),
+      };
+    }),
   };
 }
 
 export async function saveSequenceConfig(active: boolean, steps: SequenceStep[], triggerSource: TriggerSource): Promise<boolean> {
-  const p_steps = steps.map((s) => s.kind === 'stage'
-    ? { delay_hours: Math.max(0, Math.round(s.delayHours || 0)), kind: 'stage', stage: s.stage }
-    : { delay_hours: Math.max(0, Math.round(s.delayHours || 0)), kind: 'email', subject: s.subject, body: s.body });
+  const p_steps = steps.map((s) => {
+    const base = { delay_hours: Math.max(0, Math.round(s.delayHours || 0)) };
+    if (s.kind === 'stage') return { ...base, kind: 'stage', stage: s.stage };
+    if (s.kind === 'whatsapp') return { ...base, kind: 'whatsapp', template: s.template.trim(), lang: (s.lang || 'es_MX').trim() };
+    return { ...base, kind: 'email', subject: s.subject, body: s.body };
+  });
   const { error } = await supabase.rpc('moveya_seq_config_save', { p_active: active, p_steps, p_trigger_source: triggerSource });
   return !error;
 }

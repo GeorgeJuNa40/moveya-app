@@ -837,7 +837,7 @@ function SequenceAutomation() {
   const setStep = (i: number, patch: Partial<SequenceStep>) =>
     setSteps((ss) => ss.map((s, k) => (k === i ? { ...s, ...patch } : s)));
   const addStep = (kind: StepKind) => setSteps((ss) => [...ss, {
-    delayHours: (ss.length ? 72 : 0), kind, subject: '', body: '', stage: 'contactado',
+    delayHours: (ss.length ? 72 : 0), kind, subject: '', body: '', stage: 'contactado', template: '', lang: 'es_MX',
   }]);
   const removeStep = (i: number) => setSteps((ss) => ss.filter((_, k) => k !== i));
 
@@ -875,7 +875,7 @@ function SequenceAutomation() {
           {steps.map((s, i) => (
             <div key={i} className="rounded-xl border border-cream-dark bg-white p-3">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-semibold text-ink">Paso {i + 1} · {s.kind === 'stage' ? 'Cambiar etapa' : 'Enviar correo'}</span>
+                <span className="text-xs font-semibold text-ink">Paso {i + 1} · {s.kind === 'stage' ? 'Cambiar etapa' : s.kind === 'whatsapp' ? 'WhatsApp' : 'Enviar correo'}</span>
                 <button onClick={() => removeStep(i)} className="text-[11px] font-semibold text-red-600 hover:underline">Quitar</button>
               </div>
               <label className="mb-2 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
@@ -895,6 +895,20 @@ function SequenceAutomation() {
                     {LEAD_STATUSES.map((st) => <option key={st} value={st}>{LEAD_STATUS_LABEL[st]}</option>)}
                   </select>
                 </label>
+              ) : s.kind === 'whatsapp' ? (
+                <div className="space-y-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-medium text-ink-soft">Nombre de la plantilla aprobada</span>
+                      <input className={inp} value={s.template} onChange={(e) => setStep(i, { template: e.target.value })} placeholder="ej. bienvenida_leads" />
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-[11px] font-medium text-ink-soft">Idioma</span>
+                      <input className={inp} value={s.lang} onChange={(e) => setStep(i, { lang: e.target.value })} placeholder="es_MX" />
+                    </label>
+                  </div>
+                  <p className="text-[11px] text-ink-faint">El texto lo define la plantilla en Meta; la variable <b>{'{{'}1{'}}'}</b> se reemplaza por el nombre del lead. Requiere número de producción activo y plantilla aprobada.</p>
+                </div>
               ) : (
                 <>
                   <input className={`${inp} mb-2`} value={s.subject} onChange={(e) => setStep(i, { subject: e.target.value })} placeholder="Asunto (usa {{nombre}})" />
@@ -906,6 +920,7 @@ function SequenceAutomation() {
 
           <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => addStep('email')} className="rounded-full border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">+ Correo</button>
+            <button onClick={() => addStep('whatsapp')} className="rounded-full border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">+ WhatsApp</button>
             <button onClick={() => addStep('stage')} className="rounded-full border border-cream-dark px-3 py-1.5 text-xs font-semibold text-ink-soft hover:bg-cream-dark/40">+ Cambiar etapa</button>
             <button onClick={save} disabled={saving} className="ml-auto rounded-full bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar workflow'}</button>
           </div>
