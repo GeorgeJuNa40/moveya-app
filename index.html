@@ -2,6 +2,29 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Dominio canónico (arreglo de "me saca de sesión").
+      Supabase guarda la sesión POR ORIGEN: si el usuario entra una vez a
+      www.moveyaapp.app y otra a moveyaapp.app, cada origen tiene su propia
+      sesión y parece que "lo desloguea". Aquí forzamos SIEMPRE el dominio sin
+      www, desde el cliente y antes de cargar React. Es location.replace (no un
+      redirect 308 del servidor), así que NO pasa por el service worker ni puede
+      dejar pantalla en blanco. Solo actúa sobre moveyaapp.app (deja intactos
+      localhost, previews de Vercel *.vercel.app, etc.).
+    -->
+    <script>
+      (function () {
+        try {
+          var h = location.hostname;
+          if (h === 'www.moveyaapp.app') {
+            location.replace(
+              location.protocol + '//moveyaapp.app' +
+              location.pathname + location.search + location.hash
+            );
+          }
+        } catch (e) {}
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
     <meta name="theme-color" content="#4A5D55" />
     <meta name="description" content="Move yA — Plataforma integral de gestión de estudios de Pilates" />
