@@ -60,18 +60,20 @@ sombras suaves, tarjetas `rounded-2xl`. White-label por estudio vía variables C
   `ANTHROPIC_API_KEY`, claves VAPID.
 - No incluir el identificador del modelo en artefactos del repo.
 
-## Pendientes conocidos (al 22-oct-2026)
-- **Usuario:** re-correr `birthdate-setup.sql` en Supabase (promo Premium en registros nuevos).
-- **Usuario:** verificación de negocio en Meta (para que el bot reciba mensajes reales).
-  Según capturas de oct-2026 ya fue aprobada; falta confirmar que el bot recibe mensajes reales.
+## Pendientes conocidos (al 08-nov-2026)
+- **Usuario (go-live WhatsApp):** número 6692402867 → pasar de "Pendiente" a Conectado
+  en Meta (PIN de verificación en 2 pasos); app de Meta Development → Live; confirmar
+  nombre para mostrar y webhook. Luego correr `moveya-workflow-whatsapp.sql` completo
+  y conectar el paso WhatsApp del workflow.
 - **Usuario:** al llegar primer cliente Premium: cargar saldo Anthropic, poner
   `ANTHROPIC_API_KEY`, correr `20260806_whatsapp_usage.sql`, activar `aiActive`.
-- **Usuario (hardening pendiente de pegar):** correr `security-hardening.sql` en el SQL
-  Editor — elimina las firmas viejas duplicadas de `book_session`/`redeem_reward` (el MCP
-  bloquea `DROP`, por eso no se aplicó solo). El resto del archivo (search_path + revoke
-  anon) YA está aplicado en vivo.
-- **Usuario (1 clic):** activar "Leaked password protection" (HaveIBeenPwned) en
-  Supabase → Authentication → Policies.
+- **Usuario (1 clic, requiere plan pago de Supabase):** activar "Leaked password
+  protection" (HaveIBeenPwned) en Supabase → Authentication → Policies. En espera
+  hasta pagar membresía.
+- **Usuario:** en Supabase → Authentication → URL Configuration, fijar
+  Site URL = `https://moveyaapp.app` (apex, sin www) para cerrar el arreglo de logouts.
+- **Usuario:** desconectar Netlify (quedó colgado; Vercel es quien despliega).
+- **Futuro:** Embedded Signup para que clientes Premium conecten SU WhatsApp a la app.
 
 ## Resuelto (histórico de auditoría)
 - **Webhook de Stripe:** ya maneja renovaciones/impagos/cancelaciones (`invoice.paid`,
@@ -82,4 +84,12 @@ sombras suaves, tarjetas `rounded-2xl`. White-label por estudio vía variables C
   RPC `SECURITY DEFINER` (`book_session`, `cancel_booking`, `redeem_reward`). Vivo.
 - **Hardening oct-2026:** `security-hardening.sql` — `search_path` fijo en `lock_moveya_picks`
   y revocado `anon` de las RPC de acción (conservando públicas `get_public_studio` y
-  `founders_status`). Aplicado en vivo salvo los `DROP` de limpieza (ver pendiente arriba).
+  `founders_status`). Aplicado en vivo. Los `DROP` de limpieza YA no aplican: verificado
+  (08-nov-2026) que solo existen las firmas en uso `book_session(p_session_id,p_spot,p_user)`
+  y `redeem_reward(p_reward_id,p_user)`; no quedan duplicados.
+- **Registro/promo Premium:** `birthdate-setup.sql` aplicado y verificado vivo (08-nov-2026):
+  columna `birth_date`, trigger `on_auth_user_created`, estudios nuevos nacen en Premium con
+  bloque de prueba de 14 días (`currentPeriodEnd`).
+- **Logouts (www vs apex):** resuelto. Redirect `www → apex` client-side en `index.html`
+  (`location.replace` antes de cargar React; NO pasa por el service worker). Reemplazó al
+  redirect de servidor que rompía la PWA (revertido en #169). PR #170, vivo.
