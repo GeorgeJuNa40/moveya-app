@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button, StatCard, EmptyState } from '../../components/ui';
 import { usd } from '../../lib/format';
@@ -43,11 +43,26 @@ export default function CoachClasses() {
   const [busy, setBusy] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
 
+  // Guardia de secuencia: solo la carga MÁS RECIENTE puede escribir el estado.
+  // Evita que una recarga vieja (más lenta) pise una confirmación recién hecha
+  // (ese era el bug de "confirmo y se regresa a confirmar").
+  const reqSeq = useRef(0);
+  const applyLogs = (rows: ClassLog[], seq: number) => {
+    if (seq === reqSeq.current) setLogs(rows);
+  };
+
   // Genera las pendientes que falten (clases olvidadas) y luego carga todo.
   const reload = () => {
+    const seq = ++reqSeq.current;
     void ensureClassLogs(month.start, month.end)
       .then(() => fetchClassLogs(studioId, month.start, month.end))
-      .then(setLogs);
+      .then((rows) => applyLogs(rows, seq));
+  };
+  // Recarga ligera tras una mutación: NO vuelve a correr ensure (ya corrió al
+  // abrir el mes) y respeta la guardia de secuencia.
+  const refetch = () => {
+    const seq = ++reqSeq.current;
+    void fetchClassLogs(studioId, month.start, month.end).then((rows) => applyLogs(rows, seq));
   };
   useEffect(reload, [studioId, month.start, month.end]);
 
@@ -76,14 +91,28 @@ export default function CoachClasses() {
     setBusy(l.id);
     const amount = Math.max(0, Number(amtValue(l)) || 0);
     const ok = await staffConfirmClass(l.id, undefined, amount);
-    if (ok) { notifySuccess('Clase confirmada ✓'); reload(); }
+    if (ok) {
+      // Optimista: deja la clase CONFIRMADA de inmediato (ya no "regresa").
+      const nowIso = new Date().toISOString();
+      setLogs((prev) => prev.map((x) =>
+        x.id === l.id ? { ...x, staffConfirmedAt: nowIso, amount } : x));
+      setDraftAmt((p) => { const n = { ...p }; delete n[l.id]; return n; });
+      notifySuccess('Clase confirmada ✓');
+      refetch();
+    }
     setBusy(null);
   };
   const saveAmount = async (l: ClassLog) => {
     setBusy(l.id);
     const amount = Math.max(0, Number(amtValue(l)) || 0);
     const ok = await setClassAmount(l.id, amount);
-    if (ok) { notifySuccess('Monto actualizado'); reload(); }
+    if (ok) {
+      // Optimista: refleja el monto nuevo sin esperar la recarga.
+      setLogs((prev) => prev.map((x) => (x.id === l.id ? { ...x, amount } : x)));
+      setDraftAmt((p) => { const n = { ...p }; delete n[l.id]; return n; });
+      notifySuccess('Monto actualizado');
+      refetch();
+    }
     setBusy(null);
   };
 
