@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../lib/store';
 import { PageHeader, Card, Button, StatCard, EmptyState } from '../../components/ui';
 import { usd } from '../../lib/format';
@@ -34,11 +34,21 @@ export default function CoachClassesConfirm() {
   const [busy, setBusy] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Guardia de secuencia: solo la carga MÁS RECIENTE escribe el estado, para que
+  // una recarga vieja no pise una confirmación recién hecha.
+  const reqSeq = useRef(0);
   const reload = () => {
+    const seq = ++reqSeq.current;
     setLoading(true);
     void ensureClassLogs(month.start, month.end)
       .then(() => fetchClassLogs(studioId, month.start, month.end))
-      .then((l) => { setLogs(l); setLoading(false); });
+      .then((l) => { if (seq === reqSeq.current) { setLogs(l); setLoading(false); } });
+  };
+  // Recarga ligera tras confirmar: sin ensure y respetando la guardia.
+  const refetch = () => {
+    const seq = ++reqSeq.current;
+    void fetchClassLogs(studioId, month.start, month.end)
+      .then((l) => { if (seq === reqSeq.current) setLogs(l); });
   };
   useEffect(reload, [studioId, month.start, month.end]);
 
@@ -50,7 +60,14 @@ export default function CoachClassesConfirm() {
     if (!l.sessionId) return;
     setBusy(l.id);
     const ok = await coachConfirmClass(l.sessionId, l.occurredOn);
-    if (ok) { notifySuccess('Clase confirmada ✓'); reload(); }
+    if (ok) {
+      // Optimista: deja tu confirmación marcada de inmediato (ya no "regresa").
+      const nowIso = new Date().toISOString();
+      setLogs((prev) => prev.map((x) =>
+        x.id === l.id ? { ...x, coachConfirmedAt: x.coachConfirmedAt ?? nowIso } : x));
+      notifySuccess('Clase confirmada ✓');
+      refetch();
+    }
     setBusy(null);
   };
 
