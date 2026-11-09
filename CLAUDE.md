@@ -70,8 +70,12 @@ sombras suaves, tarjetas `rounded-2xl`. White-label por estudio vía variables C
 - **Usuario (1 clic, requiere plan pago de Supabase):** activar "Leaked password
   protection" (HaveIBeenPwned) en Supabase → Authentication → Policies. En espera
   hasta pagar membresía.
-- **Usuario:** en Supabase → Authentication → URL Configuration, fijar
-  Site URL = `https://moveyaapp.app` (apex, sin www) para cerrar el arreglo de logouts.
+- **Usuario (config dominio Vercel):** hoy Vercel tiene `www` como principal (apex →308→ www)
+  y Site URL de Supabase = apex → inconsistente (funciona, pero). Elegir UNO:
+  (a) dejar www: cambiar Site URL a `https://www.moveyaapp.app`; o
+  (b) preferir apex: Vercel → Settings → Domains → poner `moveyaapp.app` como principal y
+  `www` → redirect a apex (así el Site URL=apex ya queda correcto). NUNCA volver a meter un
+  redirect por JS en sentido contrario al de Vercel (causa bucle infinito — ver Resuelto).
 - **Usuario:** desconectar Netlify (quedó colgado; Vercel es quien despliega).
 - **Futuro:** Embedded Signup para que clientes Premium conecten SU WhatsApp a la app.
 
@@ -90,6 +94,10 @@ sombras suaves, tarjetas `rounded-2xl`. White-label por estudio vía variables C
 - **Registro/promo Premium:** `birthdate-setup.sql` aplicado y verificado vivo (08-nov-2026):
   columna `birth_date`, trigger `on_auth_user_created`, estudios nuevos nacen en Premium con
   bloque de prueba de 14 días (`currentPeriodEnd`).
-- **Logouts (www vs apex):** resuelto. Redirect `www → apex` client-side en `index.html`
-  (`location.replace` antes de cargar React; NO pasa por el service worker). Reemplazó al
-  redirect de servidor que rompía la PWA (revertido en #169). PR #170, vivo.
+- **Logouts / dominio canónico (www vs apex):** la canonicalización la hace **Vercel** con
+  un redirect 308 a nivel de dominio (hoy `www` es el principal: apex →308→ www). NO agregar
+  un redirect por JS en `index.html`: el intento de `location.replace` www→apex (PR #170)
+  chocó con el 308 de Vercel y creó un **BUCLE infinito** ("se queda cargando"). Se quitó en
+  PR #172 (09-nov-2026). Un solo origen (el 308 server-side) ya resuelve los logouts.
+  Pendiente de config: decidir canónico — dejar `www` (y poner Site URL=www en Supabase) o
+  flipear Vercel a apex principal (Site URL ya está en apex). Ver Pendientes.
