@@ -569,6 +569,11 @@ export const CONTENT_CHANNEL_LABEL: Record<ContentChannel, string> = {
   instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', whatsapp: 'WhatsApp', otro: 'Otro',
 };
 
+// Material del post: imágenes subidas (a Storage) o links de video/Reel.
+export interface ContentMedia { kind: 'image' | 'video'; url: string; name?: string; path?: string }
+const CONTENT_BUCKET = 'moveya-content';
+const MAX_IMG_BYTES = 15 * 1024 * 1024; // 15 MB
+
 export interface ContentPost {
   id: string;
   scheduledFor: string; // YYYY-MM-DD
@@ -577,6 +582,7 @@ export interface ContentPost {
   caption: string;
   status: ContentStatus;
   link: string;
+  media: ContentMedia[];
 }
 
 export async function fetchContent(): Promise<ContentPost[]> {
@@ -590,12 +596,13 @@ export async function fetchContent(): Promise<ContentPost[]> {
     caption: String(r.caption ?? ''),
     status: (r.status ?? 'idea') as ContentStatus,
     link: String(r.link ?? ''),
+    media: Array.isArray(r.media) ? (r.media as ContentMedia[]) : [],
   }));
 }
 
 export async function saveContent(p: {
   id?: string; scheduledFor: string; channel: ContentChannel; title?: string;
-  caption?: string; status?: ContentStatus; link?: string;
+  caption?: string; status?: ContentStatus; link?: string; media?: ContentMedia[];
 }): Promise<boolean> {
   const { error } = await supabase.rpc('moveya_content_save', {
     p_id: p.id ?? '',
@@ -605,9 +612,29 @@ export async function saveContent(p: {
     p_caption: p.caption ?? '',
     p_status: p.status ?? 'idea',
     p_link: p.link ?? '',
+    p_media: (p.media ?? []) as unknown as Record<string, unknown>,
   });
   return !error;
 }
+
+// Sube una imagen al bucket y devuelve su media (url pública + path para borrar).
+export async function uploadContentImage(file: File): Promise<ContentMedia | null> {
+  if (!file.type.startsWith('image/')) return null;
+  if (file.size > MAX_IMG_BYTES) return null;
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const path = `content/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext || 'jpg'}`;
+  const { error } = await supabase.storage.from(CONTENT_BUCKET).upload(path, file, { contentType: file.type, upsert: false });
+  if (error) return null;
+  const { data } = supabase.storage.from(CONTENT_BUCKET).getPublicUrl(path);
+  return { kind: 'image', url: data.publicUrl, name: file.name, path };
+}
+
+// Borra una imagen del bucket (si tiene path). Los links de video no borran nada.
+export async function removeContentImage(path?: string): Promise<void> {
+  if (!path) return;
+  try { await supabase.storage.from(CONTENT_BUCKET).remove([path]); } catch { /* noop */ }
+}
+export const CONTENT_MAX_IMG_MB = 15;
 
 export async function deleteContent(id: string): Promise<boolean> {
   const { error } = await supabase.rpc('moveya_content_delete', { p_id: id });
