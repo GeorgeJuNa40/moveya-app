@@ -13,7 +13,8 @@ import {
   fetchEmailsRecent, sendEmailCampaign, brandedEmailHtml, DEFAULT_EMAIL_FROM, DEFAULT_EMAIL_TEMPLATES, type MoveyaEmail,
   fetchSequenceConfig, saveSequenceConfig, fetchSequenceStats, type SequenceStep, type StepKind,
   type TriggerSource, TRIGGER_SOURCES, TRIGGER_SOURCE_LABEL,
-  fetchContent, saveContent, deleteContent, type ContentPost, type ContentStatus, type ContentChannel,
+  fetchContent, saveContent, deleteContent, uploadContentImage, removeContentImage,
+  CONTENT_MAX_IMG_MB, type ContentPost, type ContentStatus, type ContentChannel, type ContentMedia,
   CONTENT_STATUSES, CONTENT_STATUS_LABEL, CONTENT_CHANNELS, CONTENT_CHANNEL_LABEL,
 } from '../../lib/platform';
 import { FOUNDER_CODE } from '../../lib/plans';
@@ -1346,7 +1347,7 @@ const CHANNEL_ICON: Record<ContentChannel, string> = {
 };
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const emptyPost = (): ContentPost => ({
-  id: '', scheduledFor: todayStr(), channel: 'instagram', title: '', caption: '', status: 'idea', link: '',
+  id: '', scheduledFor: todayStr(), channel: 'instagram', title: '', caption: '', status: 'idea', link: '', media: [],
 });
 
 // Calendario mensual (tipo GHL): toca un día para ver/crear, colores por estado,
@@ -1467,11 +1468,36 @@ function ContenidoTab() {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<ContentPost | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [view, setView] = useState<'calendario' | 'lista'>('calendario');
 
   const load = () => { setLoading(true); fetchContent().then(setPosts).finally(() => setLoading(false)); };
   useEffect(load, []);
+
+  // Material del post: links de video + imágenes subidas.
+  const addVideoLink = () => setDraft((d) => (d ? { ...d, media: [...d.media, { kind: 'video', url: '' }] } : d));
+  const setMediaUrl = (i: number, url: string) =>
+    setDraft((d) => (d ? { ...d, media: d.media.map((m, idx) => (idx === i ? { ...m, url } : m)) } : d));
+  const removeMedia = (i: number) => setDraft((d) => {
+    if (!d) return d;
+    const m = d.media[i];
+    if (m?.kind === 'image' && m.path) void removeContentImage(m.path);
+    return { ...d, media: d.media.filter((_, idx) => idx !== i) };
+  });
+  const pickImages = async (files: FileList | null) => {
+    if (!files || !files.length) return;
+    setUploading(true);
+    const added: ContentMedia[] = [];
+    for (const f of Array.from(files)) {
+      if (!f.type.startsWith('image/')) { notifyError('content', `${f.name}: solo imágenes.`); continue; }
+      if (f.size > CONTENT_MAX_IMG_MB * 1024 * 1024) { notifyError('content', `${f.name}: máximo ${CONTENT_MAX_IMG_MB} MB.`); continue; }
+      const up = await uploadContentImage(f);
+      if (up) added.push(up); else notifyError('content', `No se pudo subir ${f.name}.`);
+    }
+    setUploading(false);
+    if (added.length) setDraft((d) => (d ? { ...d, media: [...d.media, ...added] } : d));
+  };
 
   const save = async () => {
     if (!draft) return;
@@ -1480,6 +1506,7 @@ function ContenidoTab() {
     const ok = await saveContent({
       id: draft.id || undefined, scheduledFor: draft.scheduledFor, channel: draft.channel,
       title: draft.title.trim(), caption: draft.caption.trim(), status: draft.status, link: draft.link.trim(),
+      media: draft.media.filter((m) => m.kind === 'image' || m.url.trim() !== ''),
     });
     setSaving(false);
     if (ok) { notifySuccess(draft.id ? 'Publicación actualizada.' : 'Publicación agregada.'); setDraft(null); load(); }
@@ -1572,6 +1599,46 @@ function ContenidoTab() {
             <span className="mb-1 block text-xs font-medium text-ink-soft">Link del post (cuando lo publiques, opcional)</span>
             <input className={inp} value={draft.link} onChange={(e) => setDraft({ ...draft, link: e.target.value })} placeholder="https://instagram.com/p/…" />
           </label>
+
+          {/* Material del post: videos por link + imágenes subidas */}
+          <div className="rounded-2xl border border-cream-dark bg-cream/40 p-3 space-y-3">
+            <span className="block text-xs font-semibold text-ink">🎬 Material del post</span>
+
+            {/* Links de video / Reel */}
+            <div className="space-y-2">
+              {draft.media.map((m, i) => (m.kind === 'video' ? (
+                <div key={`v${i}`} className="flex items-center gap-2">
+                  <span className="text-sm">🎬</span>
+                  <input className={inp} value={m.url} onChange={(e) => setMediaUrl(i, e.target.value)}
+                    placeholder="Link del Reel/video (Drive, YouTube, Vimeo, Dropbox…)" />
+                  <button type="button" onClick={() => removeMedia(i)} className="shrink-0 rounded-full px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50">✕</button>
+                </div>
+              ) : null))}
+              <button type="button" onClick={addVideoLink} className="text-xs font-semibold text-brand hover:underline">+ Agregar link de video / Reel</button>
+            </div>
+
+            {/* Imágenes subidas */}
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center rounded-full border border-brand bg-white px-3 py-1.5 text-xs font-semibold text-brand hover:bg-brand/5">
+                  <input type="file" accept="image/*" multiple className="hidden" disabled={uploading}
+                    onChange={(e) => { void pickImages(e.target.files); e.currentTarget.value = ''; }} />
+                  {uploading ? 'Subiendo…' : '+ Subir imágenes'}
+                </label>
+                <span className="text-[11px] text-ink-faint">JPG/PNG/WebP · hasta {CONTENT_MAX_IMG_MB} MB c/u. Los videos van por link (más ligero).</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {draft.media.map((m, i) => (m.kind === 'image' ? (
+                  <div key={`i${i}`} className="relative">
+                    <img src={m.url} alt={m.name || 'imagen'} className="h-16 w-16 rounded-lg border border-cream-dark object-cover" />
+                    <button type="button" onClick={() => removeMedia(i)}
+                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white shadow">✕</button>
+                  </div>
+                ) : null))}
+              </div>
+            </div>
+          </div>
+
           <div className="flex justify-end gap-2">
             <button onClick={() => setDraft(null)} disabled={saving} className="rounded-2xl px-4 py-2 text-sm font-semibold text-ink-soft hover:bg-cream-dark/40 disabled:opacity-60">Cancelar</button>
             <button onClick={save} disabled={saving} className="rounded-2xl bg-brand px-4 py-2 text-sm font-semibold text-cream hover:opacity-90 disabled:opacity-60">{saving ? 'Guardando…' : 'Guardar'}</button>
@@ -1598,6 +1665,19 @@ function ContenidoTab() {
                   {p.title && <p className="mt-1 text-sm font-medium text-ink">{p.title}</p>}
                   {p.caption && <p className="mt-1 whitespace-pre-wrap text-xs text-ink-soft line-clamp-4">{p.caption}</p>}
                   {p.link && <a href={p.link} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-brand underline">Ver post publicado</a>}
+                  {p.media.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {p.media.filter((m) => m.kind === 'image').map((m, i) => (
+                        <a key={`li${i}`} href={m.url} target="_blank" rel="noreferrer">
+                          <img src={m.url} alt="" className="h-12 w-12 rounded-lg border border-cream-dark object-cover" />
+                        </a>
+                      ))}
+                      {p.media.filter((m) => m.kind === 'video' && m.url.trim()).map((m, i) => (
+                        <a key={`lv${i}`} href={m.url} target="_blank" rel="noreferrer"
+                          className="inline-flex items-center gap-1 rounded-full bg-cream-dark/60 px-2.5 py-1 text-[11px] font-semibold text-ink-soft hover:bg-cream-dark">🎬 Ver video {i + 1}</a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
